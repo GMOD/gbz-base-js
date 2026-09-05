@@ -17,7 +17,9 @@ the same way gbwt-rs does. Databases are produced by unmodified upstream
 import { RemoteFile } from 'generic-filehandle2'
 import { GBZBase, subgraphInInterval } from '@gmod/gbz-base'
 
-const db = await GBZBase.open(new RemoteFile('https://example.org/graph.gbz.db'))
+const db = await GBZBase.open(
+  new RemoteFile('https://example.org/graph.gbz.db'),
+)
 const subgraph = await subgraphInInterval(
   db,
   { sample: 'GRCh38', contig: 'chr6' },
@@ -35,8 +37,8 @@ diverging stretches scored using vg's match, mismatch and gap parameters.
 
 Any object with `read(length, position)` and `stat()` works as a source, so
 `LocalFile`, `RemoteFile` and `BlobFile` from `generic-filehandle2` all do.
-Pages are fetched in blocks (64 KiB by default, `blockSize` in the open
-options) and cached.
+Pages are fetched in blocks (64 KiB by default, `blockSize` in the open options)
+and cached.
 
 The command line mirrors the upstream tool for the query types it supports:
 
@@ -51,9 +53,8 @@ carried.
 ## Naming haplotypes
 
 Upstream gbz-base cannot say which haplotype a subgraph path belongs to, so it
-emits `unknown#N`. This package adds that with two side tables that a small
-Rust tool writes into an existing database, built on the unmodified upstream
-crates:
+emits `unknown#N`. This package adds that with two side tables that a small Rust
+tool writes into an existing database, built on the unmodified upstream crates:
 
 ```
 cd tools/haplotype-index && cargo build --release
@@ -62,17 +63,17 @@ cd tools/haplotype-index && cargo build --release
 
 `HaplotypeSamples` holds one GBWT position every `--interval` bp along every
 path in both orientations, with the path handle and the forward coordinate of
-that node, and `HaplotypeLengths` holds each path's length. The upstream
-`query` binary keeps working on the augmented database.
+that node, and `HaplotypeLengths` holds each path's length. The upstream `query`
+binary keeps working on the augmented database.
 
-At query time `subgraph.identifyPaths()` loads the samples for the window's
-node range in one index scan, chains each haplotype's fragments to the next
-through the private nodes between them, and walks at most one interval past
-the window for a chain that met no sample inside it. `subgraph.alignments()`
-then gives one record per fragment: PanSN name, strand, haplotype interval in
-that contig's coordinates, reference interval, and a CIGAR clipped to the
-fragment's own reference span. `toJSON(cigar, { names: 'resolved' })` names
-the paths the same way. On the command line, `--resolve` and `--alignments`.
+At query time `subgraph.identifyPaths()` loads the samples for the window's node
+range in one index scan, chains each haplotype's fragments to the next through
+the private nodes between them, and walks at most one interval past the window
+for a chain that met no sample inside it. `subgraph.alignments()` then gives one
+record per fragment: PanSN name, strand, haplotype interval in that contig's
+coordinates, reference interval, and a CIGAR clipped to the fragment's own
+reference span. `toJSON(cigar, { names: 'resolved' })` names the paths the same
+way. On the command line, `--resolve` and `--alignments`.
 
 The tests check every resolved fragment against an independent backward walk
 through the bidirectional GBWT to the path's recorded start position.
@@ -80,27 +81,27 @@ through the bidirectional GBWT to the path's recorded start position.
 ## Fidelity
 
 `test/data/oracle/` holds JSON written by upstream `gbz-base query` for the
-queries listed in `queries.txt`, over databases built from gbwt-rs's test
-graphs (`micb-kir3dl1.gbz`, a 46-sample HPRC slice; `example.gbz`;
-`example-v3.gbz`). The test suite requires this library's output to be deep
-equal to every one of them, CIGAR strings included. `generate.sh` regenerates
-the oracle with an upstream binary.
+queries listed in `queries.txt`, over databases built from gbwt-rs's test graphs
+(`micb-kir3dl1.gbz`, a 46-sample HPRC slice; `example.gbz`; `example-v3.gbz`).
+The test suite requires this library's output to be deep equal to every one of
+them, CIGAR strings included. `generate.sh` regenerates the oracle with an
+upstream binary.
 
 Not ported: snarl extension (`--snarls`, `--between`), GFA output, GAF-base.
 
 CIGARs are computed by matching each shared node to its earliest usable
 occurrence on the reference walk, which is weight-optimal whenever every shared
-node can be placed in order; the Myers-based weighted LCS from gbwt-rs runs
-only for the fragments where that fails (inversions, repeats). The two can pick
+node can be placed in order; the Myers-based weighted LCS from gbwt-rs runs only
+for the fragments where that fails (inversions, repeats). The two can pick
 different equal-weight alignments only when the reference walk repeats a node.
 
 ## Measured
 
-Against a 134 MB HPRC chr20 `.gbz.db` served over HTTPS, `--sample GRCh38
---contig chr20`:
+Against a 134 MB HPRC chr20 `.gbz.db` served over HTTPS,
+`--sample GRCh38 --contig chr20`:
 
-| window | context | nodes | haplotype fragments | range requests | bytes read | time |
-| ------ | ------- | ----- | ------------------- | -------------- | ---------- | ---- |
+| window | context | nodes | haplotype fragments | range requests | bytes read | time  |
+| ------ | ------- | ----- | ------------------- | -------------- | ---------- | ----- |
 | 500 bp | 0       | 17    | 11                  | 7              | 459 KB     | 1.4 s |
 | 10 kb  | 0       | 627   | 1021                | 8              | 524 KB     | 2.1 s |
 | 100 kb | 0       | 2051  | 3673                | 13             | 852 KB     | 1.7 s |
@@ -109,10 +110,11 @@ Against a 134 MB HPRC chr20 `.gbz.db` served over HTTPS, `--sample GRCh38
 Most of the wall time in the small queries is sequential request latency, not
 decoding.
 
-## Why not WebAssembly
+## Footnote
 
-gbwt-rs and simple-sds serialize `usize` at native width, so their wasm32
-builds misread files written on 64-bit hosts, and the maintainer declined a
-32-bit port. wasm64 fixes that for gbwt-rs but cannot carry gbz-base, whose
-bundled SQLite has no wasm64 libc. A TypeScript reader has neither problem and
-runs in a JBrowse RPC worker with the file access layer JBrowse already has.
+Started from ideas at MemPanG 26! Earlier work considered WASM cross compilation
+of the rust code but gbwt-rs and simple-sds serialize `usize` at native width,
+so their wasm32 builds misread files written on 64-bit hosts, and the maintainer
+declined a 32-bit port. wasm64 fixes that for gbwt-rs but cannot carry gbz-base,
+whose bundled SQLite has no wasm64 libc. A TypeScript reader has neither problem
+and runs in a JBrowse RPC worker with the file access layer JBrowse already has.
