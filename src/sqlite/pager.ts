@@ -23,6 +23,12 @@ export class Pager {
     this.maxBlocks = opts.maxBlocks ?? 256
   }
 
+  seed(index: number, bytes: Uint8Array) {
+    if (bytes.length === Math.min(this.blockSize, this.fileSize - index * this.blockSize)) {
+      this.blocks.set(index, Promise.resolve(bytes))
+    }
+  }
+
   private block(index: number) {
     const cached = this.blocks.get(index)
     if (cached) {

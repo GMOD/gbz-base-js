@@ -21,7 +21,8 @@ export class SqliteDatabase {
 
   static async open(source: ByteSource, opts: PagerOptions = {}) {
     const { size } = await source.stat()
-    const header = await source.read(100, 0)
+    const firstBlock = await source.read(Math.min(opts.blockSize ?? 65536, size), 0)
+    const header = firstBlock.subarray(0, 100)
     const magic = new TextDecoder().decode(header.subarray(0, 15))
     if (magic !== 'SQLite format 3') {
       throw new Error('Not a SQLite database')
@@ -35,6 +36,9 @@ export class SqliteDatabase {
       throw new Error(`SQLite text encoding ${encoding} is not UTF-8`)
     }
     const pager = new Pager(source, pageSize, size, opts)
+    pager.seed(0, firstBlock)
+    pager.fetches += 1
+    pager.bytesFetched += firstBlock.length
     const btree = new BTree(pager, reserved)
     const objects = new Map<string, SqliteObject>()
     for await (const { values } of btree.tableScan(1)) {
