@@ -1,0 +1,50 @@
+{
+  "name": "@gmod/gbz-base",
+  "version": "0.0.1",
+  "description": "Pure TypeScript reader for gbz-base pangenome databases (.gbz.db) with random access over HTTP range requests",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "gbz-base-query": "./bin/query.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "tools/haplotype-index/Cargo.toml",
+    "tools/haplotype-index/src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepare": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "generic-filehandle2": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GMOD/gbz-base-js.git"
+  },
+  "keywords": [
+    "pangenome",
+    "gbz",
+    "gbwt",
+    "sqlite",
+    "genomics",
+    "jbrowse"
+  ]
+}

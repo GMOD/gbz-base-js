@@ -1,0 +1,14 @@
+micb_chr6_i_ctx0	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --interval 31500000..31501000 --context 0 --cigar
+micb_chr6_i_ctx100	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --interval 31500000..31501000 --context 100 --cigar
+micb_chr6_o_ctx50	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --offset 31500500 --context 50 --cigar
+micb_chr6_i_distinct	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --interval 31500000..31501000 --context 100 --haplotypes distinct --cigar
+micb_chr6_i_refonly	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --interval 31500000..31501000 --context 0 --haplotypes reference-only
+micb_chm13_i_ctx20	micb-kir3dl1.gbz.db	--sample CHM13 --contig chr6 --interval 31352000..31352500 --context 20 --cigar
+micb_chr19_i_ctx100	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr19 --interval 54817000..54818000 --context 100 --cigar
+micb_chr19_i_big	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr19 --interval 54816500..54822000 --context 0 --cigar
+micb_nodes	micb-kir3dl1.gbz.db	--node 200 --node 201 --context 10
+micb_chr6_end	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --interval 31498140..31498300 --context 0 --cigar
+example_A_i	example.gbz.db	--contig A --interval 1..4 --context 1 --cigar
+example_B_o	example.gbz.db	--contig B --offset 2 --context 2 --cigar
+example_A_distinct	example.gbz.db	--contig A --interval 0..5 --context 0 --haplotypes distinct --cigar
+example_v3_A_i	example-v3.gbz.db	--contig A --interval 1..4 --context 1 --cigar
