@@ -1,4 +1,4 @@
-export { GBZBase, GbzRecord, formatPathName, GENERIC_SAMPLE } from './db.ts'
+export { GBZBase, GbzRecord, SchemaVersionError, formatPathName, GENERIC_SAMPLE, SCHEMA_VERSION } from './db.ts'
 export type { GbzPath, HaplotypeSample, PathName } from './db.ts'
 export type { ByteSource } from './filehandle.ts'
 export type { Pos } from './gbwt/record.ts'

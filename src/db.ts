@@ -15,6 +15,19 @@ export interface PathName {
 }
 
 export const GENERIC_SAMPLE = '_gbwt_ref'
+export const SCHEMA_VERSION = 'GBZ-base version 4'
+
+export class SchemaVersionError extends Error {
+  override name = 'SchemaVersionError'
+
+  constructor(readonly found: string | undefined) {
+    super(
+      found === undefined
+        ? `not a gbz-base database: its Tags table has no version`
+        : `unsupported database schema "${found}"; this reader understands "${SCHEMA_VERSION}"`,
+    )
+  }
+}
 
 export function formatPathName(name: PathName, end: number) {
   return `${name.sample}#${name.haplotype}#${name.contig}[${name.fragment}-${end}]`
@@ -122,7 +135,12 @@ export class GBZBase {
     for (const table of ['Tags', 'Nodes', 'Paths', 'ReferenceIndex']) {
       sqlite.rootPage(table)
     }
-    return new GBZBase(sqlite)
+    const db = new GBZBase(sqlite)
+    const version = await db.tag('version')
+    if (version !== SCHEMA_VERSION) {
+      throw new SchemaVersionError(version)
+    }
+    return db
   }
 
   tags() {

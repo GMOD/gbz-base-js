@@ -2,7 +2,7 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { GBZBase } from '../src/db.ts'
+import { GBZBase, SchemaVersionError } from '../src/db.ts'
 import { SqliteDatabase } from '../src/sqlite/database.ts'
 
 const file = path.join(import.meta.dirname, 'data', 'micb-kir3dl1.gbz.db')
@@ -35,6 +35,12 @@ describe('sqlite reader', () => {
       count += 1
     }
     expect(count).toBe(5782)
+  })
+
+  it('refuses a database whose schema it does not understand', async () => {
+    const future = path.join(import.meta.dirname, 'data', 'example-future-schema.gbz.db')
+    await expect(GBZBase.open(new LocalFile(future))).rejects.toBeInstanceOf(SchemaVersionError)
+    await expect(GBZBase.open(new LocalFile(future))).rejects.toThrow('GBZ-base version 99')
   })
 
   it('reads tags and paths', async () => {
