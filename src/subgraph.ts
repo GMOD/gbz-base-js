@@ -104,31 +104,63 @@ export interface ToJsonOptions {
   names?: 'anonymous' | 'resolved'
 }
 
+function sideBefore(
+  a: [number, number, NodeSide],
+  b: [number, number, NodeSide],
+) {
+  return (
+    a[0] < b[0] ||
+    (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])))
+  )
+}
+
 class SideQueue {
-  private items: [number, number, NodeSide][] = []
+  private heap: [number, number, NodeSide][] = []
 
   push(distance: number, node: number, side: NodeSide) {
-    this.items.push([distance, node, side])
+    const heap = this.heap
+    heap.push([distance, node, side])
+    let i = heap.length - 1
+    while (i > 0) {
+      const parent = (i - 1) >> 1
+      if (sideBefore(heap[i]!, heap[parent]!)) {
+        ;[heap[i], heap[parent]] = [heap[parent]!, heap[i]!]
+        i = parent
+      } else {
+        break
+      }
+    }
   }
 
   pop() {
-    let best = 0
-    for (let i = 1; i < this.items.length; i++) {
-      const a = this.items[i]!
-      const b = this.items[best]!
-      if (
-        a[0] < b[0] ||
-        (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])))
-      ) {
-        best = i
+    const heap = this.heap
+    const top = heap[0]
+    const last = heap.pop()
+    if (heap.length > 0 && last !== undefined) {
+      heap[0] = last
+      let i = 0
+      for (;;) {
+        const left = 2 * i + 1
+        const right = left + 1
+        let smallest = i
+        if (left < heap.length && sideBefore(heap[left]!, heap[smallest]!)) {
+          smallest = left
+        }
+        if (right < heap.length && sideBefore(heap[right]!, heap[smallest]!)) {
+          smallest = right
+        }
+        if (smallest === i) {
+          break
+        }
+        ;[heap[i], heap[smallest]] = [heap[smallest]!, heap[i]!]
+        i = smallest
       }
     }
-    const [item] = this.items.splice(best, 1)
-    return item
+    return top
   }
 
   get size() {
-    return this.items.length
+    return this.heap.length
   }
 }
 
