@@ -178,26 +178,91 @@ function posKey(pos: Pos) {
   return `${pos.node}:${pos.offset}`
 }
 
+const SCAN_GAP = 4096
+
+function handleRuns(sortedHandles: number[]) {
+  const runs: [number, number][] = []
+  for (const handle of sortedHandles) {
+    const last = runs[runs.length - 1]
+    if (last && handle - last[1] <= SCAN_GAP) {
+      last[1] = handle
+    } else {
+      runs.push([handle, handle])
+    }
+  }
+  return runs
+}
+
 interface Anchor {
   pathHandle: number
   orientation: Orientation
   base: number
 }
 
+export type ChainEnd =
+  | 'in-fragment sample'
+  | 'identified sibling'
+  | 'out-of-window sample'
+  | 'bound'
+  | 'endmarker'
+  | 'cycle'
+
+export interface ChainRecord {
+  fragments: number
+  steps: number
+  seeks: number
+  reentries: number
+  twinLandings: number
+  end: ChainEnd
+  pathHandle: number | undefined
+}
+
+export interface IdentificationStats {
+  interval: number
+  scans: [number, number][]
+  windowSamples: number
+  fragmentLengths: number[]
+  companionSeeks: number
+  companionMisses: number
+  graphLookups: number
+  graphFetches: number
+  chains: ChainRecord[]
+}
+
+interface SubgraphStats {
+  orderedAlignments: number
+  lcsAlignments: number
+  identificationSteps: number
+  identificationFetches: number
+  identification: IdentificationStats
+}
+
 export class Subgraph {
   private records = new Map<number, GbzRecord>()
   private paths: PathInfo[] = []
+  private twinStarts = new Set<string>()
   private refId: number | undefined
   private refPath: PathName | undefined
   private refHandle: number | undefined
   private refInterval: [number, number] | undefined
   private refIndexCache: Map<number, number[]> | undefined
   private refPrefixCache: number[] | undefined
-  readonly stats = {
+  readonly stats: SubgraphStats = {
     orderedAlignments: 0,
     lcsAlignments: 0,
     identificationSteps: 0,
     identificationFetches: 0,
+    identification: {
+      interval: 0,
+      scans: [],
+      windowSamples: 0,
+      fragmentLengths: [],
+      companionSeeks: 0,
+      companionMisses: 0,
+      graphLookups: 0,
+      graphFetches: 0,
+      chains: [],
+    },
   }
 
   private db: GBZBase
@@ -270,6 +335,7 @@ export class Subgraph {
 
   private clearPaths() {
     this.paths = []
+    this.twinStarts.clear()
     this.refId = undefined
     this.refPath = undefined
     this.refHandle = undefined
@@ -664,6 +730,8 @@ export class Subgraph {
               weight: undefined,
               identity: undefined,
             })
+          } else {
+            this.twinStarts.add(posKey(positions[0]!))
           }
         }
       }
@@ -727,18 +795,29 @@ export class Subgraph {
       )
     }
     const interval = (await this.db.haplotypeSampleInterval()) ?? 4096
-    const handles = this.sortedHandles()
-    const minHandle = handles[0]
-    const maxHandle = handles[handles.length - 1]
-    if (minHandle === undefined || maxHandle === undefined) {
+    const runs = handleRuns(this.sortedHandles())
+    if (runs.length === 0) {
       return
     }
     const samples = new Map<string, HaplotypeSample>()
-    for (const sample of await this.db.haplotypeSamplesInRange(
-      minHandle,
-      maxHandle,
-    )) {
-      samples.set(posKey(sample), sample)
+    for (const [first, last] of runs) {
+      for (const sample of await this.db.haplotypeSamplesInRange(first, last)) {
+        samples.set(posKey(sample), sample)
+      }
+    }
+    const scanned = (handle: number) => {
+      let lo = 0
+      let hi = runs.length - 1
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1
+        if (runs[mid]![0] <= handle) {
+          lo = mid
+        } else {
+          hi = mid - 1
+        }
+      }
+      const run = runs[lo]!
+      return run[0] <= handle && handle <= run[1]
     }
     const starts = new Map<string, number>()
     this.paths.forEach((info, index) => {
@@ -747,15 +826,35 @@ export class Subgraph {
         starts.set(posKey(first), index)
       }
     })
-    const recordAt = this.recordReader(() => {
-      this.stats.identificationFetches += 1
+    const identification = this.stats.identification
+    identification.interval = interval
+    identification.scans = runs
+    identification.windowSamples = samples.size
+    this.paths.forEach((info, index) => {
+      if (index !== this.refId) {
+        identification.fragmentLengths.push(info.len)
+      }
     })
-    const sampleAt = async (pos: Pos) => {
-      if (pos.node >= minHandle && pos.node <= maxHandle) {
+    const readRecord = this.recordReader(() => {
+      this.stats.identificationFetches += 1
+      identification.graphFetches += 1
+    })
+    const recordAt = (handle: number) => {
+      identification.graphLookups += 1
+      return readRecord(handle)
+    }
+    const sampleAt = async (pos: Pos, chain: ChainRecord) => {
+      if (scanned(pos.node)) {
         return samples.get(posKey(pos))
       }
       this.stats.identificationFetches += 1
-      return this.db.haplotypeSampleAt(pos.node, pos.offset)
+      identification.companionSeeks += 1
+      chain.seeks += 1
+      const sample = await this.db.haplotypeSampleAt(pos.node, pos.offset)
+      if (!sample) {
+        identification.companionMisses += 1
+      }
+      return sample
     }
     const names = new Map<number, PathName>()
     const nameOf = async (pathHandle: number) => {
@@ -809,6 +908,16 @@ export class Subgraph {
       }
       const chain: { index: number; startBp: number }[] = []
       const visited = new Set<number>()
+      const record: ChainRecord = {
+        fragments: 0,
+        steps: 0,
+        seeks: 0,
+        reentries: 0,
+        twinLandings: 0,
+        end: 'endmarker',
+        pathHandle: undefined,
+      }
+      identification.chains.push(record)
       let anchor: Anchor | undefined
       let counter = 0
       let current: number | undefined = start
@@ -817,11 +926,13 @@ export class Subgraph {
         this.signal?.throwIfAborted()
         if (current !== undefined) {
           if (visited.has(current)) {
+            record.end = 'cycle'
             break
           }
           visited.add(current)
           const info = this.paths[current]!
           chain.push({ index: current, startBp: counter })
+          record.fragments += 1
           let bp = counter
           for (const position of info.positions) {
             const sample = samples.get(posKey(position))
@@ -834,6 +945,7 @@ export class Subgraph {
           }
           counter += info.len
           if (anchor) {
+            record.end = 'in-fragment sample'
             break
           }
           const last = info.positions[info.positions.length - 1]!
@@ -841,35 +953,48 @@ export class Subgraph {
           current = undefined
         }
         if (pos === undefined || pos.node === ENDMARKER) {
+          record.end = 'endmarker'
           break
         }
-        const known = starts.get(posKey(pos))
+        const key = posKey(pos)
+        const known = starts.get(key)
         if (known !== undefined) {
           const identity = this.paths[known]!.identity
           if (identity) {
             anchor = anchorFromIdentity(identity, counter)
+            record.end = 'identified sibling'
             break
           }
           current = known
           continue
         }
-        const sample = await sampleAt(pos)
-        const record = await recordAt(pos.node)
+        if (this.records.has(pos.node)) {
+          record.reentries += 1
+        }
+        if (this.twinStarts.has(key)) {
+          record.twinLandings += 1
+        }
+        const sample = await sampleAt(pos, record)
+        const node = await recordAt(pos.node)
         if (sample) {
-          anchor = anchorFromSample(sample, counter, record.sequenceLen)
+          anchor = anchorFromSample(sample, counter, node.sequenceLen)
+          record.end = 'out-of-window sample'
           break
         }
         this.stats.identificationSteps += 1
+        record.steps += 1
         if (
           counter - (chain[chain.length - 1] as { startBp: number }).startBp >
-          4 * interval + 4 * record.sequenceLen
+          4 * interval + 4 * node.sequenceLen
         ) {
+          record.end = 'bound'
           break
         }
-        counter += record.sequenceLen
-        pos = record.gbwt().lf(pos.offset)
+        counter += node.sequenceLen
+        pos = node.gbwt().lf(pos.offset)
       }
       if (anchor) {
+        record.pathHandle = anchor.pathHandle
         const name = await nameOf(anchor.pathHandle)
         for (const { index, startBp } of chain) {
           const info = this.paths[index]!

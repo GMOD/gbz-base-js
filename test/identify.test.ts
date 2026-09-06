@@ -138,6 +138,33 @@ describe('haplotype identification', () => {
     )
   })
 
+  it('accounts for every fragment in exactly one chain', async () => {
+    const { subgraph } = await checkIdentities(
+      'micb-kir3dl1.gbz.db',
+      'GRCh38',
+      'chr6',
+      31500000,
+      31501000,
+      0,
+    )
+    const { chains, fragmentLengths, interval } = subgraph.stats.identification
+    expect(interval).toBe(1000)
+    expect(fragmentLengths.length).toBe(subgraph.pathCount - 1)
+    expect(chains.reduce((n, c) => n + c.fragments, 0)).toBe(
+      subgraph.pathCount - 1,
+    )
+    expect(chains.every(c => c.pathHandle !== undefined)).toBe(true)
+    expect(chains.some(c => c.fragments > 1)).toBe(true)
+    expect(
+      chains
+        .filter(c => c.end === 'in-fragment sample' && c.fragments === 1)
+        .every(c => c.steps === 0),
+    ).toBe(true)
+    expect(chains.reduce((n, c) => n + c.steps, 0)).toBe(
+      subgraph.stats.identificationSteps,
+    )
+  })
+
   it('works on the tiny example graph', async () => {
     await checkIdentities('example.gbz.db', undefined, 'A', 1, 4, 1)
     await checkIdentities('example-v3.gbz.db', undefined, 'B', 0, 3, 2)

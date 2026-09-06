@@ -145,7 +145,9 @@ gbz-base-query https://host/graph.gbz.db --contig chrM --offset 1000 --context 5
 ```
 
 `--stats` reports how many range requests a query made and how many bytes they
-carried.
+carried, and with `--resolve` or `--alignments` how identification went: index
+scans, chains per haplotype, why each chain ended, companion seeks against graph
+record lookups, and fragment lengths against the walk bound.
 
 ## Snarls
 
@@ -209,15 +211,18 @@ path in both orientations, with the path handle and the forward coordinate of
 that node, and `HaplotypeLengths` holds each path's length. The upstream `query`
 binary keeps working on the augmented database.
 
-At query time `subgraph.identifyPaths()` loads the samples for the window's node
-range in one index scan, chains each haplotype's fragments to the next through
-the private nodes between them, and walks at most one interval past the window
-for a chain that met no sample inside it. This is what fills in the `resolved`
-half of a feature: PanSN name, haplotype interval in that contig's coordinates,
-and the path handle. `getAlignmentsForRange` and `getSubgraphForRange` run it
-for you when the database has the tables; on the lower-level path you call it
-yourself before `alignments()` or `toSubgraphJson({ names: 'resolved' })`. On
-the command line, `--resolve` and `--alignments`.
+At query time `subgraph.identifyPaths()` loads the samples for the window's
+nodes with one index scan per run of consecutive node ids (a window whose nodes
+sit in far-apart id ranges, as a tandem repeat's do, is not one scan across the
+gap), chains each haplotype's fragments to the next through the private nodes
+between them, and for a chain that met no sample inside the window walks on
+until it finds one, up to four intervals past the last fragment it linked. This
+is what fills in the `resolved` half of a feature: PanSN name, haplotype
+interval in that contig's coordinates, and the path handle.
+`getAlignmentsForRange` and `getSubgraphForRange` run it for you when the
+database has the tables; on the lower-level path you call it yourself before
+`alignments()` or `toSubgraphJson({ names: 'resolved' })`. On the command line,
+`--resolve` and `--alignments`.
 
 The tests check every resolved fragment against an independent backward walk
 through the bidirectional GBWT to the path's recorded start position.

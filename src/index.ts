@@ -13,8 +13,11 @@ export type { Pos } from './gbwt/record.ts'
 export { Subgraph } from './subgraph.ts'
 export type {
   AlignmentSpan,
+  ChainEnd,
+  ChainRecord,
   HaplotypeAlignment,
   HaplotypeOutput,
+  IdentificationStats,
   PathIdentity,
   PathPosition,
   ReferencePath,

@@ -10,8 +10,10 @@ import {
 } from './query.ts'
 
 import type {
+  ChainEnd,
   HaplotypeAlignment,
   HaplotypeOutput,
+  IdentificationStats,
   SnarlOutput,
 } from './subgraph.ts'
 
@@ -187,6 +189,41 @@ function parseArgs(argv: string[]): Args {
   return args
 }
 
+const CHAIN_ENDS: ChainEnd[] = [
+  'in-fragment sample',
+  'identified sibling',
+  'out-of-window sample',
+  'bound',
+  'endmarker',
+  'cycle',
+]
+
+function identificationReport(stats: IdentificationStats) {
+  const { chains, fragmentLengths, interval, scans } = stats
+  const resolved = chains.filter(c => c.pathHandle !== undefined)
+  const haplotypes = new Set(resolved.map(c => c.pathHandle)).size
+  const unresolved = chains.filter(c => c.pathHandle === undefined)
+  const unresolvedFragments = unresolved.reduce((n, c) => n + c.fragments, 0)
+  const sum = (pick: (c: (typeof chains)[number]) => number) =>
+    chains.reduce((n, c) => n + pick(c), 0)
+  const ends = CHAIN_ENDS.map(
+    end => `${end} ${chains.filter(c => c.end === end).length}`,
+  ).join(', ')
+  const bound = 4 * interval
+  const overBound = fragmentLengths.filter(len => len > bound).length
+  const maxLen = fragmentLengths.reduce((a, b) => Math.max(a, b), 0)
+  const scannedNodes = scans.reduce((n, [a, b]) => n + ((b - a) >> 1) + 1, 0)
+  const scanned = `${scans.length} index scans over ${scannedNodes} nodes for ${stats.windowSamples} samples`
+  return [
+    `identification: interval ${interval}; ${scanned}`,
+    `  ${fragmentLengths.length} fragments in ${chains.length} chains for ${haplotypes} haplotypes (${resolved.length - haplotypes} chains beyond one per haplotype; ${unresolved.length} chains / ${unresolvedFragments} fragments unresolved)`,
+    `  chain ends: ${ends}`,
+    `  sibling links ${sum(c => c.fragments - 1)}; out-of-window steps ${sum(c => c.steps)}, ${sum(c => c.reentries)} re-entering the subgraph, ${sum(c => c.twinLandings)} on a discarded twin's start`,
+    `  companion seeks ${stats.companionSeeks} (${stats.companionMisses} misses); graph record lookups ${stats.graphLookups}, ${stats.graphFetches} fetched`,
+    `  fragment length max ${maxLen}, ${overBound} over the ${bound} bp bound`,
+  ].join('\n')
+}
+
 function alignmentRecord(alignment: HaplotypeAlignment) {
   const { start, ...rest } = alignment
   return rest.resolved ? { ...rest, name: rest.label, label: undefined } : rest
@@ -260,5 +297,10 @@ export async function main(argv: string[]) {
     process.stderr.write(
       `Subgraph contains ${subgraph.nodeCount} nodes and ${subgraph.pathCount} paths; ${fetches} fetches, ${bytesFetched} bytes${index}; ${orderedAlignments} ordered + ${lcsAlignments} lcs alignments; identification ${identificationSteps} steps, ${identificationFetches} lookups\n`,
     )
+    if (args.resolve) {
+      process.stderr.write(
+        `${identificationReport(subgraph.stats.identification)}\n`,
+      )
+    }
   }
 }
