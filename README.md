@@ -1,15 +1,10 @@
 # @gmod/gbz-base
 
-A pure TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
-pangenome databases (`.gbz.db`). It answers the same subgraph queries as
-`gbz-base query`, reading only the SQLite pages a query touches, so a
-multi-gigabyte database on an HTTP server is queried through range requests
-without downloading it or compiling anything to WebAssembly.
+[![NPM version](https://img.shields.io/npm/v/@gmod/gbz-base.svg?style=flat-square)](https://npmjs.org/package/@gmod/gbz-base)
+![Build Status](https://img.shields.io/github/actions/workflow/status/GMOD/gbz-base-js/publish.yml?branch=main)
 
-No SQLite library is involved. The reader walks the SQLite b-trees directly
-(rowid lookups, index seeks, overflow chains) and decodes the GBWT node records
-the same way gbwt-rs does. Databases are produced by unmodified upstream
-`gbz-base construct`.
+A pure TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
+pangenome databases (`.gbz.db`).
 
 ## Usage
 
@@ -123,6 +118,18 @@ way. On the command line, `--resolve` and `--alignments`.
 
 The tests check every resolved fragment against an independent backward walk
 through the bidirectional GBWT to the path's recorded start position.
+
+## Technical notes
+
+It answers the same subgraph queries as `gbz-base query`, reading only the
+SQLite pages a query touches, so a multi-gigabyte database on an HTTP server is
+queried through range requests without downloading it or compiling anything to
+WebAssembly.
+
+No SQLite library is involved. The reader walks the SQLite b-trees directly
+(rowid lookups, index seeks, overflow chains) and decodes the GBWT node records
+the same way gbwt-rs does. Databases are produced by unmodified upstream
+`gbz-base construct`.
 
 ## Fidelity
 
