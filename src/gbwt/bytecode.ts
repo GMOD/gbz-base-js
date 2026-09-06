@@ -1,7 +1,10 @@
 export class ByteCodeReader {
   offset = 0
+  private bytes: Uint8Array
 
-  constructor(private bytes: Uint8Array) {}
+  constructor(bytes: Uint8Array) {
+    this.bytes = bytes
+  }
 
   get done() {
     return this.offset >= this.bytes.length
@@ -20,7 +23,7 @@ export class ByteCodeReader {
     let shift = 1
     let result = 0
     while (this.offset < this.bytes.length) {
-      const value = this.bytes[this.offset] as number
+      const value = this.bytes[this.offset]!
       this.offset += 1
       result += (value & 0x7f) * shift
       shift *= 128
@@ -48,14 +51,17 @@ export class RunReader {
   constructor(bytes: Uint8Array, sigma: number) {
     this.source = new ByteCodeReader(bytes)
     this.sigma = sigma === 0 ? Number.MAX_SAFE_INTEGER : sigma
-    this.threshold = this.sigma < RLE_THRESHOLD ? Math.floor(RLE_UNIVERSE / this.sigma) : 0
+    this.threshold =
+      this.sigma < RLE_THRESHOLD ? Math.floor(RLE_UNIVERSE / this.sigma) : 0
   }
 
   next(): Run | undefined {
     if (this.sigma >= RLE_THRESHOLD) {
       const value = this.source.int()
       const len = this.source.int()
-      return value === undefined || len === undefined ? undefined : { value, len: len + 1 }
+      return value === undefined || len === undefined
+        ? undefined
+        : { value, len: len + 1 }
     }
     const byte = this.source.byte()
     if (byte === undefined) {

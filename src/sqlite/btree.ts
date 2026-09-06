@@ -1,5 +1,6 @@
-import type { Pager } from './pager.ts'
 import { decodeRecord, readVarint } from './record.ts'
+
+import type { Pager } from './pager.ts'
 import type { SqlValue } from './record.ts'
 
 const INTERIOR_INDEX = 0x02
@@ -17,7 +18,12 @@ interface PageHeader {
 function readHeader(page: Uint8Array, start: number): PageHeader {
   const view = new DataView(page.buffer, page.byteOffset, page.byteLength)
   const type = page[start]
-  if (type !== INTERIOR_INDEX && type !== INTERIOR_TABLE && type !== LEAF_INDEX && type !== LEAF_TABLE) {
+  if (
+    type !== INTERIOR_INDEX &&
+    type !== INTERIOR_TABLE &&
+    type !== LEAF_INDEX &&
+    type !== LEAF_TABLE
+  ) {
     throw new Error(`SQLite page has unknown b-tree type ${type}`)
   }
   const interior = type === INTERIOR_INDEX || type === INTERIOR_TABLE
@@ -41,17 +47,18 @@ function readUint32(page: Uint8Array, offset: number) {
 
 export class BTree {
   private readonly usable: number
+  private pager: Pager
 
-  constructor(
-    private pager: Pager,
-    reservedBytes: number,
-  ) {
+  constructor(pager: Pager, reservedBytes: number) {
+    this.pager = pager
     this.usable = pager.pageSize - reservedBytes
   }
 
   private localPayloadSize(total: number, isIndex: boolean) {
     const usable = this.usable
-    const maxLocal = isIndex ? Math.floor(((usable - 12) * 64) / 255) - 23 : usable - 35
+    const maxLocal = isIndex
+      ? Math.floor(((usable - 12) * 64) / 255) - 23
+      : usable - 35
     if (total <= maxLocal) {
       return total
     }
@@ -60,7 +67,12 @@ export class BTree {
     return spill <= maxLocal ? spill : minLocal
   }
 
-  private async payload(page: Uint8Array, offset: number, total: number, isIndex: boolean) {
+  private async payload(
+    page: Uint8Array,
+    offset: number,
+    total: number,
+    isIndex: boolean,
+  ) {
     const local = this.localPayloadSize(total, isIndex)
     if (local === total) {
       return page.subarray(offset, offset + total)
@@ -71,13 +83,18 @@ export class BTree {
     let next = readUint32(page, offset + local)
     while (next !== 0 && filled < total) {
       const overflow = await this.pager.page(next)
-      const chunk = overflow.subarray(4, 4 + Math.min(this.usable - 4, total - filled))
+      const chunk = overflow.subarray(
+        4,
+        4 + Math.min(this.usable - 4, total - filled),
+      )
       result.set(chunk, filled)
       filled += chunk.length
       next = readUint32(overflow, 0)
     }
     if (filled !== total) {
-      throw new Error('SQLite overflow chain ended before the payload was complete')
+      throw new Error(
+        'SQLite overflow chain ended before the payload was complete',
+      )
     }
     return result
   }
@@ -87,7 +104,10 @@ export class BTree {
     return { page, header: readHeader(page, pageNumber === 1 ? 100 : 0) }
   }
 
-  async tableRowid(root: number, rowid: number): Promise<SqlValue[] | undefined> {
+  async tableRowid(
+    root: number,
+    rowid: number,
+  ): Promise<SqlValue[] | undefined> {
     let pageNumber = root
     for (;;) {
       const { page, header } = await this.pageAt(pageNumber)
@@ -125,18 +145,26 @@ export class BTree {
           high = mid
         }
       }
-      pageNumber = low === header.cellCount ? header.rightChild : readUint32(page, cellOffset(page, header, low))
+      pageNumber =
+        low === header.cellCount
+          ? header.rightChild
+          : readUint32(page, cellOffset(page, header, low))
     }
   }
 
-  async *tableScan(root: number): AsyncGenerator<{ rowid: number; values: SqlValue[] }> {
+  async *tableScan(
+    root: number,
+  ): AsyncGenerator<{ rowid: number; values: SqlValue[] }> {
     const { page, header } = await this.pageAt(root)
     if (header.type === LEAF_TABLE) {
       for (let i = 0; i < header.cellCount; i++) {
         const offset = cellOffset(page, header, i)
         const [size, afterSize] = readVarint(page, offset)
         const [rowid, afterKey] = readVarint(page, afterSize)
-        yield { rowid, values: decodeRecord(await this.payload(page, afterKey, size, false)) }
+        yield {
+          rowid,
+          values: decodeRecord(await this.payload(page, afterKey, size, false)),
+        }
       }
     } else {
       for (let i = 0; i < header.cellCount; i++) {
@@ -154,7 +182,10 @@ export class BTree {
     return { values, leftChild: interior ? readUint32(page, offset) : 0 }
   }
 
-  async *indexScanFrom(root: number, low: number[]): AsyncGenerator<SqlValue[]> {
+  async *indexScanFrom(
+    root: number,
+    low: number[],
+  ): AsyncGenerator<SqlValue[]> {
     const { page, header } = await this.pageAt(root)
     let first = 0
     let high = header.cellCount
@@ -179,7 +210,10 @@ export class BTree {
     }
   }
 
-  async indexSeekLE(root: number, key: number[]): Promise<SqlValue[] | undefined> {
+  async indexSeekLE(
+    root: number,
+    key: number[],
+  ): Promise<SqlValue[] | undefined> {
     let best: SqlValue[] | undefined
     let pageNumber = root
     for (;;) {

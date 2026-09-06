@@ -47,7 +47,9 @@ export function exitOrientation(side: NodeSide): Orientation {
 export function edgeIsCanonical(from: number, to: number) {
   const fromId = nodeId(from)
   const toId = nodeId(to)
-  return isReverse(from) ? toId > fromId || (toId === fromId && !isReverse(to)) : toId >= fromId
+  return isReverse(from)
+    ? toId > fromId || (toId === fromId && !isReverse(to))
+    : toId >= fromId
 }
 
 export function pathIsCanonical(path: number[]) {
@@ -56,5 +58,7 @@ export function pathIsCanonical(path: number[]) {
   if (first === undefined || last === undefined) {
     return true
   }
-  return isReverse(first) === isReverse(last) ? !isReverse(first) : edgeIsCanonical(first, last)
+  return isReverse(first) === isReverse(last)
+    ? !isReverse(first)
+    : edgeIsCanonical(first, last)
 }

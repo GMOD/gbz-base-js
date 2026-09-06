@@ -1,4 +1,5 @@
 import path from 'node:path'
+
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
@@ -38,9 +39,17 @@ describe('sqlite reader', () => {
   })
 
   it('refuses a database whose schema it does not understand', async () => {
-    const future = path.join(import.meta.dirname, 'data', 'example-future-schema.gbz.db')
-    await expect(GBZBase.open(new LocalFile(future))).rejects.toBeInstanceOf(SchemaVersionError)
-    await expect(GBZBase.open(new LocalFile(future))).rejects.toThrow('GBZ-base version 99')
+    const future = path.join(
+      import.meta.dirname,
+      'data',
+      'example-future-schema.gbz.db',
+    )
+    await expect(GBZBase.open(new LocalFile(future))).rejects.toBeInstanceOf(
+      SchemaVersionError,
+    )
+    await expect(GBZBase.open(new LocalFile(future))).rejects.toThrow(
+      'GBZ-base version 99',
+    )
   })
 
   it('reads tags and paths', async () => {
@@ -50,17 +59,34 @@ describe('sqlite reader', () => {
     const paths = await db.paths()
     expect(paths).toHaveLength(169)
     expect(paths.filter(p => p.isIndexed)).toHaveLength(4)
-    const chr6 = await db.findPath({ sample: 'GRCh38', contig: 'chr6', haplotype: 0, fragment: 31500000 })
+    const chr6 = await db.findPath({
+      sample: 'GRCh38',
+      contig: 'chr6',
+      haplotype: 0,
+      fragment: 31500000,
+    })
     expect(chr6?.handle).toBe(1)
     expect(chr6?.name.fragment).toBe(31498140)
   })
 
   it('seeks the reference index', async () => {
     const db = await GBZBase.open(new LocalFile(file))
-    expect(await db.indexedPosition(0, 0)).toEqual({ pathOffset: 0, pos: { node: 2, offset: 0 } })
-    expect(await db.indexedPosition(0, 1178)).toEqual({ pathOffset: 0, pos: { node: 2, offset: 0 } })
-    expect(await db.indexedPosition(0, 1179)).toEqual({ pathOffset: 1179, pos: { node: 198, offset: 1 } })
-    expect(await db.indexedPosition(0, 5000)).toEqual({ pathOffset: 4339, pos: { node: 472, offset: 47 } })
+    expect(await db.indexedPosition(0, 0)).toEqual({
+      pathOffset: 0,
+      pos: { node: 2, offset: 0 },
+    })
+    expect(await db.indexedPosition(0, 1178)).toEqual({
+      pathOffset: 0,
+      pos: { node: 2, offset: 0 },
+    })
+    expect(await db.indexedPosition(0, 1179)).toEqual({
+      pathOffset: 1179,
+      pos: { node: 198, offset: 1 },
+    })
+    expect(await db.indexedPosition(0, 5000)).toEqual({
+      pathOffset: 4339,
+      pos: { node: 472, offset: 47 },
+    })
     expect(await db.indexedPosition(99, 5000)).toBeUndefined()
   })
 

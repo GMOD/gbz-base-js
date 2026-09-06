@@ -22,7 +22,7 @@ export function decodeSequence(encoded: Uint8Array) {
   for (const byte of encoded) {
     let value = byte
     for (let i = 0; i < 3; i++) {
-      const base = DECODE[value % 6] as string
+      const base = DECODE[value % 6]!
       if (base === '') {
         return result
       }
@@ -33,12 +33,18 @@ export function decodeSequence(encoded: Uint8Array) {
   return result
 }
 
-const COMPLEMENT: Record<string, string> = { A: 'T', C: 'G', G: 'C', T: 'A', N: 'N' }
+const COMPLEMENT: Record<string, string> = {
+  A: 'T',
+  C: 'G',
+  G: 'C',
+  T: 'A',
+  N: 'N',
+}
 
 export function reverseComplement(sequence: string) {
   let result = ''
   for (let i = sequence.length - 1; i >= 0; i--) {
-    result += COMPLEMENT[sequence[i] as string] ?? 'N'
+    result += COMPLEMENT[sequence[i]!] ?? 'N'
   }
   return result
 }

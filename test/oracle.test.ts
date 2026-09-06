@@ -1,10 +1,16 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
-import { subgraphAroundNodes, subgraphAtOffset, subgraphInInterval } from '../src/query.ts'
+import {
+  subgraphAroundNodes,
+  subgraphAtOffset,
+  subgraphInInterval,
+} from '../src/query.ts'
+
 import type { HaplotypeOutput } from '../src/subgraph.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
@@ -16,7 +22,10 @@ interface OracleQuery {
   args: string[]
 }
 
-const queries: OracleQuery[] = readFileSync(path.join(oracleDir, 'queries.txt'), 'utf8')
+const queries: OracleQuery[] = readFileSync(
+  path.join(oracleDir, 'queries.txt'),
+  'utf8',
+)
   .trim()
   .split('\n')
   .map(line => {
@@ -32,7 +41,8 @@ function option(args: string[], flag: string) {
 async function runQuery(query: OracleQuery) {
   const db = await GBZBase.open(new LocalFile(path.join(dataDir, query.db)))
   const context = Number(option(query.args, '--context') ?? 100)
-  const haplotypes = (option(query.args, '--haplotypes') ?? 'all') as HaplotypeOutput
+  const haplotypes = (option(query.args, '--haplotypes') ??
+    'all') as HaplotypeOutput
   const sample = option(query.args, '--sample')
   const contig = option(query.args, '--contig') ?? ''
   const cigar = query.args.includes('--cigar')
@@ -40,9 +50,16 @@ async function runQuery(query: OracleQuery) {
   const pathQuery = { contig, ...(sample === undefined ? {} : { sample }) }
   const interval = option(query.args, '--interval')
   const offset = option(query.args, '--offset')
-  const nodes = query.args.flatMap((arg, i) => (arg === '--node' ? [Number(query.args[i + 1])] : []))
+  const nodes = query.args.flatMap((arg, i) =>
+    arg === '--node' ? [Number(query.args[i + 1])] : [],
+  )
   const subgraph = interval
-    ? await subgraphInInterval(db, pathQuery, ...(interval.split('..').map(Number) as [number, number]), opts)
+    ? await subgraphInInterval(
+        db,
+        pathQuery,
+        ...(interval.split('..').map(Number) as [number, number]),
+        opts,
+      )
     : offset
       ? await subgraphAtOffset(db, pathQuery, Number(offset), opts)
       : await subgraphAroundNodes(db, nodes, opts)
@@ -52,7 +69,9 @@ async function runQuery(query: OracleQuery) {
 describe('matches upstream gbz-base query output', () => {
   for (const query of queries) {
     it(query.name, async () => {
-      const expected = JSON.parse(readFileSync(path.join(oracleDir, `${query.name}.json`), 'utf8'))
+      const expected = JSON.parse(
+        readFileSync(path.join(oracleDir, `${query.name}.json`), 'utf8'),
+      )
       expect(await runQuery(query)).toEqual(expected)
     })
   }

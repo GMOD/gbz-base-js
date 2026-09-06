@@ -3,18 +3,20 @@ import { describe, expect, it } from 'vitest'
 import { weightedLcs } from '../src/lcs.ts'
 
 function naive(a: number[], b: number[], weight: (x: number) => number) {
-  const dp = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0))
+  const dp = Array.from({ length: a.length + 1 }, () =>
+    new Array<number>(b.length + 1).fill(0),
+  )
   for (let i = 0; i < a.length; i++) {
     for (let j = 0; j < b.length; j++) {
-      const row = dp[i + 1] as number[]
-      const prev = dp[i] as number[]
-      row[j + 1] = Math.max(row[j] as number, prev[j + 1] as number)
+      const row = dp[i + 1]!
+      const prev = dp[i]!
+      row[j + 1] = Math.max(row[j]!, prev[j + 1]!)
       if (a[i] === b[j]) {
-        row[j + 1] = Math.max(row[j + 1] as number, (prev[j] as number) + weight(a[i] as number))
+        row[j + 1] = Math.max(row[j + 1]!, prev[j]! + weight(a[i]!))
       }
     }
   }
-  return (dp[a.length] as number[])[b.length] as number
+  return dp[a.length]![b.length]!
 }
 
 function random(seed: number) {
@@ -51,8 +53,14 @@ describe('weighted lcs', () => {
       const n = 1 + Math.floor(rand() * 12)
       const m = 1 + Math.floor(rand() * 12)
       const alphabet = 2 + Math.floor(rand() * 5)
-      const a = Array.from({ length: n }, () => 1 + Math.floor(rand() * alphabet))
-      const b = Array.from({ length: m }, () => 1 + Math.floor(rand() * alphabet))
+      const a = Array.from(
+        { length: n },
+        () => 1 + Math.floor(rand() * alphabet),
+      )
+      const b = Array.from(
+        { length: m },
+        () => 1 + Math.floor(rand() * alphabet),
+      )
       const weight = (x: number) => 1 + (x % 3)
       const [pairs, total] = weightedLcs(a, b, weight)
       expect(total).toBe(naive(a, b, weight))
@@ -63,7 +71,7 @@ describe('weighted lcs', () => {
         expect(i).toBeGreaterThan(lastA)
         expect(j).toBeGreaterThan(lastB)
         expect(a[i]).toBe(b[j])
-        sum += weight(a[i] as number)
+        sum += weight(a[i]!)
         lastA = i
         lastB = j
       }

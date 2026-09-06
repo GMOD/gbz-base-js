@@ -8,7 +8,7 @@ interface Point {
 function prefixSums(sequence: number[], weight: (x: number) => number) {
   const sums = [0]
   for (let i = 0; i < sequence.length; i++) {
-    sums.push((sums[i] as number) + weight(sequence[i] as number))
+    sums.push(sums[i]! + weight(sequence[i]!))
   }
   return sums
 }
@@ -22,10 +22,10 @@ class MinHeap {
     let i = items.length - 1
     while (i > 0) {
       const parent = (i - 1) >> 1
-      if ((items[parent] as number) <= value) {
+      if (items[parent]! <= value) {
         break
       }
-      items[i] = items[parent] as number
+      items[i] = items[parent]!
       i = parent
     }
     items[i] = value
@@ -46,17 +46,17 @@ class MinHeap {
         const right = left + 1
         let smallest = i
         let value = last
-        if (left < items.length && (items[left] as number) < value) {
+        if (left < items.length && items[left]! < value) {
           smallest = left
-          value = items[left] as number
+          value = items[left]!
         }
-        if (right < items.length && (items[right] as number) < value) {
+        if (right < items.length && items[right]! < value) {
           smallest = right
         }
         if (smallest === i) {
           break
         }
-        items[i] = items[smallest] as number
+        items[i] = items[smallest]!
         i = smallest
       }
       items[i] = last
@@ -68,14 +68,14 @@ class MinHeap {
 class Matrix {
   readonly aSums: number[]
   readonly bSums: number[]
+  readonly a: number[]
+  readonly b: number[]
   readonly points = new Map<number, Map<number, Point>>()
   private pendingEdits = new MinHeap()
 
-  constructor(
-    readonly a: number[],
-    readonly b: number[],
-    weight: (x: number) => number,
-  ) {
+  constructor(a: number[], b: number[], weight: (x: number) => number) {
+    this.a = a
+    this.b = b
     this.aSums = prefixSums(a, weight)
     this.bSums = prefixSums(b, weight)
     this.set(0, 0, { weight: 0, a: 0, b: 0, matches: 0 })
@@ -103,11 +103,11 @@ class Matrix {
   }
 
   aWeight(offset: number) {
-    return (this.aSums[offset + 1] as number) - (this.aSums[offset] as number)
+    return this.aSums[offset + 1]! - this.aSums[offset]!
   }
 
   bWeight(offset: number) {
-    return (this.bSums[offset + 1] as number) - (this.bSums[offset] as number)
+    return this.bSums[offset + 1]! - this.bSums[offset]!
   }
 
   extend(edits: number): Point | undefined {
@@ -122,7 +122,11 @@ class Matrix {
         continue
       }
       const point = { ...found }
-      while (point.a < this.a.length && point.b < this.b.length && this.a[point.a] === this.b[point.b]) {
+      while (
+        point.a < this.a.length &&
+        point.b < this.b.length &&
+        this.a[point.a] === this.b[point.b]
+      ) {
         point.weight += 2 * this.aWeight(point.a)
         point.a += 1
         point.b += 1
@@ -136,29 +140,54 @@ class Matrix {
       }
       if (point.a < this.a.length) {
         const w = this.aWeight(point.a)
-        this.tryInsert(edits + w, diagonal + w, { weight: point.weight, a: point.a + 1, b: point.b, matches: 0 })
+        this.tryInsert(edits + w, diagonal + w, {
+          weight: point.weight,
+          a: point.a + 1,
+          b: point.b,
+          matches: 0,
+        })
       }
       if (point.b < this.b.length) {
         const w = this.bWeight(point.b)
-        this.tryInsert(edits + w, diagonal - w, { weight: point.weight, a: point.a, b: point.b + 1, matches: 0 })
+        this.tryInsert(edits + w, diagonal - w, {
+          weight: point.weight,
+          a: point.a,
+          b: point.b + 1,
+          matches: 0,
+        })
       }
     }
     return undefined
   }
 
   nextEdits(edits: number) {
-    while (this.pendingEdits.peek() !== undefined && (this.pendingEdits.peek() as number) <= edits) {
+    while (
+      this.pendingEdits.peek() !== undefined &&
+      this.pendingEdits.peek()! <= edits
+    ) {
       this.pendingEdits.pop()
     }
     return this.pendingEdits.peek()
   }
 
-  predecessor(a: number, b: number, edits: number): [Point, number] | undefined {
-    const diagonal = (this.aSums[a] as number) - (this.bSums[b] as number)
-    const prev = a > 0 && this.aWeight(a - 1) <= edits ? this.get(edits - this.aWeight(a - 1), diagonal - this.aWeight(a - 1)) : undefined
-    const next = b > 0 && this.bWeight(b - 1) <= edits ? this.get(edits - this.bWeight(b - 1), diagonal + this.bWeight(b - 1)) : undefined
+  predecessor(
+    a: number,
+    b: number,
+    edits: number,
+  ): [Point, number] | undefined {
+    const diagonal = this.aSums[a]! - this.bSums[b]!
+    const prev =
+      a > 0 && this.aWeight(a - 1) <= edits
+        ? this.get(edits - this.aWeight(a - 1), diagonal - this.aWeight(a - 1))
+        : undefined
+    const next =
+      b > 0 && this.bWeight(b - 1) <= edits
+        ? this.get(edits - this.bWeight(b - 1), diagonal + this.bWeight(b - 1))
+        : undefined
     if (prev && next) {
-      return prev.weight > next.weight ? [prev, edits - this.aWeight(a - 1)] : [next, edits - this.bWeight(b - 1)]
+      return prev.weight > next.weight
+        ? [prev, edits - this.aWeight(a - 1)]
+        : [next, edits - this.bWeight(b - 1)]
     }
     if (prev) {
       return [prev, edits - this.aWeight(a - 1)]
@@ -170,34 +199,50 @@ class Matrix {
   }
 }
 
-export function weightedLcs(a: number[], b: number[], weight: (x: number) => number): [pairs: [number, number][], weight: number] {
+export function weightedLcs(
+  a: number[],
+  b: number[],
+  weight: (x: number) => number,
+): [pairs: [number, number][], weight: number] {
   let prefix = 0
   while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) {
     prefix += 1
   }
   let suffix = 0
-  while (suffix < a.length - prefix && suffix < b.length - prefix && a[a.length - 1 - suffix] === b[b.length - 1 - suffix]) {
+  while (
+    suffix < a.length - prefix &&
+    suffix < b.length - prefix &&
+    a[a.length - 1 - suffix] === b[b.length - 1 - suffix]
+  ) {
     suffix += 1
   }
   const pairs: [number, number][] = []
   let total = 0
   for (let i = 0; i < prefix; i++) {
     pairs.push([i, i])
-    total += weight(a[i] as number)
+    total += weight(a[i]!)
   }
-  const [middle, middleWeight] = weightedLcsCore(a.slice(prefix, a.length - suffix), b.slice(prefix, b.length - suffix), weight)
+  const [middle, middleWeight] = weightedLcsCore(
+    a.slice(prefix, a.length - suffix),
+    b.slice(prefix, b.length - suffix),
+    weight,
+  )
   for (const [i, j] of middle) {
     pairs.push([i + prefix, j + prefix])
   }
   total += middleWeight
   for (let i = suffix; i > 0; i--) {
     pairs.push([a.length - i, b.length - i])
-    total += weight(a[a.length - i] as number)
+    total += weight(a[a.length - i]!)
   }
   return [pairs, total]
 }
 
-function weightedLcsCore(a: number[], b: number[], weight: (x: number) => number): [pairs: [number, number][], weight: number] {
+function weightedLcsCore(
+  a: number[],
+  b: number[],
+  weight: (x: number) => number,
+): [pairs: [number, number][], weight: number] {
   if (a.length === 0 || b.length === 0) {
     return [[], 0]
   }

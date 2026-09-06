@@ -1,6 +1,7 @@
-import type { ByteSource } from '../filehandle.ts'
 import { BTree } from './btree.ts'
 import { Pager } from './pager.ts'
+
+import type { ByteSource } from '../filehandle.ts'
 import type { PagerOptions } from './pager.ts'
 import type { SqlValue } from './record.ts'
 
@@ -13,21 +14,36 @@ export interface SqliteObject {
 }
 
 export class SqliteDatabase {
+  readonly pager: Pager
+  readonly btree: BTree
+  readonly objects: Map<string, SqliteObject>
+
   private constructor(
-    readonly pager: Pager,
-    readonly btree: BTree,
-    readonly objects: Map<string, SqliteObject>,
-  ) {}
+    pager: Pager,
+    btree: BTree,
+    objects: Map<string, SqliteObject>,
+  ) {
+    this.pager = pager
+    this.btree = btree
+    this.objects = objects
+  }
 
   static async open(source: ByteSource, opts: PagerOptions = {}) {
     const { size } = await source.stat()
-    const firstBlock = await source.read(Math.min(opts.blockSize ?? 65536, size), 0)
+    const firstBlock = await source.read(
+      Math.min(opts.blockSize ?? 65536, size),
+      0,
+    )
     const header = firstBlock.subarray(0, 100)
     const magic = new TextDecoder().decode(header.subarray(0, 15))
     if (magic !== 'SQLite format 3') {
       throw new Error('Not a SQLite database')
     }
-    const view = new DataView(header.buffer, header.byteOffset, header.byteLength)
+    const view = new DataView(
+      header.buffer,
+      header.byteOffset,
+      header.byteLength,
+    )
     const rawPageSize = view.getUint16(16)
     const pageSize = rawPageSize === 1 ? 65536 : rawPageSize
     const reserved = header[20] ?? 0
@@ -43,8 +59,19 @@ export class SqliteDatabase {
     const objects = new Map<string, SqliteObject>()
     for await (const { values } of btree.tableScan(1)) {
       const [type, name, tableName, rootPage, sql] = values
-      if (typeof type === 'string' && typeof name === 'string' && typeof tableName === 'string' && typeof rootPage === 'number') {
-        objects.set(name, { type, name, tableName, rootPage, sql: typeof sql === 'string' ? sql : '' })
+      if (
+        typeof type === 'string' &&
+        typeof name === 'string' &&
+        typeof tableName === 'string' &&
+        typeof rootPage === 'number'
+      ) {
+        objects.set(name, {
+          type,
+          name,
+          tableName,
+          rootPage,
+          sql: typeof sql === 'string' ? sql : '',
+        })
       }
     }
     return new SqliteDatabase(pager, btree, objects)
@@ -59,7 +86,9 @@ export class SqliteDatabase {
   }
 
   indexOn(tableName: string) {
-    const index = [...this.objects.values()].find(o => o.type === 'index' && o.tableName === tableName)
+    const index = [...this.objects.values()].find(
+      o => o.type === 'index' && o.tableName === tableName,
+    )
     if (!index) {
       throw new Error(`SQLite table ${tableName} has no index`)
     }

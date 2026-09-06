@@ -12,19 +12,32 @@ export class Pager {
   bytesFetched = 0
   fetches = 0
 
+  private source: ByteSource
+  readonly pageSize: number
+  private fileSize: number
+
   constructor(
-    private source: ByteSource,
-    readonly pageSize: number,
-    private fileSize: number,
+    source: ByteSource,
+    pageSize: number,
+    fileSize: number,
     opts: PagerOptions = {},
   ) {
+    this.source = source
+    this.pageSize = pageSize
+    this.fileSize = fileSize
     const requested = opts.blockSize ?? 65536
-    this.blockSize = Math.max(pageSize, Math.ceil(requested / pageSize) * pageSize)
+    this.blockSize = Math.max(
+      pageSize,
+      Math.ceil(requested / pageSize) * pageSize,
+    )
     this.maxBlocks = opts.maxBlocks ?? 256
   }
 
   seed(index: number, bytes: Uint8Array) {
-    if (bytes.length === Math.min(this.blockSize, this.fileSize - index * this.blockSize)) {
+    if (
+      bytes.length ===
+      Math.min(this.blockSize, this.fileSize - index * this.blockSize)
+    ) {
       this.blocks.set(index, Promise.resolve(bytes))
     }
   }

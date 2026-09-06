@@ -1,7 +1,12 @@
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
 import { GBZBase, formatPathName } from './db.ts'
-import { subgraphAroundNodes, subgraphAtOffset, subgraphInInterval } from './query.ts'
+import {
+  subgraphAroundNodes,
+  subgraphAtOffset,
+  subgraphInInterval,
+} from './query.ts'
+
 import type { HaplotypeOutput } from './subgraph.ts'
 
 const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
@@ -61,7 +66,7 @@ function parseArgs(argv: string[]): Args {
     return value
   }
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i] as string
+    const arg = argv[i]!
     switch (arg) {
       case '--sample':
         args.sample = next(i++)
@@ -134,31 +139,60 @@ function parseArgs(argv: string[]): Args {
 
 export async function main(argv: string[]) {
   const args = parseArgs(argv)
-  const source = /^https?:\/\//.test(args.file) ? new RemoteFile(args.file) : new LocalFile(args.file)
+  const source = /^https?:\/\//.test(args.file)
+    ? new RemoteFile(args.file)
+    : new LocalFile(args.file)
   const db = await GBZBase.open(source, { blockSize: args.blockSize })
-  const opts = { context: args.context, haplotypes: args.haplotypes, ...(args.limit === undefined ? {} : { limit: args.limit }) }
-  const query = { contig: args.contig ?? '', haplotype: args.haplotype, ...(args.sample === undefined ? {} : { sample: args.sample }) }
+  const opts = {
+    context: args.context,
+    haplotypes: args.haplotypes,
+    ...(args.limit === undefined ? {} : { limit: args.limit }),
+  }
+  const query = {
+    contig: args.contig ?? '',
+    haplotype: args.haplotype,
+    ...(args.sample === undefined ? {} : { sample: args.sample }),
+  }
   const subgraph =
     args.nodes.length > 0
       ? await subgraphAroundNodes(db, args.nodes, opts)
       : args.interval
-        ? await subgraphInInterval(db, query, args.interval[0], args.interval[1], opts)
+        ? await subgraphInInterval(
+            db,
+            query,
+            args.interval[0],
+            args.interval[1],
+            opts,
+          )
         : args.offset !== undefined
           ? await subgraphAtOffset(db, query, args.offset, opts)
           : undefined
   if (!subgraph) {
-    throw new Error('Query type must be specified using --offset, --interval or --node')
+    throw new Error(
+      'Query type must be specified using --offset, --interval or --node',
+    )
   }
   if (args.resolve) {
     await subgraph.identifyPaths()
   }
   const output = args.alignments
-    ? subgraph.alignments().map(a => ({ ...a, name: a.name ? formatPathName(a.name, a.name.fragment) : undefined, start: undefined }))
-    : subgraph.toJSON(args.cigar, { names: args.resolve ? 'resolved' : 'anonymous' })
+    ? subgraph.alignments().map(a => ({
+        ...a,
+        name: a.name ? formatPathName(a.name, a.name.fragment) : undefined,
+        start: undefined,
+      }))
+    : subgraph.toJSON(args.cigar, {
+        names: args.resolve ? 'resolved' : 'anonymous',
+      })
   process.stdout.write(`${JSON.stringify(output)}\n`)
   if (args.stats) {
     const { fetches, bytesFetched } = db.sqlite.pager
-    const { orderedAlignments, lcsAlignments, identificationSteps, identificationFetches } = subgraph.stats
+    const {
+      orderedAlignments,
+      lcsAlignments,
+      identificationSteps,
+      identificationFetches,
+    } = subgraph.stats
     process.stderr.write(
       `Subgraph contains ${subgraph.nodeCount} nodes and ${subgraph.pathCount} paths; ${fetches} fetches, ${bytesFetched} bytes; ${orderedAlignments} ordered + ${lcsAlignments} lcs alignments; identification ${identificationSteps} steps, ${identificationFetches} lookups\n`,
     )

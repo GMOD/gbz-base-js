@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    name: Build and test
+    name: Lint, build, and test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -19,9 +19,11 @@ jobs:
           node-version: 24.x
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm build
-      - run: pnpm test
+      - run: pnpm test --run
 
   publish:
     name: Publish to npm
@@ -52,11 +54,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Notes come from the CHANGELOG.md section git-cliff wrote during
+      # `pnpm version`, which is part of the tagged commit — so this needs
+      # neither full history nor a second pass over the git log.
       - name: Create release
         run: |
+          ./scripts/release-notes.sh "$GITHUB_REF_NAME" > /tmp/notes.md
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --verify-tag \
-            --generate-notes
+            --notes-file /tmp/notes.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

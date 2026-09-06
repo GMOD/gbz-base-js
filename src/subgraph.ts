@@ -1,6 +1,4 @@
-import type { GBZBase, GbzPath, GbzRecord, HaplotypeSample, PathName } from './db.ts'
 import { formatPathName } from './db.ts'
-import type { Pos } from './gbwt/record.ts'
 import {
   ENDMARKER,
   edgeIsCanonical,
@@ -15,8 +13,17 @@ import {
   nodeOrientation,
   pathIsCanonical,
 } from './gbwt/node.ts'
-import type { NodeSide, Orientation } from './gbwt/node.ts'
 import { weightedLcs } from './lcs.ts'
+
+import type {
+  GBZBase,
+  GbzPath,
+  GbzRecord,
+  HaplotypeSample,
+  PathName,
+} from './db.ts'
+import type { NodeSide, Orientation } from './gbwt/node.ts'
+import type { Pos } from './gbwt/record.ts'
 
 export type HaplotypeOutput = 'all' | 'distinct' | 'reference-only' | 'none'
 
@@ -61,7 +68,12 @@ export interface SubgraphPath {
 
 export interface SubgraphJson {
   nodes: { id: string; sequence: string }[]
-  edges: { from: string; from_is_reverse: boolean; to: string; to_is_reverse: boolean }[]
+  edges: {
+    from: string
+    from_is_reverse: boolean
+    to: string
+    to_is_reverse: boolean
+  }[]
   paths: SubgraphPath[]
 }
 
@@ -93,9 +105,12 @@ class SideQueue {
   pop() {
     let best = 0
     for (let i = 1; i < this.items.length; i++) {
-      const a = this.items[i] as [number, number, NodeSide]
-      const b = this.items[best] as [number, number, NodeSide]
-      if (a[0] < b[0] || (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])))) {
+      const a = this.items[i]!
+      const b = this.items[best]!
+      if (
+        a[0] < b[0] ||
+        (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])))
+      ) {
         best = i
       }
     }
@@ -128,9 +143,18 @@ export class Subgraph {
   private refIndexCache: Map<number, number[]> | undefined
   private refPrefixCache: number[] | undefined
   limit: number | undefined
-  readonly stats = { orderedAlignments: 0, lcsAlignments: 0, identificationSteps: 0, identificationFetches: 0 }
+  readonly stats = {
+    orderedAlignments: 0,
+    lcsAlignments: 0,
+    identificationSteps: 0,
+    identificationFetches: 0,
+  }
 
-  constructor(private db: GBZBase) {}
+  private db: GBZBase
+
+  constructor(db: GBZBase) {
+    this.db = db
+  }
 
   get nodeCount() {
     return this.records.size / 2
@@ -142,7 +166,11 @@ export class Subgraph {
 
   get referenceInterval() {
     return this.refInterval && this.refPath
-      ? { name: this.refPath, start: this.refPath.fragment + this.refInterval[0], end: this.refPath.fragment + this.refInterval[1] }
+      ? {
+          name: this.refPath,
+          start: this.refPath.fragment + this.refInterval[0],
+          end: this.refPath.fragment + this.refInterval[1],
+        }
       : undefined
   }
 
@@ -198,20 +226,36 @@ export class Subgraph {
   async pathPosition(query: PathName): Promise<ReferencePath> {
     const path = await this.db.findPath(query)
     if (!path) {
-      throw new Error(`Cannot find a path covering ${formatPathName(query, query.fragment)}`)
+      throw new Error(
+        `Cannot find a path covering ${formatPathName(query, query.fragment)}`,
+      )
     }
     if (!path.isIndexed) {
-      throw new Error(`Path ${formatPathName(path.name, path.name.fragment)} has not been indexed for random access`)
+      throw new Error(
+        `Path ${formatPathName(path.name, path.name.fragment)} has not been indexed for random access`,
+      )
     }
     const queryOffset = query.fragment - path.name.fragment
     const indexed = await this.db.indexedPosition(path.handle, queryOffset)
     if (!indexed) {
-      throw new Error(`Path ${formatPathName(path.name, path.name.fragment)} has not been indexed for random access`)
+      throw new Error(
+        `Path ${formatPathName(path.name, path.name.fragment)} has not been indexed for random access`,
+      )
     }
-    return this.findPathPosition(path, queryOffset, indexed.pathOffset, indexed.pos)
+    return this.findPathPosition(
+      path,
+      queryOffset,
+      indexed.pathOffset,
+      indexed.pos,
+    )
   }
 
-  private async findPathPosition(path: GbzPath, queryOffset: number, startOffset: number, start: Pos): Promise<ReferencePath> {
+  private async findPathPosition(
+    path: GbzPath,
+    queryOffset: number,
+    startOffset: number,
+    start: Pos,
+  ): Promise<ReferencePath> {
     let pathOffset = startOffset
     let pos = start
     for (;;) {
@@ -219,7 +263,12 @@ export class Subgraph {
       const record = this.record(pos.node)
       if (pathOffset + record.sequenceLen > queryOffset) {
         return {
-          position: { seqOffset: queryOffset, handle: pos.node, nodeOffset: queryOffset - pathOffset, gbwtOffset: pos.offset },
+          position: {
+            seqOffset: queryOffset,
+            handle: pos.node,
+            nodeOffset: queryOffset - pathOffset,
+            gbwtOffset: pos.offset,
+          },
           name: path.name,
           handle: path.handle,
         }
@@ -227,7 +276,9 @@ export class Subgraph {
       pathOffset += record.sequenceLen
       const next = record.gbwt().lf(pos.offset)
       if (!next) {
-        throw new Error(`Path ${formatPathName(path.name, path.name.fragment)} does not contain offset ${queryOffset}`)
+        throw new Error(
+          `Path ${formatPathName(path.name, path.name.fragment)} does not contain offset ${queryOffset}`,
+        )
       }
       pos = next
     }
@@ -258,18 +309,26 @@ export class Subgraph {
       await this.ensureNode(id)
       const record = this.record(pos.node)
       if (offset >= record.sequenceLen) {
-        throw new Error(`Offset ${offset} in node ${id} of length ${record.sequenceLen}`)
+        throw new Error(
+          `Offset ${offset} in node ${id} of length ${record.sequenceLen}`,
+        )
       }
       active.push(offset, id, entrySide(orientation))
       const distanceToNext = record.sequenceLen - offset
       if (remaining <= distanceToNext) {
-        active.push(remaining === distanceToNext ? 0 : distanceToNext - remaining - 1, id, exitSide(orientation))
+        active.push(
+          remaining === distanceToNext ? 0 : distanceToNext - remaining - 1,
+          id,
+          exitSide(orientation),
+        )
         break
       }
       active.push(0, id, exitSide(orientation))
       const next = record.gbwt().lf(pos.offset)
       if (!next) {
-        throw new Error(`No successor for GBWT position (${pos.node}, ${pos.offset})`)
+        throw new Error(
+          `No successor for GBWT position (${pos.node}, ${pos.offset})`,
+        )
       }
       pos = next
       offset = 0
@@ -297,7 +356,7 @@ export class Subgraph {
     }
     let inserted = 0
     while (active.size > 0) {
-      const [distance, id, side] = active.pop() as [number, number, NodeSide]
+      const [distance, id, side] = active.pop()!
       const key = `${id}:${side}`
       if (visited.has(key)) {
         continue
@@ -344,7 +403,10 @@ export class Subgraph {
     this.refPath = reference?.name
     this.refHandle = reference?.handle
     const handles = this.sortedHandles()
-    const successors = new Map<number, { next: Pos; hasPredecessor: boolean }[]>()
+    const successors = new Map<
+      number,
+      { next: Pos; hasPredecessor: boolean }[]
+    >()
     for (const handle of handles) {
       successors.set(
         handle,
@@ -364,7 +426,10 @@ export class Subgraph {
     }
     let refOffset: number | undefined
     for (const handle of handles) {
-      const entries = successors.get(handle) as { next: Pos; hasPredecessor: boolean }[]
+      const entries = successors.get(handle) as {
+        next: Pos
+        hasPredecessor: boolean
+      }[]
       entries.forEach((entry, offset) => {
         if (entry.hasPredecessor) {
           return
@@ -375,7 +440,10 @@ export class Subgraph {
         const positions: Pos[] = []
         let len = 0
         while (curr) {
-          if (refPos && curr.node === refPos.handle && curr.offset === refPos.gbwtOffset) {
+          if (
+            curr.node === refPos?.handle &&
+            curr.offset === refPos.gbwtOffset
+          ) {
             this.refId = this.paths.length
             refOffset = path.length
             isRef = true
@@ -383,11 +451,24 @@ export class Subgraph {
           path.push(curr.node)
           positions.push(curr)
           len += this.record(curr.node).sequenceLen
-          const step: { next: Pos } | undefined = successors.get(curr.node)?.[curr.offset]
-          curr = step && step.next.node !== ENDMARKER && successors.has(step.next.node) ? step.next : undefined
+          const step: { next: Pos } | undefined = successors.get(curr.node)?.[
+            curr.offset
+          ]
+          curr =
+            step &&
+            step.next.node !== ENDMARKER &&
+            successors.has(step.next.node)
+              ? step.next
+              : undefined
         }
         if (isRef || pathIsCanonical(path)) {
-          this.paths.push({ path, positions, len, weight: undefined, identity: undefined })
+          this.paths.push({
+            path,
+            positions,
+            len,
+            weight: undefined,
+            identity: undefined,
+          })
         }
       })
     }
@@ -396,15 +477,19 @@ export class Subgraph {
         this.clearPaths()
         throw new Error('Could not find the reference path')
       }
-      const info = this.paths[this.refId] as PathInfo
+      const info = this.paths[this.refId]!
       let before = refPos.nodeOffset
       for (const handle of info.path.slice(0, refOffset)) {
         before += this.record(handle).sequenceLen
       }
       const start = refPos.seqOffset - before
       this.refInterval = [start, start + info.len]
-      if (reference) {
-        info.identity = { pathHandle: reference.handle, name: reference.name, orientation: 'forward', hapStart: start, hapEnd: start + info.len }
+      info.identity = {
+        pathHandle: reference.handle,
+        name: reference.name,
+        orientation: 'forward',
+        hapStart: start,
+        hapEnd: start + info.len,
       }
     }
     if (output === 'distinct') {
@@ -413,13 +498,14 @@ export class Subgraph {
       if (this.refId === undefined) {
         throw new Error('Reference path is required for reference-only output')
       }
-      this.paths = [this.paths[this.refId] as PathInfo]
+      this.paths = [this.paths[this.refId]!]
       this.refId = 0
     }
   }
 
   private distinctPaths() {
-    const refPath = this.refId === undefined ? undefined : (this.paths[this.refId] as PathInfo).path
+    const refPath =
+      this.refId === undefined ? undefined : this.paths[this.refId]!.path
     this.paths.sort((x, y) => comparePaths(x.path, y.path) || x.len - y.len)
     const merged: PathInfo[] = []
     let refId: number | undefined
@@ -440,7 +526,9 @@ export class Subgraph {
 
   async identifyPaths() {
     if (!this.db.hasHaplotypeIndex) {
-      throw new Error('The database has no HaplotypeSamples table; run gbz-haplotype-index on it')
+      throw new Error(
+        'The database has no HaplotypeSamples table; run gbz-haplotype-index on it',
+      )
     }
     const interval = (await this.db.haplotypeSampleInterval()) ?? 4096
     const handles = this.sortedHandles()
@@ -450,7 +538,10 @@ export class Subgraph {
       return
     }
     const samples = new Map<string, HaplotypeSample>()
-    for (const sample of await this.db.haplotypeSamplesInRange(minHandle, maxHandle)) {
+    for (const sample of await this.db.haplotypeSamplesInRange(
+      minHandle,
+      maxHandle,
+    )) {
       samples.set(posKey(sample), sample)
     }
     const starts = new Map<string, number>()
@@ -497,17 +588,40 @@ export class Subgraph {
       }
       return name
     }
-    const anchorFromSample = (sample: HaplotypeSample, counter: number, nodeLen: number): Anchor =>
+    const anchorFromSample = (
+      sample: HaplotypeSample,
+      counter: number,
+      nodeLen: number,
+    ): Anchor =>
       sample.orientation === 'forward'
-        ? { pathHandle: sample.pathHandle, orientation: 'forward', base: sample.pathOffset - counter }
-        : { pathHandle: sample.pathHandle, orientation: 'reverse', base: sample.pathOffset + counter + nodeLen }
-    const anchorFromIdentity = (identity: PathIdentity, counter: number): Anchor =>
+        ? {
+            pathHandle: sample.pathHandle,
+            orientation: 'forward',
+            base: sample.pathOffset - counter,
+          }
+        : {
+            pathHandle: sample.pathHandle,
+            orientation: 'reverse',
+            base: sample.pathOffset + counter + nodeLen,
+          }
+    const anchorFromIdentity = (
+      identity: PathIdentity,
+      counter: number,
+    ): Anchor =>
       identity.orientation === 'forward'
-        ? { pathHandle: identity.pathHandle, orientation: 'forward', base: identity.hapStart - counter }
-        : { pathHandle: identity.pathHandle, orientation: 'reverse', base: identity.hapEnd + counter }
+        ? {
+            pathHandle: identity.pathHandle,
+            orientation: 'forward',
+            base: identity.hapStart - counter,
+          }
+        : {
+            pathHandle: identity.pathHandle,
+            orientation: 'reverse',
+            base: identity.hapEnd + counter,
+          }
 
     for (let start = 0; start < this.paths.length; start++) {
-      const startInfo = this.paths[start] as PathInfo
+      const startInfo = this.paths[start]!
       if (start === this.refId || startInfo.identity) {
         continue
       }
@@ -523,7 +637,7 @@ export class Subgraph {
             break
           }
           visited.add(current)
-          const info = this.paths[current] as PathInfo
+          const info = this.paths[current]!
           chain.push({ index: current, startBp: counter })
           let bp = counter
           for (const position of info.positions) {
@@ -539,7 +653,7 @@ export class Subgraph {
           if (anchor) {
             break
           }
-          const last = info.positions[info.positions.length - 1] as Pos
+          const last = info.positions[info.positions.length - 1]!
           pos = this.record(last.node).gbwt().lf(last.offset)
           current = undefined
         }
@@ -548,7 +662,7 @@ export class Subgraph {
         }
         const known = starts.get(posKey(pos))
         if (known !== undefined) {
-          const identity = (this.paths[known] as PathInfo).identity
+          const identity = this.paths[known]!.identity
           if (identity) {
             anchor = anchorFromIdentity(identity, counter)
             break
@@ -563,7 +677,10 @@ export class Subgraph {
           break
         }
         this.stats.identificationSteps += 1
-        if (counter - (chain[chain.length - 1] as { startBp: number }).startBp > 4 * interval + 4 * record.sequenceLen) {
+        if (
+          counter - (chain[chain.length - 1] as { startBp: number }).startBp >
+          4 * interval + 4 * record.sequenceLen
+        ) {
           break
         }
         counter += record.sequenceLen
@@ -572,11 +689,23 @@ export class Subgraph {
       if (anchor) {
         const name = await nameOf(anchor.pathHandle)
         for (const { index, startBp } of chain) {
-          const info = this.paths[index] as PathInfo
+          const info = this.paths[index]!
           info.identity =
             anchor.orientation === 'forward'
-              ? { pathHandle: anchor.pathHandle, name, orientation: 'forward', hapStart: anchor.base + startBp, hapEnd: anchor.base + startBp + info.len }
-              : { pathHandle: anchor.pathHandle, name, orientation: 'reverse', hapStart: anchor.base - startBp - info.len, hapEnd: anchor.base - startBp }
+              ? {
+                  pathHandle: anchor.pathHandle,
+                  name,
+                  orientation: 'forward',
+                  hapStart: anchor.base + startBp,
+                  hapEnd: anchor.base + startBp + info.len,
+                }
+              : {
+                  pathHandle: anchor.pathHandle,
+                  name,
+                  orientation: 'reverse',
+                  hapStart: anchor.base - startBp - info.len,
+                  hapEnd: anchor.base - startBp,
+                }
         }
       }
     }
@@ -602,19 +731,22 @@ export class Subgraph {
     if (this.refPrefixCache === undefined) {
       const prefix = [0]
       ref.forEach((handle, i) => {
-        prefix.push((prefix[i] as number) + this.record(handle).sequenceLen)
+        prefix.push(prefix[i]! + this.record(handle).sequenceLen)
       })
       this.refPrefixCache = prefix
     }
     return this.refPrefixCache
   }
 
-  private orderedMatches(path: number[], ref: number[]): [number, number][] | undefined {
+  private orderedMatches(
+    path: number[],
+    ref: number[],
+  ): [number, number][] | undefined {
     const index = this.refIndex(ref)
     const pairs: [number, number][] = []
     let last = -1
     for (let i = 0; i < path.length; i++) {
-      const occurrences = index.get(path[i] as number)
+      const occurrences = index.get(path[i]!)
       if (occurrences) {
         const j = occurrences.find(x => x > last)
         if (j === undefined) {
@@ -642,8 +774,8 @@ export class Subgraph {
     let pb = 0
     let rb = 0
     while (pi < path.length && ri < ref.length) {
-      const a = this.record(path[pi] as number).sequence
-      const b = this.record(ref[ri] as number).sequence
+      const a = this.record(path[pi]!).sequence
+      const b = this.record(ref[ri]!).sequence
       while (pb < a.length && rb < b.length) {
         if (a[pb] !== b[rb]) {
           return result
@@ -671,8 +803,8 @@ export class Subgraph {
     let pb = 0
     let rb = 0
     while (pi < path.length && ri < ref.length) {
-      const a = this.record(path[path.length - pi - 1] as number).sequence
-      const b = this.record(ref[ref.length - ri - 1] as number).sequence
+      const a = this.record(path[path.length - pi - 1]!).sequence
+      const b = this.record(ref[ref.length - ri - 1]!).sequence
       while (pb < a.length && rb < b.length) {
         if (a[a.length - pb - 1] !== b[b.length - rb - 1]) {
           return result
@@ -713,7 +845,10 @@ export class Subgraph {
       appendEdit(edits, 'I', pathMiddle)
     } else {
       const mismatch = Math.min(pathMiddle, refMiddle)
-      const mismatchIndel = 4 * mismatch + gapPenalty(pathMiddle - mismatch) + gapPenalty(refMiddle - mismatch)
+      const mismatchIndel =
+        4 * mismatch +
+        gapPenalty(pathMiddle - mismatch) +
+        gapPenalty(refMiddle - mismatch)
       const insertionDeletion = gapPenalty(pathMiddle) + gapPenalty(refMiddle)
       if (mismatchIndel <= insertionDeletion) {
         appendEdit(edits, 'M', mismatch)
@@ -732,20 +867,26 @@ export class Subgraph {
     if (this.refId === undefined || pathIndex === this.refId || !info) {
       return undefined
     }
-    const ref = (this.paths[this.refId] as PathInfo).path
+    const ref = this.paths[this.refId]!.path
     const ordered = this.orderedMatches(info.path, ref)
     if (ordered) {
       this.stats.orderedAlignments += 1
     } else {
       this.stats.lcsAlignments += 1
     }
-    const lcs = ordered ?? weightedLcs(info.path, ref, handle => this.record(handle).sequenceLen)[0]
+    const lcs =
+      ordered ??
+      weightedLcs(info.path, ref, handle => this.record(handle).sequenceLen)[0]
     const edits: Edit[] = []
     let pathOffset = 0
     let refOffset = 0
     for (const [nextPath, nextRef] of lcs) {
-      this.align(info.path.slice(pathOffset, nextPath), ref.slice(refOffset, nextRef), edits)
-      appendEdit(edits, 'M', this.record(info.path[nextPath] as number).sequenceLen)
+      this.align(
+        info.path.slice(pathOffset, nextPath),
+        ref.slice(refOffset, nextRef),
+        edits,
+      )
+      appendEdit(edits, 'M', this.record(info.path[nextPath]!).sequenceLen)
       pathOffset = nextPath + 1
       refOffset = nextRef + 1
     }
@@ -754,7 +895,9 @@ export class Subgraph {
   }
 
   alignToRef(pathIndex: number) {
-    return this.edits(pathIndex)?.map(([op, len]) => `${len}${op}`).join('')
+    return this.edits(pathIndex)
+      ?.map(([op, len]) => `${len}${op}`)
+      .join('')
   }
 
   alignments(): HaplotypeAlignment[] {
@@ -762,35 +905,45 @@ export class Subgraph {
     if (this.refId === undefined || !reference) {
       throw new Error('Alignments need a reference path')
     }
-    const ref = (this.paths[this.refId] as PathInfo).path
-    const refTotal = this.refPrefix(ref)[ref.length] as number
+    const ref = this.paths[this.refId]!.path
+    const refTotal = this.refPrefix(ref)[ref.length]!
     const result: HaplotypeAlignment[] = []
     this.paths.forEach((info, index) => {
       if (index === this.refId) {
         return
       }
-      const edits = this.edits(index) as Edit[]
+      const edits = this.edits(index)!
       let first = 0
       let leading = 0
-      while (first < edits.length && (edits[first] as Edit)[0] === 'D') {
-        leading += (edits[first] as Edit)[1]
+      while (first < edits.length && edits[first]![0] === 'D') {
+        leading += edits[first]![1]
         first += 1
       }
       let last = edits.length
       let trailing = 0
-      while (last > first && (edits[last - 1] as Edit)[0] === 'D') {
-        trailing += (edits[last - 1] as Edit)[1]
+      while (last > first && edits[last - 1]![0] === 'D') {
+        trailing += edits[last - 1]![1]
         last -= 1
       }
       const identity = info.identity
-      const strand = info.path.some(handle => isReverse(handle)) && !info.path.some(handle => !isReverse(handle)) ? '-' : '+'
+      const strand =
+        info.path.some(handle => isReverse(handle)) &&
+        !info.path.some(handle => !isReverse(handle))
+          ? '-'
+          : '+'
       result.push({
         pathHandle: identity?.pathHandle,
         name: identity?.name,
-        strand: identity ? (identity.orientation === 'forward' ? '+' : '-') : strand,
-        hapStart: identity ? identity.name.fragment + identity.hapStart : undefined,
+        strand: identity
+          ? identity.orientation === 'forward'
+            ? '+'
+            : '-'
+          : strand,
+        hapStart: identity
+          ? identity.name.fragment + identity.hapStart
+          : undefined,
         hapEnd: identity ? identity.name.fragment + identity.hapEnd : undefined,
-        start: info.positions[0] as Pos,
+        start: info.positions[0]!,
         refStart: reference.start + leading,
         refEnd: reference.start + refTotal - trailing,
         cigar: edits
@@ -808,7 +961,10 @@ export class Subgraph {
     const handles = this.sortedHandles()
     const nodes = handles
       .filter(handle => !isReverse(handle))
-      .map(handle => ({ id: String(nodeId(handle)), sequence: this.record(handle).sequence }))
+      .map(handle => ({
+        id: String(nodeId(handle)),
+        sequence: this.record(handle).sequence,
+      }))
     const edges: SubgraphJson['edges'] = []
     for (const handle of handles) {
       for (const successor of this.record(handle).successors()) {
@@ -825,9 +981,18 @@ export class Subgraph {
     const paths: SubgraphPath[] = []
     const contig = this.refPath?.contig ?? 'unknown'
     if (this.refId !== undefined && this.refPath && this.refInterval) {
-      const info = this.paths[this.refId] as PathInfo
-      const name = { ...this.refPath, fragment: this.refPath.fragment + this.refInterval[0] }
-      paths.push(jsonPath(info, formatPathName(name, this.refPath.fragment + this.refInterval[1]), undefined))
+      const info = this.paths[this.refId]!
+      const name = {
+        ...this.refPath,
+        fragment: this.refPath.fragment + this.refInterval[0],
+      }
+      paths.push(
+        jsonPath(
+          info,
+          formatPathName(name, this.refPath.fragment + this.refInterval[1]),
+          undefined,
+        ),
+      )
     }
     let haplotype = 1
     this.paths.forEach((info, index) => {
@@ -836,29 +1001,47 @@ export class Subgraph {
       }
       const resolved = opts.names === 'resolved' ? info.identity : undefined
       const name = resolved
-        ? formatPathName({ ...resolved.name, fragment: resolved.name.fragment + resolved.hapStart }, resolved.name.fragment + resolved.hapEnd)
-        : formatPathName({ sample: 'unknown', contig, haplotype, fragment: 0 }, info.len)
-      paths.push(jsonPath(info, name, cigar ? this.alignToRef(index) : undefined))
+        ? formatPathName(
+            {
+              ...resolved.name,
+              fragment: resolved.name.fragment + resolved.hapStart,
+            },
+            resolved.name.fragment + resolved.hapEnd,
+          )
+        : formatPathName(
+            { sample: 'unknown', contig, haplotype, fragment: 0 },
+            info.len,
+          )
+      paths.push(
+        jsonPath(info, name, cigar ? this.alignToRef(index) : undefined),
+      )
       haplotype += 1
     })
     return { nodes, edges, paths }
   }
 }
 
-function jsonPath(info: PathInfo, name: string, cigar: string | undefined): SubgraphPath {
+function jsonPath(
+  info: PathInfo,
+  name: string,
+  cigar: string | undefined,
+): SubgraphPath {
   return {
     name,
     ...(info.weight === undefined ? {} : { weight: info.weight }),
     ...(cigar === undefined ? {} : { cigar }),
-    path: info.path.map(handle => ({ id: String(nodeId(handle)), is_reverse: isReverse(handle) })),
+    path: info.path.map(handle => ({
+      id: String(nodeId(handle)),
+      is_reverse: isReverse(handle),
+    })),
   }
 }
 
 function comparePaths(a: number[], b: number[]) {
   const n = Math.min(a.length, b.length)
   for (let i = 0; i < n; i++) {
-    const x = a[i] as number
-    const y = b[i] as number
+    const x = a[i]!
+    const y = b[i]!
     if (x !== y) {
       return x < y ? -1 : 1
     }
@@ -871,7 +1054,7 @@ function appendEdit(edits: Edit[], op: EditOp, len: number) {
     return
   }
   const last = edits[edits.length - 1]
-  if (last && last[0] === op) {
+  if (last?.[0] === op) {
     last[1] += len
   } else {
     edits.push([op, len])

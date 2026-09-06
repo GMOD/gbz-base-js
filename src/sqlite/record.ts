@@ -1,6 +1,9 @@
 export type SqlValue = null | number | string | Uint8Array
 
-export function readVarint(bytes: Uint8Array, offset: number): [value: number, next: number] {
+export function readVarint(
+  bytes: Uint8Array,
+  offset: number,
+): [value: number, next: number] {
   let value = 0
   for (let i = 0; i < 8; i++) {
     const byte = bytes[offset + i]
@@ -37,7 +40,10 @@ function readSignedInt(view: DataView, offset: number, width: number) {
       return view.getInt16(offset) * 4294967296 + view.getUint32(offset + 2)
     default: {
       const big = view.getBigInt64(offset)
-      if (big > BigInt(Number.MAX_SAFE_INTEGER) || big < BigInt(Number.MIN_SAFE_INTEGER)) {
+      if (
+        big > BigInt(Number.MAX_SAFE_INTEGER) ||
+        big < BigInt(Number.MIN_SAFE_INTEGER)
+      ) {
         throw new Error(`SQLite integer ${big} exceeds the safe integer range`)
       }
       return Number(big)
@@ -56,7 +62,11 @@ export function decodeRecord(payload: Uint8Array): SqlValue[] {
     types.push(type)
     offset = next
   }
-  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength)
+  const view = new DataView(
+    payload.buffer,
+    payload.byteOffset,
+    payload.byteLength,
+  )
   let body = headerSize
   return types.map(type => {
     if (type === 0) {

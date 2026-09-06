@@ -27,10 +27,13 @@ export function decompressEdges(bytes: Uint8Array): Pos[] {
 }
 
 export class GbwtRecord {
-  constructor(
-    readonly edges: Pos[],
-    readonly bwt: Uint8Array,
-  ) {}
+  readonly edges: Pos[]
+  readonly bwt: Uint8Array
+
+  constructor(edges: Pos[], bwt: Uint8Array) {
+    this.edges = edges
+    this.bwt = bwt
+  }
 
   runs() {
     return new RunReader(this.bwt, this.edges.length)
@@ -39,7 +42,9 @@ export class GbwtRecord {
   private edge(rank: number) {
     const edge = this.edges[rank]
     if (edge === undefined) {
-      throw new Error(`GBWT run refers to edge rank ${rank} of ${this.edges.length}`)
+      throw new Error(
+        `GBWT run refers to edge rank ${rank} of ${this.edges.length}`,
+      )
     }
     return edge
   }
@@ -49,9 +54,11 @@ export class GbwtRecord {
     let offset = 0
     for (const run of this.runs()) {
       const edge = this.edge(run.value)
-      const soFar = offsets[run.value] as number
+      const soFar = offsets[run.value]!
       if (offset + run.len > i) {
-        return edge.node === ENDMARKER ? undefined : { node: edge.node, offset: soFar + (i - offset) }
+        return edge.node === ENDMARKER
+          ? undefined
+          : { node: edge.node, offset: soFar + (i - offset) }
       }
       offsets[run.value] = soFar + run.len
       offset += run.len
@@ -64,7 +71,7 @@ export class GbwtRecord {
     let high = this.edges.length
     while (low < high) {
       const mid = (low + high) >> 1
-      const edge = this.edges[mid] as Pos
+      const edge = this.edges[mid]!
       if (edge.node === node) {
         return mid
       }
@@ -85,7 +92,7 @@ export class GbwtRecord {
     if (rank === undefined) {
       return undefined
     }
-    let succRank = (this.edges[rank] as Pos).offset
+    let succRank = this.edges[rank]!.offset
     if (succRank > pos.offset) {
       return undefined
     }
@@ -104,7 +111,10 @@ export class GbwtRecord {
   }
 
   predecessorAt(i: number): number | undefined {
-    const counts = this.edges.map(e => ({ node: e.node === ENDMARKER ? ENDMARKER : flipNode(e.node), count: 0 }))
+    const counts = this.edges.map(e => ({
+      node: e.node === ENDMARKER ? ENDMARKER : flipNode(e.node),
+      count: 0,
+    }))
     for (const run of this.runs()) {
       const entry = counts[run.value]
       if (entry) {
@@ -135,8 +145,8 @@ export class GbwtRecord {
     for (const run of this.runs()) {
       const edge = this.edge(run.value)
       for (let k = 0; k < run.len; k++) {
-        result.push({ node: edge.node, offset: offsets[run.value] as number })
-        offsets[run.value] = (offsets[run.value] as number) + 1
+        result.push({ node: edge.node, offset: offsets[run.value]! })
+        offsets[run.value] = offsets[run.value]! + 1
       }
     }
     return result

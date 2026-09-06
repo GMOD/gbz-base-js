@@ -1,9 +1,10 @@
-import type { ByteSource } from './filehandle.ts'
-import { GbwtRecord, decompressEdges } from './gbwt/record.ts'
-import type { Pos } from './gbwt/record.ts'
 import { ENDMARKER, nodeId, nodeOrientation } from './gbwt/node.ts'
+import { GbwtRecord, decompressEdges } from './gbwt/record.ts'
 import { decodeSequence, encodedSequenceLength } from './gbwt/sequence.ts'
 import { SqliteDatabase } from './sqlite/database.ts'
+
+import type { ByteSource } from './filehandle.ts'
+import type { Pos } from './gbwt/record.ts'
 import type { PagerOptions } from './sqlite/pager.ts'
 import type { SqlValue } from './sqlite/record.ts'
 
@@ -20,12 +21,15 @@ export const SCHEMA_VERSION = 'GBZ-base version 4'
 export class SchemaVersionError extends Error {
   override name = 'SchemaVersionError'
 
-  constructor(readonly found: string | undefined) {
+  readonly found: string | undefined
+
+  constructor(found: string | undefined) {
     super(
       found === undefined
         ? `not a gbz-base database: its Tags table has no version`
         : `unsupported database schema "${found}"; this reader understands "${SCHEMA_VERSION}"`,
     )
+    this.found = found
   }
 }
 
@@ -51,15 +55,25 @@ export interface GbzPath {
 
 export class GbzRecord {
   readonly sequenceLen: number
+  readonly handle: number
+  readonly edges: Pos[]
+  readonly bwt: Uint8Array
+  readonly encodedSequence: Uint8Array
+  readonly next: number | undefined
   private decoded: string | undefined
 
   constructor(
-    readonly handle: number,
-    readonly edges: Pos[],
-    readonly bwt: Uint8Array,
-    readonly encodedSequence: Uint8Array,
-    readonly next: number | undefined,
+    handle: number,
+    edges: Pos[],
+    bwt: Uint8Array,
+    encodedSequence: Uint8Array,
+    next: number | undefined,
   ) {
+    this.handle = handle
+    this.edges = edges
+    this.bwt = bwt
+    this.encodedSequence = encodedSequence
+    this.next = next
     this.sequenceLen = encodedSequenceLength(encodedSequence)
   }
 
@@ -112,8 +126,14 @@ function blob(value: SqlValue | undefined, what: string) {
 function rowToPath(rowid: number, values: SqlValue[]): GbzPath {
   return {
     handle: rowid,
-    fwStart: { node: num(values[1], 'Paths.fw_node'), offset: num(values[2], 'Paths.fw_offset') },
-    revStart: { node: num(values[3], 'Paths.rev_node'), offset: num(values[4], 'Paths.rev_offset') },
+    fwStart: {
+      node: num(values[1], 'Paths.fw_node'),
+      offset: num(values[2], 'Paths.fw_offset'),
+    },
+    revStart: {
+      node: num(values[3], 'Paths.rev_node'),
+      offset: num(values[4], 'Paths.rev_offset'),
+    },
     name: {
       sample: str(values[5], 'Paths.sample'),
       contig: str(values[6], 'Paths.contig'),
@@ -128,7 +148,11 @@ export class GBZBase {
   private tagCache: Promise<Map<string, string>> | undefined
   private pathCache: Promise<GbzPath[]> | undefined
 
-  private constructor(readonly sqlite: SqliteDatabase) {}
+  readonly sqlite: SqliteDatabase
+
+  private constructor(sqlite: SqliteDatabase) {
+    this.sqlite = sqlite
+  }
 
   static async open(source: ByteSource, opts: PagerOptions = {}) {
     const sqlite = await SqliteDatabase.open(source, opts)
@@ -205,7 +229,9 @@ export class GBZBase {
   }
 
   get hasHaplotypeIndex() {
-    return this.sqlite.has('HaplotypeSamples') && this.sqlite.has('HaplotypeLengths')
+    return (
+      this.sqlite.has('HaplotypeSamples') && this.sqlite.has('HaplotypeLengths')
+    )
   }
 
   async haplotypeSampleInterval() {
@@ -218,19 +244,28 @@ export class GBZBase {
       node: num(values[0], 'HaplotypeSamples.node_handle'),
       offset: num(values[1], 'HaplotypeSamples.node_offset'),
       pathHandle: num(values[2], 'HaplotypeSamples.path_handle'),
-      orientation: num(values[3], 'HaplotypeSamples.orientation') === 0 ? 'forward' : 'reverse',
+      orientation:
+        num(values[3], 'HaplotypeSamples.orientation') === 0
+          ? 'forward'
+          : 'reverse',
       pathOffset: num(values[4], 'HaplotypeSamples.path_offset'),
     }
   }
 
   async haplotypeSamplesInRange(minHandle: number, maxHandle: number) {
     const samples: HaplotypeSample[] = []
-    for await (const key of this.sqlite.indexScanFrom('HaplotypeSamples', [minHandle, 0])) {
+    for await (const key of this.sqlite.indexScanFrom('HaplotypeSamples', [
+      minHandle,
+      0,
+    ])) {
       const node = num(key[0], 'HaplotypeSamples.node_handle')
       if (node > maxHandle) {
         break
       }
-      const row = await this.sqlite.byRowid('HaplotypeSamples', num(key[2], 'HaplotypeSamples rowid'))
+      const row = await this.sqlite.byRowid(
+        'HaplotypeSamples',
+        num(key[2], 'HaplotypeSamples rowid'),
+      )
       if (row) {
         samples.push(this.sampleFromRow(row))
       }
@@ -239,11 +274,17 @@ export class GBZBase {
   }
 
   async haplotypeSampleAt(node: number, offset: number) {
-    const key = await this.sqlite.indexSeekLE('HaplotypeSamples', [node, offset])
-    if (!key || key[0] !== node || key[1] !== offset) {
+    const key = await this.sqlite.indexSeekLE('HaplotypeSamples', [
+      node,
+      offset,
+    ])
+    if (key?.[0] !== node || key[1] !== offset) {
       return undefined
     }
-    const row = await this.sqlite.byRowid('HaplotypeSamples', num(key[2], 'HaplotypeSamples rowid'))
+    const row = await this.sqlite.byRowid(
+      'HaplotypeSamples',
+      num(key[2], 'HaplotypeSamples rowid'),
+    )
     return row ? this.sampleFromRow(row) : undefined
   }
 
@@ -252,18 +293,30 @@ export class GBZBase {
     return row ? num(row[1], 'HaplotypeLengths.length') : undefined
   }
 
-  async indexedPosition(pathHandle: number, pathOffset: number): Promise<{ pathOffset: number; pos: Pos } | undefined> {
-    const key = await this.sqlite.indexSeekLE('ReferenceIndex', [pathHandle, pathOffset])
-    if (!key || key[0] !== pathHandle) {
+  async indexedPosition(
+    pathHandle: number,
+    pathOffset: number,
+  ): Promise<{ pathOffset: number; pos: Pos } | undefined> {
+    const key = await this.sqlite.indexSeekLE('ReferenceIndex', [
+      pathHandle,
+      pathOffset,
+    ])
+    if (key?.[0] !== pathHandle) {
       return undefined
     }
-    const row = await this.sqlite.byRowid('ReferenceIndex', num(key[2], 'ReferenceIndex rowid'))
+    const row = await this.sqlite.byRowid(
+      'ReferenceIndex',
+      num(key[2], 'ReferenceIndex rowid'),
+    )
     if (!row) {
       throw new Error('ReferenceIndex row referenced by its index is missing')
     }
     return {
       pathOffset: num(row[1], 'ReferenceIndex.path_offset'),
-      pos: { node: num(row[2], 'ReferenceIndex.node_handle'), offset: num(row[3], 'ReferenceIndex.node_offset') },
+      pos: {
+        node: num(row[2], 'ReferenceIndex.node_handle'),
+        offset: num(row[3], 'ReferenceIndex.node_offset'),
+      },
     }
   }
 }

@@ -62,9 +62,9 @@ cd tools/haplotype-index && cargo build --release
 ./target/release/gbz-haplotype-index --interval 4096 --from-db graph.gbz.db
 ```
 
-The second form walks the paths through the database's own node records, so
-a database whose GBZ is no longer at hand can still be augmented; the two
-forms write identical tables.
+The second form walks the paths through the database's own node records, so a
+database whose GBZ is no longer at hand can still be augmented; the two forms
+write identical tables.
 
 `HaplotypeSamples` holds one GBWT position every `--interval` bp along every
 path in both orientations, with the path handle and the forward coordinate of
