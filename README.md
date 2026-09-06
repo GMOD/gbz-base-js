@@ -45,13 +45,15 @@ also `snarls`; both resolve haplotype names when the database can. For
 alignments `haplotypes` is `all` or `distinct`, the two outputs that leave
 something to align against the reference.
 
-`context` is the graph context in bp to extend past the window, 100 by default,
-and it shapes the answer rather than padding it: a haplotype's walk ends where
-it leaves the subgraph, so at `context: 0` every bubble cuts a walk into pieces
-and the same window returns several times as many records as it does at 100.
-`limit` caps the subgraph at that many nodes, per fragment. `signal` is an
-`AbortSignal`; a query checks it between range requests, so an abort stops the
-next fetch rather than the one in flight.
+`context` is the graph context in bp to extend past the window, 100 by default.
+It does not decide how many records come back, since the pieces of a walk that
+leaves the subgraph are joined again (see below); it trades nodes read against
+pieces to identify and join. A window inside a snarl much larger than itself
+(MHC class II on the HPRC graph) is 1.1M pieces at `context: 0` and 464 walks at
+1000, three times faster; a window whose private stretches are short bubbles
+costs about the same either way. `limit` caps the subgraph at that many nodes,
+per fragment. `signal` is an `AbortSignal`; a query checks it between range
+requests, so an abort stops the next fetch rather than the one in flight.
 
 ### One returns records, the other a query object
 
