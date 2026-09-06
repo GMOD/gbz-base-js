@@ -9,7 +9,7 @@
 [changelog]
 body = """
 {% if version -%}
-## [{{ version | trim_start_matches(pat="v") }}](https://github.com/GMOD/gbz-base-js/compare/{% if previous %}{{ previous.version }}{% else %}{{ version }}{% endif %}...{{ version }}) ({{ timestamp | date(format="%Y-%m-%d") }})
+## [{{ version | trim_start_matches(pat="v") }}](https://github.com/GMOD/gbz-base-js/compare/{% if previous.version %}{{ previous.version }}{% else %}{{ version }}{% endif %}...{{ version }}) ({{ timestamp | date(format="%Y-%m-%d") }})
 {% else -%}
 ## [Unreleased]
 {% endif %}
