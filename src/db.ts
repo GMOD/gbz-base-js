@@ -13,7 +13,7 @@ import type { PathName, PathRef } from './pathName.ts'
 import type { QueryOptions } from './query.ts'
 import type { PagerOptions } from './sqlite/pager.ts'
 import type { SqlValue } from './sqlite/record.ts'
-import type { HaplotypeAlignment, Subgraph } from './subgraph.ts'
+import type { HaplotypeAlignment } from './subgraph.ts'
 
 export const SCHEMA_VERSION = 'GBZ-base version 4'
 
@@ -21,6 +21,13 @@ export interface PathFragment {
   path: GbzPath
   start: number
   end: number
+}
+
+export interface AlignmentOptions extends Pick<
+  QueryOptions,
+  'context' | 'limit' | 'signal'
+> {
+  haplotypes?: 'all' | 'distinct' | undefined
 }
 
 export class SchemaVersionError extends Error {
@@ -349,23 +356,18 @@ export class GBZBase {
     end: number,
     opts: QueryOptions,
   ) {
-    const lo = Math.max(start, fragment.start)
-    const hi = Math.min(end, fragment.end)
-    let subgraph: Subgraph | undefined
-    if (hi > lo) {
-      const { sample, contig, haplotype } = fragment.path.name
-      subgraph = await subgraphInInterval(
-        this,
-        { sample, contig, haplotype },
-        lo,
-        hi,
-        opts,
-      )
-      const haplotypes = opts.haplotypes ?? 'all'
-      const named = haplotypes === 'all' || haplotypes === 'distinct'
-      if (this.hasHaplotypeIndex && named) {
-        await subgraph.identifyPaths()
-      }
+    const { sample, contig, haplotype } = fragment.path.name
+    const subgraph = await subgraphInInterval(
+      this,
+      { sample, contig, haplotype },
+      Math.max(start, fragment.start),
+      Math.min(end, fragment.end),
+      opts,
+    )
+    const haplotypes = opts.haplotypes ?? 'all'
+    const named = haplotypes === 'all' || haplotypes === 'distinct'
+    if (this.hasHaplotypeIndex && named) {
+      await subgraph.identifyPaths()
     }
     return subgraph
   }
@@ -386,7 +388,7 @@ export class GBZBase {
     ref: PathRef,
     start: number,
     end: number,
-    opts: QueryOptions = {},
+    opts: AlignmentOptions = {},
   ) {
     const result: HaplotypeAlignment[] = []
     for (const fragment of await this.pathFragmentsForRange(ref, start, end)) {
@@ -396,9 +398,7 @@ export class GBZBase {
         end,
         opts,
       )
-      if (subgraph) {
-        result.push(...subgraph.alignments())
-      }
+      result.push(...subgraph.alignments())
     }
     return result
   }

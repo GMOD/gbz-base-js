@@ -1,5 +1,6 @@
 export { GBZBase, GbzRecord, SCHEMA_VERSION, SchemaVersionError } from './db.ts'
 export type {
+  AlignmentOptions,
   GbzPath,
   HaplotypeSample,
   OpenOptions,

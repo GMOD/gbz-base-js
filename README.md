@@ -40,10 +40,18 @@ The path is a PanSN `sample#haplotype#contig` string, or a bare contig for a
 graph whose reference paths have no sample. `{ sample, haplotype, contig }`
 works too, and `parsePathName` is the parser if you want it separately.
 
-Both take `{ context, haplotypes, snarls, limit, signal }` and both resolve
-haplotype names when the database can. `signal` is an `AbortSignal`; a query
-checks it between range requests, so an abort stops the next fetch rather than
-the one in flight.
+Both take `{ context, haplotypes, limit, signal }`, and `getSubgraphForRange`
+also `snarls`; both resolve haplotype names when the database can. For
+alignments `haplotypes` is `all` or `distinct`, the two outputs that leave
+something to align against the reference.
+
+`context` is the graph context in bp to extend past the window, 100 by default,
+and it shapes the answer rather than padding it: a haplotype's walk ends where
+it leaves the subgraph, so at `context: 0` every bubble cuts a walk into pieces
+and the same window returns several times as many records as it does at 100.
+`limit` caps the subgraph at that many nodes, per fragment. `signal` is an
+`AbortSignal`; a query checks it between range requests, so an abort stops the
+next fetch rather than the one in flight.
 
 ### One returns records, the other a query object
 
@@ -53,11 +61,12 @@ coordinate-correct because a record's `refStart`/`refEnd` are absolute.
 
 `getSubgraphForRange` hands back the `Subgraph` itself, because two disjoint
 fragments do not merge into one graph. It answers for the first fragment
-overlapping the window, clamped to it, and `subgraph.referenceInterval` says
-which interval that was. It is `undefined` when the path is unknown, when no
-fragment overlaps the window, or when the clamped window is empty. Use
-`pathFragmentsForRange` to see the fragments yourself, and `hasPath` to ask
-about a path alone.
+overlapping the window, clamped to it, and is `undefined` when the path is
+unknown or no fragment overlaps the window. `subgraph.referenceInterval` is the
+reference walk the subgraph holds, which runs to node boundaries and through
+`context`, so it is wider than the clamped window on both sides. Use
+`pathFragmentsForRange` to see the fragment bounds themselves, and `hasPath` to
+ask about a path alone.
 
 A path that exists but was never indexed for random access throws rather than
 returning nothing — that is a database that needs rebuilding, not an empty

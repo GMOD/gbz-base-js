@@ -190,6 +190,23 @@ describe('getAlignmentsForRange', () => {
       }),
     ).rejects.toThrow()
   })
+
+  it('collapses identical walks under distinct, and only accepts outputs it can align', async () => {
+    const db = await openMicb()
+    const all = await db.getAlignmentsForRange(chr6, 31500000, 31501000)
+    const distinct = await db.getAlignmentsForRange(chr6, 31500000, 31501000, {
+      haplotypes: 'distinct',
+    })
+    expect(distinct.length).toBeLessThan(all.length)
+    expect(all.every(a => a.weight === undefined)).toBe(true)
+    expect(distinct.every(a => a.weight !== undefined && a.weight >= 1)).toBe(
+      true,
+    )
+    // @ts-expect-error alignments need haplotypes to align
+    void db.getAlignmentsForRange(chr6, 0, 1, { haplotypes: 'none' })
+    // @ts-expect-error snarls do not shape an alignment record
+    void db.getAlignmentsForRange(chr6, 0, 1, { snarls: 'contained' })
+  })
 })
 
 describe('getSubgraphForRange', () => {
@@ -219,5 +236,20 @@ describe('getSubgraphForRange', () => {
     const db = await openMicb()
     expect(await db.getSubgraphForRange('nonexistent', 0, 1000)).toBeUndefined()
     expect(await db.getSubgraphForRange(chr6, 0, 1000)).toBeUndefined()
+  })
+
+  it('reports a reference interval that runs to node boundaries and through context', async () => {
+    const db = await openMicb()
+    const tight = await db.getSubgraphForRange(chr6, 31500000, 31501000, {
+      context: 0,
+    })
+    const wide = await db.getSubgraphForRange(chr6, 31500000, 31501000, {
+      context: 100,
+    })
+    expect(tight?.referenceInterval?.start).toBeLessThanOrEqual(31500000)
+    expect(tight?.referenceInterval?.end).toBeGreaterThanOrEqual(31501000)
+    expect(wide?.referenceInterval?.end).toBeGreaterThan(
+      tight!.referenceInterval!.end,
+    )
   })
 })
