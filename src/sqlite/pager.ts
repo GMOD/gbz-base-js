@@ -33,6 +33,23 @@ export class Pager {
     this.maxBlocks = opts.maxBlocks ?? 256
   }
 
+  private async read(length: number, start: number) {
+    let attempt = 0
+    for (;;) {
+      try {
+        const bytes = await this.source.read(length, start)
+        this.bytesFetched += bytes.length
+        return bytes
+      } catch (error) {
+        attempt += 1
+        if (attempt >= 3) {
+          throw error
+        }
+        await new Promise(resolve => setTimeout(resolve, 200 * attempt))
+      }
+    }
+  }
+
   seed(index: number, bytes: Uint8Array) {
     if (
       bytes.length ===
@@ -51,12 +68,10 @@ export class Pager {
     }
     const start = index * this.blockSize
     const length = Math.min(this.blockSize, this.fileSize - start)
-    const pending = this.source.read(length, start).then(bytes => {
-      this.bytesFetched += bytes.length
-      return bytes
-    })
+    const pending = this.read(length, start)
     this.fetches += 1
     this.blocks.set(index, pending)
+    this.forgetOnFailure(pending, [index])
     this.evict()
     return pending
   }
@@ -88,19 +103,27 @@ export class Pager {
   private fetchRun(firstIndex: number, count: number) {
     const start = firstIndex * this.blockSize
     const length = Math.min(count * this.blockSize, this.fileSize - start)
-    const pending = this.source.read(length, start).then(bytes => {
-      this.bytesFetched += bytes.length
-      return bytes
-    })
+    const pending = this.read(length, start)
     this.fetches += 1
+    const indexes: number[] = []
     for (let i = 0; i < count; i++) {
       const within = i * this.blockSize
+      indexes.push(firstIndex + i)
       this.blocks.set(
         firstIndex + i,
         pending.then(bytes => bytes.subarray(within, within + this.blockSize)),
       )
     }
+    this.forgetOnFailure(pending, indexes)
     this.evict()
+  }
+
+  private forgetOnFailure(pending: Promise<Uint8Array>, indexes: number[]) {
+    pending.catch(() => {
+      for (const index of indexes) {
+        this.blocks.delete(index)
+      }
+    })
   }
 
   private evict() {
