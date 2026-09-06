@@ -2,7 +2,7 @@ import { ENDMARKER, nodeId, nodeOrientation } from './gbwt/node.ts'
 import { GbwtRecord, decompressEdges } from './gbwt/record.ts'
 import { decodeSequence, encodedSequenceLength } from './gbwt/sequence.ts'
 import { graphNameFromTags } from './graphName.ts'
-import { pathNameFor, toPathQuery } from './pathName.ts'
+import { formatPathName, pathNameFor, toPathQuery } from './pathName.ts'
 import { subgraphInInterval } from './query.ts'
 import { SqliteDatabase } from './sqlite/database.ts'
 
@@ -278,6 +278,7 @@ export class GBZBase {
     if (!length) {
       length = this.walkPathLength(handle)
       this.pathLengths.set(handle, length)
+      length.catch(() => this.pathLengths.delete(handle))
     }
     return length
   }
@@ -289,7 +290,10 @@ export class GBZBase {
     if (indexed === undefined) {
       const last = await this.indexedPosition(handle, Number.MAX_SAFE_INTEGER)
       if (!last) {
-        throw new Error(`Path ${handle} has not been indexed for random access`)
+        const path = await this.getPath(handle)
+        throw new Error(
+          `Path ${path ? formatPathName(path.name, path.name.fragment) : handle} has not been indexed for random access`,
+        )
       }
       let length = last.pathOffset
       let pos = last.pos
@@ -314,6 +318,9 @@ export class GBZBase {
     start: number,
     end: number,
   ): Promise<PathFragment[]> {
+    if (end <= start) {
+      return []
+    }
     const ordered = await this.pathsNamed(ref)
     const covering = ordered.filter(p => p.name.fragment <= start).slice(-1)
     const within = ordered.filter(

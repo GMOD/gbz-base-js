@@ -69,6 +69,62 @@ describe('pathFragmentsForRange', () => {
   })
 })
 
+describe('fragment selection', () => {
+  const lengths = new Map([
+    [1, 1000],
+    [2, 1000],
+    [3, 1000],
+  ])
+
+  async function splitContig() {
+    const db = await openMicb()
+    const paths = [...lengths.keys()].map((handle, i) => ({
+      handle,
+      fwStart: { node: 0, offset: 0 },
+      revStart: { node: 0, offset: 0 },
+      name: {
+        sample: 'GRCh38',
+        contig: 'chr6',
+        haplotype: 0,
+        fragment: i * 1500,
+      },
+      isIndexed: true,
+    }))
+    Object.defineProperty(db, 'paths', { value: () => Promise.resolve(paths) })
+    Object.defineProperty(db, 'pathLength', {
+      value: (handle: number) => Promise.resolve(lengths.get(handle)),
+    })
+    return db
+  }
+
+  async function starts(start: number, end: number) {
+    const db = await splitContig()
+    return (await db.pathFragmentsForRange(chr6, start, end)).map(f => f.start)
+  }
+
+  it('spans the fragments a window touches', async () => {
+    expect(await starts(500, 600)).toEqual([0])
+    expect(await starts(900, 1600)).toEqual([0, 1500])
+    expect(await starts(0, 5000)).toEqual([0, 1500, 3000])
+  })
+
+  it('reports nothing for a window inside a gap between fragments', async () => {
+    expect(await starts(1000, 1400)).toEqual([])
+    expect(await starts(2500, 3000)).toEqual([])
+  })
+
+  it('treats fragment bounds as half-open', async () => {
+    expect(await starts(1500, 1600)).toEqual([1500])
+    expect(await starts(999, 1000)).toEqual([0])
+    expect(await starts(1000, 1001)).toEqual([])
+  })
+
+  it('reports nothing for an empty window', async () => {
+    expect(await starts(500, 500)).toEqual([])
+    expect(await starts(600, 500)).toEqual([])
+  })
+})
+
 describe('getAlignmentsForRange', () => {
   it('takes a PanSN string and resolves names in one call', async () => {
     const db = await openMicb()
