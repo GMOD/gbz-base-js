@@ -139,6 +139,29 @@ export class GbwtRecord {
     return undefined
   }
 
+  decompressArrays() {
+    const offsets = this.edges.map(e => e.offset)
+    let total = 0
+    for (const run of this.runs()) {
+      total += run.len
+    }
+    const nodes = new Int32Array(total)
+    const nextOffsets = new Int32Array(total)
+    let i = 0
+    for (const run of this.runs()) {
+      const edge = this.edge(run.value)
+      let offset = offsets[run.value]!
+      for (let k = 0; k < run.len; k++) {
+        nodes[i] = edge.node
+        nextOffsets[i] = offset
+        offset += 1
+        i += 1
+      }
+      offsets[run.value] = offset
+    }
+    return { nodes, offsets: nextOffsets }
+  }
+
   decompress(): Pos[] {
     const offsets = this.edges.map(e => e.offset)
     const result: Pos[] = []

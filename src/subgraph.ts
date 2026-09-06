@@ -590,72 +590,69 @@ export class Subgraph {
     const handles = this.sortedHandles()
     const successors = new Map<
       number,
-      { next: Pos; hasPredecessor: boolean }[]
+      { nodes: Int32Array; offsets: Int32Array; hasPredecessor: Uint8Array }
     >()
     for (const handle of handles) {
-      successors.set(
-        handle,
-        this.record(handle)
-          .gbwt()
-          .decompress()
-          .map(next => ({ next, hasPredecessor: false })),
-      )
+      const { nodes, offsets } = this.record(handle).gbwt().decompressArrays()
+      successors.set(handle, {
+        nodes,
+        offsets,
+        hasPredecessor: new Uint8Array(nodes.length),
+      })
     }
     for (const handle of handles) {
-      for (const { next } of successors.get(handle) as { next: Pos }[]) {
-        const entry = successors.get(next.node)?.[next.offset]
+      const { nodes, offsets } = successors.get(handle)!
+      for (let i = 0; i < nodes.length; i++) {
+        const entry = successors.get(nodes[i]!)
         if (entry) {
-          entry.hasPredecessor = true
+          entry.hasPredecessor[offsets[i]!] = 1
         }
       }
     }
     let refOffset: number | undefined
     for (const handle of handles) {
-      const entries = successors.get(handle) as {
-        next: Pos
-        hasPredecessor: boolean
-      }[]
-      entries.forEach((entry, offset) => {
-        if (entry.hasPredecessor) {
-          return
-        }
-        let curr: Pos | undefined = { node: handle, offset }
-        let isRef = false
-        const path: number[] = []
-        const positions: Pos[] = []
-        let len = 0
-        while (curr) {
-          if (
-            curr.node === refPos?.handle &&
-            curr.offset === refPos.gbwtOffset
-          ) {
-            this.refId = this.paths.length
-            refOffset = path.length
-            isRef = true
+      const entries = successors.get(handle)!
+      for (let offset = 0; offset < entries.nodes.length; offset++) {
+        if (entries.hasPredecessor[offset] === 0) {
+          let currNode: number | undefined = handle
+          let currOffset = offset
+          let isRef = false
+          const path: number[] = []
+          const positions: Pos[] = []
+          let len = 0
+          while (currNode !== undefined) {
+            if (
+              currNode === refPos?.handle &&
+              currOffset === refPos.gbwtOffset
+            ) {
+              this.refId = this.paths.length
+              refOffset = path.length
+              isRef = true
+            }
+            path.push(currNode)
+            positions.push({ node: currNode, offset: currOffset })
+            len += this.record(currNode).sequenceLen
+            const step = successors.get(currNode)!
+            const nextNode: number = step.nodes[currOffset]!
+            const nextOffset: number = step.offsets[currOffset]!
+            if (nextNode !== ENDMARKER && successors.has(nextNode)) {
+              currNode = nextNode
+              currOffset = nextOffset
+            } else {
+              currNode = undefined
+            }
           }
-          path.push(curr.node)
-          positions.push(curr)
-          len += this.record(curr.node).sequenceLen
-          const step: { next: Pos } | undefined = successors.get(curr.node)?.[
-            curr.offset
-          ]
-          curr =
-            step &&
-            step.next.node !== ENDMARKER &&
-            successors.has(step.next.node)
-              ? step.next
-              : undefined
+          if (isRef || pathIsCanonical(path)) {
+            this.paths.push({
+              path,
+              positions,
+              len,
+              weight: undefined,
+              identity: undefined,
+            })
+          }
         }
-        if (isRef || pathIsCanonical(path)) {
-          this.paths.push({
-            path,
-            positions,
-            len,
-            weight: undefined,
-            identity: undefined,
-          })
-        }
-      })
+      }
     }
     if (refPos) {
       if (refOffset === undefined || this.refId === undefined) {
