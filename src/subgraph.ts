@@ -11,6 +11,7 @@ import {
   isReverse,
   nodeId,
   nodeOrientation,
+  pathEndsAreCanonical,
   pathIsCanonical,
 } from './gbwt/node.ts'
 import { gfaHeaderLines, sha256Hex, subgraphName } from './graphName.ts'
@@ -54,7 +55,7 @@ export interface PathIdentity {
 
 interface PathInfo {
   path: number[]
-  positions: Pos[]
+  offsets: number[]
   len: number
   weight: number | undefined
   identity: PathIdentity | undefined
@@ -176,6 +177,10 @@ class SideQueue {
 
 function posKey(pos: Pos) {
   return `${pos.node}:${pos.offset}`
+}
+
+function pathPosition(info: PathInfo, k: number): Pos {
+  return { node: info.path[k]!, offset: info.offsets[k]! }
 }
 
 const SCAN_GAP = 4096
@@ -414,6 +419,18 @@ export class Subgraph {
     active.push(nodeOffset, id, entrySide(orientation))
     active.push(record.sequenceLen - nodeOffset - 1, id, exitSide(orientation))
     return this.insertContext(active, context)
+  }
+
+  async prefetchReferenceWalk(reference: ReferencePath, len: number) {
+    const last = await this.db.indexedPosition(
+      reference.handle,
+      reference.position.seqOffset + len,
+    )
+    if (last) {
+      const a = reference.position.handle
+      const b = last.pos.node
+      await this.db.prefetchRecords(Math.min(a, b), Math.max(a, b) + 1)
+    }
   }
 
   async aroundInterval(start: PathPosition, len: number, context: number) {
@@ -668,70 +685,132 @@ export class Subgraph {
     this.refPath = reference?.name
     this.refHandle = reference?.handle
     const handles = this.sortedHandles()
-    const successors = new Map<
-      number,
-      { nodes: Int32Array; offsets: Int32Array; hasPredecessor: Uint8Array }
-    >()
-    for (const handle of handles) {
-      const { nodes, offsets } = this.record(handle).gbwt().decompressArrays()
-      successors.set(handle, {
-        nodes,
-        offsets,
-        hasPredecessor: new Uint8Array(nodes.length),
-      })
+    const count = handles.length
+    const indexOf = new Map<number, number>()
+    handles.forEach((handle, i) => indexOf.set(handle, i))
+    const nextIndex: Int32Array[] = []
+    const nextOffset: Int32Array[] = []
+    const hasPredecessor: Uint8Array[] = []
+    const seqLen = new Int32Array(count)
+    for (let i = 0; i < count; i++) {
+      const record = this.record(handles[i]!)
+      const { nodes, offsets } = record.gbwt().decompressArrays()
+      seqLen[i] = record.sequenceLen
+      nextIndex.push(nodes)
+      nextOffset.push(offsets)
+      hasPredecessor.push(new Uint8Array(nodes.length))
     }
-    for (const handle of handles) {
-      const { nodes, offsets } = successors.get(handle)!
-      for (let i = 0; i < nodes.length; i++) {
-        const entry = successors.get(nodes[i]!)
-        if (entry) {
-          entry.hasPredecessor[offsets[i]!] = 1
+    for (let i = 0; i < count; i++) {
+      const nodes = nextIndex[i]!
+      const offsets = nextOffset[i]!
+      for (let k = 0; k < nodes.length; k++) {
+        const j = indexOf.get(nodes[k]!)
+        if (j === undefined) {
+          nodes[k] = -1
+        } else {
+          nodes[k] = j
+          hasPredecessor[j]![offsets[k]!] = 1
         }
       }
     }
+    const refIndex =
+      refPos === undefined ? undefined : indexOf.get(refPos.handle)
+    const refGbwtOffset = refPos?.gbwtOffset
     let refOffset: number | undefined
-    for (const handle of handles) {
-      const entries = successors.get(handle)!
-      for (let offset = 0; offset < entries.nodes.length; offset++) {
-        if (entries.hasPredecessor[offset] === 0) {
-          let currNode: number | undefined = handle
-          let currOffset = offset
-          let isRef = false
-          const path: number[] = []
-          const positions: Pos[] = []
-          let len = 0
-          while (currNode !== undefined) {
-            if (
-              currNode === refPos?.handle &&
-              currOffset === refPos.gbwtOffset
-            ) {
-              this.refId = this.paths.length
-              refOffset = path.length
-              isRef = true
-            }
-            path.push(currNode)
-            positions.push({ node: currNode, offset: currOffset })
-            len += this.record(currNode).sequenceLen
-            const step = successors.get(currNode)!
-            const nextNode: number = step.nodes[currOffset]!
-            const nextOffset: number = step.offsets[currOffset]!
-            if (nextNode !== ENDMARKER && successors.has(nextNode)) {
-              currNode = nextNode
-              currOffset = nextOffset
+    const walk = (i: number, offset: number, path: number[] | undefined) => {
+      const offsets: number[] = []
+      let steps = 0
+      let len = 0
+      let refAt = -1
+      let cur = i
+      let off = offset
+      for (;;) {
+        if (cur === refIndex && off === refGbwtOffset) {
+          refAt = steps
+        }
+        if (path) {
+          path.push(handles[cur]!)
+          offsets.push(off)
+        }
+        steps += 1
+        len += seqLen[cur]!
+        const next = nextIndex[cur]![off]!
+        if (next < 0) {
+          break
+        }
+        off = nextOffset[cur]![off]!
+        cur = next
+      }
+      return { offsets, len, refAt, last: cur }
+    }
+    const keep = (
+      path: number[],
+      offsets: number[],
+      len: number,
+      refAt: number,
+    ) => {
+      if (refAt >= 0) {
+        this.refId = this.paths.length
+        refOffset = refAt
+      }
+      this.paths.push({
+        path,
+        offsets,
+        len,
+        weight: undefined,
+        identity: undefined,
+      })
+    }
+    const twinsExpected = new Int32Array(count)
+    const refMayStartReversed =
+      refIndex !== undefined && isReverse(handles[refIndex]!)
+    for (let i = 0; i < count; i++) {
+      const first = handles[i]!
+      if (!isReverse(first)) {
+        const starts = hasPredecessor[i]!
+        for (let offset = 0; offset < starts.length; offset++) {
+          if (starts[offset] === 0) {
+            const path: number[] = []
+            const { offsets, len, refAt, last } = walk(i, offset, path)
+            const lastHandle = handles[last]!
+            if (refAt >= 0 || pathEndsAreCanonical(first, lastHandle)) {
+              keep(path, offsets, len, refAt)
+              if (!isReverse(lastHandle)) {
+                const twinRecord = indexOf.get(flipNode(lastHandle))!
+                twinsExpected[twinRecord] = twinsExpected[twinRecord]! + 1
+              }
             } else {
-              currNode = undefined
+              this.twinStarts.add(posKey({ node: first, offset }))
             }
           }
-          if (isRef || pathIsCanonical(path)) {
-            this.paths.push({
-              path,
-              positions,
-              len,
-              weight: undefined,
-              identity: undefined,
-            })
-          } else {
-            this.twinStarts.add(posKey(positions[0]!))
+        }
+      }
+    }
+    for (let i = 0; i < count; i++) {
+      const first = handles[i]!
+      if (isReverse(first)) {
+        const starts = hasPredecessor[i]!
+        let startCount = 0
+        for (const flag of starts) {
+          if (flag === 0) {
+            startCount += 1
+          }
+        }
+        const allTwins = !refMayStartReversed && startCount === twinsExpected[i]
+        for (let offset = 0; offset < starts.length; offset++) {
+          if (starts[offset] === 0) {
+            const bare = allTwins ? undefined : walk(i, offset, undefined)
+            if (
+              bare &&
+              (bare.refAt >= 0 ||
+                pathEndsAreCanonical(first, handles[bare.last]))
+            ) {
+              const path: number[] = []
+              const { offsets, len, refAt } = walk(i, offset, path)
+              keep(path, offsets, len, refAt)
+            } else {
+              this.twinStarts.add(posKey({ node: first, offset }))
+            }
           }
         }
       }
@@ -821,9 +900,8 @@ export class Subgraph {
     }
     const starts = new Map<string, number>()
     this.paths.forEach((info, index) => {
-      const first = info.positions[0]
-      if (first && index !== this.refId) {
-        starts.set(posKey(first), index)
+      if (info.path.length > 0 && index !== this.refId) {
+        starts.set(posKey(pathPosition(info, 0)), index)
       }
     })
     const identification = this.stats.identification
@@ -934,7 +1012,8 @@ export class Subgraph {
           chain.push({ index: current, startBp: counter })
           record.fragments += 1
           let bp = counter
-          for (const position of info.positions) {
+          for (let k = 0; k < info.path.length; k++) {
+            const position = pathPosition(info, k)
             const sample = samples.get(posKey(position))
             const nodeLen = this.record(position.node).sequenceLen
             if (sample) {
@@ -948,7 +1027,7 @@ export class Subgraph {
             record.end = 'in-fragment sample'
             break
           }
-          const last = info.positions[info.positions.length - 1]!
+          const last = pathPosition(info, info.path.length - 1)
           pos = this.record(last.node).gbwt().lf(last.offset)
           current = undefined
         }
@@ -1289,7 +1368,7 @@ export class Subgraph {
           .join(''),
         weight: info.weight,
         path: info.path,
-        start: info.positions[0]!,
+        start: pathPosition(info, 0),
       }
       if (identity) {
         const hapStart = identity.name.fragment + identity.hapStart

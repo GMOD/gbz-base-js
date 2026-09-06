@@ -58,10 +58,13 @@ interface IndexCell {
 
 const MAX_DECODED_INDEX_PAGES = 4096
 
+const PREFETCH_PAGE_LIMIT = 4096
+
 export class BTree {
   private readonly usable: number
   private pager: Pager
   private decodedIndexPages = new Map<number, (IndexCell | undefined)[]>()
+  private tableDepths = new Map<number, Promise<number>>()
 
   constructor(pager: Pager, reservedBytes: number) {
     this.pager = pager
@@ -116,6 +119,75 @@ export class BTree {
   private async pageAt(pageNumber: number) {
     const page = await this.pager.page(pageNumber)
     return { page, header: readHeader(page, pageNumber === 1 ? 100 : 0) }
+  }
+
+  private tableDepth(root: number, towards: number) {
+    let depth = this.tableDepths.get(root)
+    if (!depth) {
+      depth = (async () => {
+        let pageNumber = root
+        for (let level = 0; ; level++) {
+          const { page, header } = await this.pageAt(pageNumber)
+          if (header.type === LEAF_TABLE) {
+            return level
+          }
+          if (header.type !== INTERIOR_TABLE) {
+            throw new Error('SQLite table b-tree contains an index page')
+          }
+          const child = this.childIndexFor(page, header, towards)
+          pageNumber =
+            child === header.cellCount
+              ? header.rightChild
+              : readUint32(page, cellOffset(page, header, child))
+        }
+      })()
+      this.tableDepths.set(root, depth)
+      depth.catch(() => this.tableDepths.delete(root))
+    }
+    return depth
+  }
+
+  private childIndexFor(page: Uint8Array, header: PageHeader, rowid: number) {
+    let low = 0
+    let high = header.cellCount
+    while (low < high) {
+      const mid = (low + high) >> 1
+      const [key] = readVarint(page, cellOffset(page, header, mid) + 4)
+      if (key < rowid) {
+        low = mid + 1
+      } else {
+        high = mid
+      }
+    }
+    return low
+  }
+
+  async prefetchRowidRange(root: number, lo: number, hi: number) {
+    const leafLevel = await this.tableDepth(root, lo)
+    let pages = [root]
+    for (let level = 0; level < leafLevel; level++) {
+      const decoded = await Promise.all(pages.map(n => this.pageAt(n)))
+      const children: number[] = []
+      decoded.forEach(({ page, header }, i) => {
+        const from = i === 0 ? this.childIndexFor(page, header, lo) : 0
+        const to =
+          i === decoded.length - 1
+            ? this.childIndexFor(page, header, hi)
+            : header.cellCount
+        for (let c = from; c <= to; c++) {
+          children.push(
+            c === header.cellCount
+              ? header.rightChild
+              : readUint32(page, cellOffset(page, header, c)),
+          )
+        }
+      })
+      if (children.length > PREFETCH_PAGE_LIMIT) {
+        return
+      }
+      this.pager.prefetch(children)
+      pages = children
+    }
   }
 
   async tableRowid(

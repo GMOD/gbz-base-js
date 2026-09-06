@@ -53,8 +53,13 @@ export function edgeIsCanonical(from: number, to: number) {
 }
 
 export function pathIsCanonical(path: number[]) {
-  const first = path[0]
-  const last = path[path.length - 1]
+  return pathEndsAreCanonical(path[0], path[path.length - 1])
+}
+
+export function pathEndsAreCanonical(
+  first: number | undefined,
+  last: number | undefined,
+) {
   if (first === undefined || last === undefined) {
     return true
   }

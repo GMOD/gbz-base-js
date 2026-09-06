@@ -42,6 +42,7 @@ export async function subgraphInInterval(
 ) {
   const subgraph = new Subgraph(db, opts)
   const reference = await subgraph.pathPosition(pathNameFor(query, start))
+  await subgraph.prefetchReferenceWalk(reference, end - start)
   await subgraph.aroundInterval(
     reference.position,
     end - start,

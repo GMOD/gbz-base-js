@@ -223,6 +223,10 @@ export class GBZBase {
     return (await this.tags()).get(key)
   }
 
+  prefetchRecords(lo: number, hi: number) {
+    return this.sqlite.prefetchRows('Nodes', lo, hi)
+  }
+
   async getRecord(handle: number) {
     const row = await this.sqlite.byRowid('Nodes', handle)
     if (!row) {
