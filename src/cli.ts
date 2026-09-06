@@ -178,7 +178,10 @@ export async function main(argv: string[]) {
   const output = args.alignments
     ? subgraph.alignments().map(a => ({
         ...a,
-        name: a.name ? formatPathName(a.name, a.name.fragment) : undefined,
+        name:
+          a.name && a.hapStart !== undefined && a.hapEnd !== undefined
+            ? formatPathName({ ...a.name, fragment: a.hapStart }, a.hapEnd)
+            : undefined,
         start: undefined,
       }))
     : subgraph.toJSON(args.cigar, {
