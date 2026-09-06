@@ -1,3 +1,9 @@
+## [2.4.0](https://github.com/GMOD/gbz-base-js/compare/v2.3.0...v2.4.0) (2026-09-06)
+
+### Other Changes
+
+- Named walks run in the haplotype's direction, and a cut can keep a chosen set of haplotypes ([add1f2f](https://github.com/GMOD/gbz-base-js/commit/add1f2f03a3f5f92e81eedfbc45ec629d4d27ab5))
+
 ## [2.3.0](https://github.com/GMOD/gbz-base-js/compare/v2.2.0...v2.3.0) (2026-09-06)
 
 ### Other Changes
