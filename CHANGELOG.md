@@ -1,3 +1,9 @@
+## [2.2.0](https://github.com/GMOD/gbz-base-js/compare/v2.1.0...v2.2.0) (2026-09-06)
+
+### Other Changes
+
+- GetAlignmentsForRange takes only the options that shape an alignment ([0ec2d7c](https://github.com/GMOD/gbz-base-js/commit/0ec2d7ca8d7dbbe401204867b517304dbd46f8b4))
+
 ## [2.1.0](https://github.com/GMOD/gbz-base-js/compare/v2.0.0...v2.1.0) (2026-09-06)
 
 ### Other Changes
