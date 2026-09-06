@@ -1,3 +1,10 @@
+## [2.1.0](https://github.com/GMOD/gbz-base-js/compare/v2.0.0...v2.1.0) (2026-09-06)
+
+### Other Changes
+
+- Align a haplotype in the orientation that shares more sequence with the reference ([0054fe8](https://github.com/GMOD/gbz-base-js/commit/0054fe856900a991daebb4507d8189c47d91ef6f))
+- A companion index records the node count too, and the reader checks it when present ([7d38ca6](https://github.com/GMOD/gbz-base-js/commit/7d38ca6bd3d5e17a71ae9fbe647c5238a52577cb))
+
 ## [2.0.0](https://github.com/GMOD/gbz-base-js/compare/v1.1.0...v2.0.0) (2026-09-06)
 
 ### Other Changes
