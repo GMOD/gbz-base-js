@@ -10,11 +10,90 @@ pangenome databases (`.gbz.db`).
 
 ```ts
 import { RemoteFile } from 'generic-filehandle2'
-import { GBZBase, subgraphInInterval } from '@gmod/gbz-base'
+import { GBZBase } from '@gmod/gbz-base'
 
 const db = await GBZBase.open(
   new RemoteFile('https://example.org/graph.gbz.db'),
 )
+
+// one record per haplotype fragment crossing the window
+const features = await db.getFeaturesForRange(
+  'GRCh38#0#chr6',
+  31500000,
+  31501000,
+)
+
+// the graph itself, for a pangenome view
+const { nodes, edges, paths } = await db.getGraphForRange(
+  'GRCh38#0#chr6',
+  31500000,
+  31501000,
+)
+```
+
+Coordinates are 0-based half-open, and are offsets along the path you named, so
+`('GRCh38#0#chr6', 31500000, 31501000)` is the same window
+`gbz-base query --interval 31500000..31501000` gives.
+
+The path is a PanSN `sample#haplotype#contig` string, or a bare contig for a
+graph whose reference paths have no sample. `{ sample, haplotype, contig }`
+works too, and `parsePathName` is the parser if you want it separately. A path
+the graph does not have is not an error: `getFeaturesForRange` returns `[]` and
+`getGraphForRange` an empty graph, so a browser asking for every contig it knows
+about gets an empty track rather than a thrown error. `hasPath` answers the same
+question on its own.
+
+Both take `{ context, haplotypes, snarls, limit, signal }`. `signal` is an
+`AbortSignal` that stops the query between range requests. `context` is a
+padding radius in bp and defaults to **0** here — exactly the window you asked
+for — where the lower-level query functions below default to 100 as upstream
+does.
+
+### What a feature is
+
+```ts
+for (const feature of features) {
+  const { refStart, refEnd, strand, cigar } = feature
+  if (feature.resolved) {
+    console.log(feature.name, feature.hapStart, feature.hapEnd)
+  }
+}
+```
+
+`refStart`/`refEnd` are the fragment's span on the reference path you queried,
+and `cigar` is its alignment to that reference, computed like upstream: a
+node-length-weighted LCS, with the diverging stretches scored using vg's match,
+mismatch and gap parameters. `path` is the walk as node handles, and `weight` is
+how many identical haplotypes it stands for.
+
+Naming a fragment needs the haplotype index described below, and a database
+without one cannot do it, so the record is a union on `resolved` rather than a
+handful of separately-undefined fields. A resolved one adds `name` (the
+`HG02723#1#JAHEOU010000100.1[4392999-4393486]` form), the structured `pathName`,
+the `pathHandle`, and `hapStart`/`hapEnd` in that haplotype's own coordinates.
+`getFeaturesForRange` resolves when the database can and leaves the fragments
+unresolved when it cannot.
+
+For the graph, `paths[0]` is the reference interval, named
+`GRCh38#0#chr6[start-end]`. Every other entry is one haplotype's walk through
+the subgraph, with the same `cigar`. Pass `{ cigar: false }` to leave them out.
+
+### Sources
+
+Any object with `read(length, position)` and `stat()` works as a source, so
+`LocalFile`, `RemoteFile` and `BlobFile` from `generic-filehandle2` all do.
+Pages are fetched in blocks (64 KiB by default, `blockSize` in the open options)
+and cached.
+
+### Lower-level queries
+
+`getFeaturesForRange` and `getGraphForRange` cover the interval query. The four
+query functions underneath answer the rest of what `gbz-base query` does, and
+hand back a `Subgraph` you drive yourself:
+
+```ts
+import { subgraphAtOffset, subgraphInInterval } from '@gmod/gbz-base'
+
 const subgraph = await subgraphInInterval(
   db,
   { sample: 'GRCh38', contig: 'chr6' },
@@ -22,18 +101,13 @@ const subgraph = await subgraphInInterval(
   31501000,
   { context: 0, haplotypes: 'all' },
 )
-const { nodes, edges, paths } = subgraph.toJSON(true)
+await subgraph.identifyPaths()
+const graph = subgraph.toSubgraphJson({ cigar: true, names: 'resolved' })
+const gfa = await subgraph.toGFA({ cigar: true, names: 'resolved' })
 ```
 
-`paths[0]` is the reference interval, named `GRCh38#0#chr6[start-end]`. Every
-other entry is one haplotype's walk through the subgraph with a `cigar` relative
-to the reference, computed like upstream: a node-length-weighted LCS, with the
-diverging stretches scored using vg's match, mismatch and gap parameters.
-
-Any object with `read(length, position)` and `stat()` works as a source, so
-`LocalFile`, `RemoteFile` and `BlobFile` from `generic-filehandle2` all do.
-Pages are fetched in blocks (64 KiB by default, `blockSize` in the open options)
-and cached.
+`subgraphAtOffset` and `subgraphAroundNodes` are the other two;
+`subgraphBetween` is described under Snarls.
 
 The command line mirrors the upstream tool for the query types it supports:
 
@@ -110,11 +184,12 @@ binary keeps working on the augmented database.
 At query time `subgraph.identifyPaths()` loads the samples for the window's node
 range in one index scan, chains each haplotype's fragments to the next through
 the private nodes between them, and walks at most one interval past the window
-for a chain that met no sample inside it. `subgraph.alignments()` then gives one
-record per fragment: PanSN name, strand, haplotype interval in that contig's
-coordinates, reference interval, and a CIGAR clipped to the fragment's own
-reference span. `toJSON(cigar, { names: 'resolved' })` names the paths the same
-way. On the command line, `--resolve` and `--alignments`.
+for a chain that met no sample inside it. This is what fills in the `resolved`
+half of a feature: PanSN name, haplotype interval in that contig's coordinates,
+and the path handle. `getFeaturesForRange` and `getGraphForRange` run it for you
+when the database has the tables; on the lower-level path you call it yourself
+before `alignments()` or `toSubgraphJson({ names: 'resolved' })`. On the command
+line, `--resolve` and `--alignments`.
 
 The tests check every resolved fragment against an independent backward walk
 through the bidirectional GBWT to the path's recorded start position.

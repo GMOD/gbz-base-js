@@ -1,4 +1,3 @@
-import { formatPathName } from './db.ts'
 import {
   ENDMARKER,
   edgeIsCanonical,
@@ -16,16 +15,12 @@ import {
 } from './gbwt/node.ts'
 import { gfaHeaderLines, sha256Hex, subgraphName } from './graphName.ts'
 import { weightedLcs } from './lcs.ts'
+import { formatPathName } from './pathName.ts'
 
-import type {
-  GBZBase,
-  GbzPath,
-  GbzRecord,
-  HaplotypeSample,
-  PathName,
-} from './db.ts'
+import type { GBZBase, GbzPath, GbzRecord, HaplotypeSample } from './db.ts'
 import type { NodeSide, Orientation } from './gbwt/node.ts'
 import type { Pos } from './gbwt/record.ts'
+import type { PathName } from './pathName.ts'
 
 export type HaplotypeOutput = 'all' | 'distinct' | 'reference-only' | 'none'
 
@@ -86,12 +81,8 @@ export interface SubgraphJson {
   paths: SubgraphPath[]
 }
 
-export interface HaplotypeAlignment {
-  pathHandle: number | undefined
-  name: PathName | undefined
+export interface AlignmentSpan {
   strand: '+' | '-'
-  hapStart: number | undefined
-  hapEnd: number | undefined
   refStart: number
   refEnd: number
   cigar: string
@@ -100,8 +91,27 @@ export interface HaplotypeAlignment {
   start: Pos
 }
 
-export interface ToJsonOptions {
-  names?: 'anonymous' | 'resolved'
+export type HaplotypeAlignment = AlignmentSpan &
+  (
+    | {
+        resolved: true
+        name: string
+        pathName: PathName
+        pathHandle: number
+        hapStart: number
+        hapEnd: number
+      }
+    | { resolved: false }
+  )
+
+export interface SubgraphOutputOptions {
+  cigar?: boolean | undefined
+  names?: 'anonymous' | 'resolved' | undefined
+}
+
+export interface SubgraphOptions {
+  limit?: number | undefined
+  signal?: AbortSignal | undefined
 }
 
 function sideBefore(
@@ -183,7 +193,6 @@ export class Subgraph {
   private refInterval: [number, number] | undefined
   private refIndexCache: Map<number, number[]> | undefined
   private refPrefixCache: number[] | undefined
-  limit: number | undefined
   readonly stats = {
     orderedAlignments: 0,
     lcsAlignments: 0,
@@ -192,9 +201,13 @@ export class Subgraph {
   }
 
   private db: GBZBase
+  private readonly limit: number | undefined
+  private readonly signal: AbortSignal | undefined
 
-  constructor(db: GBZBase) {
+  constructor(db: GBZBase, opts: SubgraphOptions = {}) {
     this.db = db
+    this.limit = opts.limit
+    this.signal = opts.signal
   }
 
   get nodeCount() {
@@ -236,6 +249,7 @@ export class Subgraph {
   }
 
   private async addNode(id: number) {
+    this.signal?.throwIfAborted()
     if (this.limit !== undefined && this.nodeCount >= this.limit) {
       throw new Error(`Subgraph size limit of ${this.limit} nodes exceeded`)
     }
@@ -800,6 +814,7 @@ export class Subgraph {
       let current: number | undefined = start
       let pos: Pos | undefined
       while (anchor === undefined) {
+        this.signal?.throwIfAborted()
         if (current !== undefined) {
           if (visited.has(current)) {
             break
@@ -1094,24 +1109,17 @@ export class Subgraph {
         last -= 1
       }
       const identity = info.identity
-      const strand =
+      const walkStrand =
         info.path.some(handle => isReverse(handle)) &&
         !info.path.some(handle => !isReverse(handle))
           ? '-'
           : '+'
-      result.push({
-        pathHandle: identity?.pathHandle,
-        name: identity?.name,
+      const span: AlignmentSpan = {
         strand: identity
           ? identity.orientation === 'forward'
             ? '+'
             : '-'
-          : strand,
-        hapStart: identity
-          ? identity.name.fragment + identity.hapStart
-          : undefined,
-        hapEnd: identity ? identity.name.fragment + identity.hapEnd : undefined,
-        start: info.positions[0]!,
+          : walkStrand,
         refStart: reference.start + leading,
         refEnd: reference.start + refTotal - trailing,
         cigar: edits
@@ -1120,7 +1128,26 @@ export class Subgraph {
           .join(''),
         weight: info.weight,
         path: info.path,
-      })
+        start: info.positions[0]!,
+      }
+      if (identity) {
+        const hapStart = identity.name.fragment + identity.hapStart
+        const hapEnd = identity.name.fragment + identity.hapEnd
+        result.push({
+          ...span,
+          resolved: true,
+          name: formatPathName(
+            { ...identity.name, fragment: hapStart },
+            hapEnd,
+          ),
+          pathName: identity.name,
+          pathHandle: identity.pathHandle,
+          hapStart,
+          hapEnd,
+        })
+      } else {
+        result.push({ ...span, resolved: false })
+      }
     })
     return result
   }
@@ -1165,7 +1192,8 @@ export class Subgraph {
     return sha256Hex(chunks)
   }
 
-  async toGFA(cigar: boolean, opts: ToJsonOptions = {}) {
+  async toGFA(opts: SubgraphOutputOptions = {}) {
+    const cigar = opts.cigar ?? false
     const lines = [
       this.refPath ? `H\tVN:Z:1.1\tRS:Z:${this.refPath.sample}` : 'H\tVN:Z:1.1',
       ...gfaHeaderLines(
@@ -1244,7 +1272,8 @@ export class Subgraph {
     return `${lines.join('\n')}\n`
   }
 
-  toJSON(cigar: boolean, opts: ToJsonOptions = {}): SubgraphJson {
+  toSubgraphJson(opts: SubgraphOutputOptions = {}): SubgraphJson {
+    const cigar = opts.cigar ?? false
     const handles = this.sortedHandles()
     const nodes = handles
       .filter(handle => !isReverse(handle))

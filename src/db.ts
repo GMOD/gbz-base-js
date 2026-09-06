@@ -2,22 +2,19 @@ import { ENDMARKER, nodeId, nodeOrientation } from './gbwt/node.ts'
 import { GbwtRecord, decompressEdges } from './gbwt/record.ts'
 import { decodeSequence, encodedSequenceLength } from './gbwt/sequence.ts'
 import { graphNameFromTags } from './graphName.ts'
+import { pathNameFor, toPathQuery } from './pathName.ts'
+import { subgraphInInterval } from './query.ts'
 import { SqliteDatabase } from './sqlite/database.ts'
 
 import type { ByteSource } from './filehandle.ts'
 import type { Pos } from './gbwt/record.ts'
 import type { GraphName } from './graphName.ts'
+import type { PathName, PathQuery, PathRef } from './pathName.ts'
+import type { QueryOptions } from './query.ts'
 import type { PagerOptions } from './sqlite/pager.ts'
 import type { SqlValue } from './sqlite/record.ts'
+import type { HaplotypeAlignment, SubgraphJson } from './subgraph.ts'
 
-export interface PathName {
-  sample: string
-  contig: string
-  haplotype: number
-  fragment: number
-}
-
-export const GENERIC_SAMPLE = '_gbwt_ref'
 export const SCHEMA_VERSION = 'GBZ-base version 4'
 
 export class SchemaVersionError extends Error {
@@ -33,10 +30,6 @@ export class SchemaVersionError extends Error {
     )
     this.found = found
   }
-}
-
-export function formatPathName(name: PathName, end: number) {
-  return `${name.sample}#${name.haplotype}#${name.contig}[${name.fragment}-${end}]`
 }
 
 export interface HaplotypeSample {
@@ -254,6 +247,69 @@ export class GBZBase {
 
   async pathsForSample(sample: string) {
     return (await this.paths()).filter(p => p.name.sample === sample)
+  }
+
+  async hasPath(ref: PathRef) {
+    const name = pathNameFor(toPathQuery(ref), 0)
+    return (await this.paths()).some(
+      p =>
+        p.name.sample === name.sample &&
+        p.name.contig === name.contig &&
+        p.name.haplotype === name.haplotype,
+    )
+  }
+
+  private async subgraphForRange(
+    query: PathQuery,
+    start: number,
+    end: number,
+    opts: QueryOptions,
+  ) {
+    const subgraph = await subgraphInInterval(this, query, start, end, {
+      context: 0,
+      ...opts,
+    })
+    if (this.hasHaplotypeIndex) {
+      await subgraph.identifyPaths()
+    }
+    return subgraph
+  }
+
+  async getFeaturesForRange(
+    ref: PathRef,
+    start: number,
+    end: number,
+    opts: QueryOptions = {},
+  ): Promise<HaplotypeAlignment[]> {
+    const query = toPathQuery(ref)
+    if (await this.hasPath(query)) {
+      const subgraph = await this.subgraphForRange(query, start, end, opts)
+      return subgraph.alignments()
+    }
+    return []
+  }
+
+  async getGraphForRange(
+    ref: PathRef,
+    start: number,
+    end: number,
+    opts: QueryOptions & { cigar?: boolean | undefined } = {},
+  ): Promise<SubgraphJson> {
+    const query = toPathQuery(ref)
+    if (await this.hasPath(query)) {
+      const { cigar, ...queryOptions } = opts
+      const subgraph = await this.subgraphForRange(
+        query,
+        start,
+        end,
+        queryOptions,
+      )
+      return subgraph.toSubgraphJson({
+        cigar: cigar ?? true,
+        names: this.hasHaplotypeIndex ? 'resolved' : 'anonymous',
+      })
+    }
+    return { nodes: [], edges: [], paths: [] }
   }
 
   async graphName() {

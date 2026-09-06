@@ -1,6 +1,6 @@
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
-import { GBZBase, formatPathName } from './db.ts'
+import { GBZBase } from './db.ts'
 import { encodeNode } from './gbwt/node.ts'
 import {
   subgraphAroundNodes,
@@ -229,18 +229,11 @@ export async function main(argv: string[]) {
   }
   const names = args.resolve ? 'resolved' : 'anonymous'
   const output = args.alignments
-    ? subgraph.alignments().map(a => ({
-        ...a,
-        name:
-          a.name && a.hapStart !== undefined && a.hapEnd !== undefined
-            ? formatPathName({ ...a.name, fragment: a.hapStart }, a.hapEnd)
-            : undefined,
-        start: undefined,
-      }))
-    : subgraph.toJSON(args.cigar, { names })
+    ? subgraph.alignments().map(({ start, ...rest }) => rest)
+    : subgraph.toSubgraphJson({ cigar: args.cigar, names })
   process.stdout.write(
     args.format === 'gfa' && !args.alignments
-      ? await subgraph.toGFA(args.cigar, { names })
+      ? await subgraph.toGFA({ cigar: args.cigar, names })
       : `${JSON.stringify(output)}\n`,
   )
   if (args.stats) {

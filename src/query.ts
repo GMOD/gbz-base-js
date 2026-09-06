@@ -1,29 +1,18 @@
-import { GENERIC_SAMPLE } from './db.ts'
+import { pathNameFor } from './pathName.ts'
 import { Subgraph } from './subgraph.ts'
 
-import type { GBZBase, PathName } from './db.ts'
+import type { GBZBase } from './db.ts'
+import type { PathQuery } from './pathName.ts'
 import type { HaplotypeOutput, SnarlOutput } from './subgraph.ts'
 
+export type { PathQuery } from './pathName.ts'
+
 export interface QueryOptions {
-  context?: number
-  haplotypes?: HaplotypeOutput
-  snarls?: SnarlOutput
-  limit?: number
-}
-
-export interface PathQuery {
-  sample?: string
-  contig: string
-  haplotype?: number
-}
-
-function pathName(query: PathQuery, fragment: number): PathName {
-  return {
-    sample: query.sample ?? GENERIC_SAMPLE,
-    contig: query.contig,
-    haplotype: query.haplotype ?? 0,
-    fragment,
-  }
+  context?: number | undefined
+  haplotypes?: HaplotypeOutput | undefined
+  snarls?: SnarlOutput | undefined
+  limit?: number | undefined
+  signal?: AbortSignal | undefined
 }
 
 export async function subgraphAtOffset(
@@ -32,9 +21,8 @@ export async function subgraphAtOffset(
   offset: number,
   opts: QueryOptions = {},
 ) {
-  const subgraph = new Subgraph(db)
-  subgraph.limit = opts.limit
-  const reference = await subgraph.pathPosition(pathName(query, offset))
+  const subgraph = new Subgraph(db, opts)
+  const reference = await subgraph.pathPosition(pathNameFor(query, offset))
   await subgraph.aroundPosition(
     reference.position.handle,
     reference.position.nodeOffset,
@@ -52,9 +40,8 @@ export async function subgraphInInterval(
   end: number,
   opts: QueryOptions = {},
 ) {
-  const subgraph = new Subgraph(db)
-  subgraph.limit = opts.limit
-  const reference = await subgraph.pathPosition(pathName(query, start))
+  const subgraph = new Subgraph(db, opts)
+  const reference = await subgraph.pathPosition(pathNameFor(query, start))
   await subgraph.aroundInterval(
     reference.position,
     end - start,
@@ -80,8 +67,7 @@ export async function subgraphAroundNodes(
       'Overlapping snarls cannot be extracted for a node-based query with multiple nodes',
     )
   }
-  const subgraph = new Subgraph(db)
-  subgraph.limit = opts.limit
+  const subgraph = new Subgraph(db, opts)
   await subgraph.aroundNodes(nodes, opts.context ?? 100)
   await subgraph.extractSnarls(snarls)
   subgraph.extractPaths(undefined, haplotypes)
@@ -92,14 +78,13 @@ export async function subgraphBetween(
   db: GBZBase,
   start: number,
   end: number,
-  opts: Pick<QueryOptions, 'haplotypes' | 'limit'> = {},
+  opts: Pick<QueryOptions, 'haplotypes' | 'limit' | 'signal'> = {},
 ) {
   const haplotypes = opts.haplotypes ?? 'all'
   if (haplotypes === 'reference-only') {
     throw new Error('Cannot output a reference path in a node-based query')
   }
-  const subgraph = new Subgraph(db)
-  subgraph.limit = opts.limit
+  const subgraph = new Subgraph(db, opts)
   await subgraph.betweenNodes(start, end)
   subgraph.extractPaths(undefined, haplotypes)
   return subgraph

@@ -52,30 +52,32 @@ async function checkIdentities(
   const alignments = subgraph.alignments()
   expect(alignments.length).toBeGreaterThan(0)
   for (const alignment of alignments) {
-    expect(alignment.pathHandle).toBeDefined()
-    const gbzPath = await db.getPath(alignment.pathHandle!)
-    expect(gbzPath).toBeDefined()
-    const { start: seqStart, bpBefore } = await walkBack(db, alignment.start)
-    expect(seqStart).toEqual(
-      alignment.strand === '+' ? gbzPath?.fwStart : gbzPath?.revStart,
-    )
-    const length = (await db.haplotypeLength(alignment.pathHandle!))!
-    const local = {
-      start: alignment.hapStart! - gbzPath!.name.fragment,
-      end: alignment.hapEnd! - gbzPath!.name.fragment,
+    expect(alignment.resolved).toBe(true)
+    if (alignment.resolved) {
+      const gbzPath = await db.getPath(alignment.pathHandle)
+      expect(gbzPath).toBeDefined()
+      const { start: seqStart, bpBefore } = await walkBack(db, alignment.start)
+      expect(seqStart).toEqual(
+        alignment.strand === '+' ? gbzPath?.fwStart : gbzPath?.revStart,
+      )
+      const length = (await db.haplotypeLength(alignment.pathHandle))!
+      const local = {
+        start: alignment.hapStart - gbzPath!.name.fragment,
+        end: alignment.hapEnd - gbzPath!.name.fragment,
+      }
+      expect(alignment.strand === '+' ? local.start : length - local.end).toBe(
+        bpBefore,
+      )
+      let pathLen = 0
+      for (const handle of alignment.path) {
+        pathLen += (await db.getRecord(handle))?.sequenceLen ?? 0
+      }
+      expect(local.end - local.start).toBe(pathLen)
+      expect(alignment.refEnd).toBeGreaterThan(alignment.refStart)
+      expect(
+        alignment.cigar.startsWith('D') || /^\d+D/.test(alignment.cigar),
+      ).toBe(false)
     }
-    expect(alignment.strand === '+' ? local.start : length - local.end).toBe(
-      bpBefore,
-    )
-    let pathLen = 0
-    for (const handle of alignment.path) {
-      pathLen += (await db.getRecord(handle))?.sequenceLen ?? 0
-    }
-    expect(local.end - local.start).toBe(pathLen)
-    expect(alignment.refEnd).toBeGreaterThan(alignment.refStart)
-    expect(
-      alignment.cigar.startsWith('D') || /^\d+D/.test(alignment.cigar),
-    ).toBe(false)
   }
   return { subgraph, alignments }
 }
@@ -91,7 +93,9 @@ describe('haplotype identification', () => {
       0,
     )
     const samples = new Set(
-      alignments.map(a => `${a.name?.sample}#${a.name?.haplotype}`),
+      alignments.flatMap(a =>
+        a.resolved ? [`${a.pathName.sample}#${a.pathName.haplotype}`] : [],
+      ),
     )
     expect(samples.size).toBeGreaterThan(50)
     expect(alignments.some(a => a.strand === '-')).toBe(true)
@@ -108,7 +112,7 @@ describe('haplotype identification', () => {
       100,
     )
     expect(alignments.length).toBe(subgraph.pathCount - 1)
-    const json = subgraph.toJSON(true, { names: 'resolved' })
+    const json = subgraph.toSubgraphJson({ cigar: true, names: 'resolved' })
     expect(json.paths.slice(1).every(p => !p.name.startsWith('unknown#'))).toBe(
       true,
     )

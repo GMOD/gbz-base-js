@@ -77,7 +77,10 @@ async function runQuery(query: OracleQuery) {
             opts,
           )
         : await subgraphAroundNodes(db, nodes, opts)
-  return { json: subgraph.toJSON(cigar), gfa: await subgraph.toGFA(cigar) }
+  return {
+    json: subgraph.toSubgraphJson({ cigar }),
+    gfa: await subgraph.toGFA({ cigar }),
+  }
 }
 
 function parseHandle(text: string) {

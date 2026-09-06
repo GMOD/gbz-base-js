@@ -1,16 +1,12 @@
-export {
-  GBZBase,
-  GENERIC_SAMPLE,
-  GbzRecord,
-  SCHEMA_VERSION,
-  SchemaVersionError,
-  formatPathName,
-} from './db.ts'
-export type { GbzPath, HaplotypeSample, OpenOptions, PathName } from './db.ts'
+export { GBZBase, GbzRecord, SCHEMA_VERSION, SchemaVersionError } from './db.ts'
+export type { GbzPath, HaplotypeSample, OpenOptions } from './db.ts'
+export { GENERIC_SAMPLE, formatPathName, parsePathName } from './pathName.ts'
+export type { PathName, PathQuery, PathRef } from './pathName.ts'
 export type { ByteSource } from './filehandle.ts'
 export type { Pos } from './gbwt/record.ts'
 export { Subgraph } from './subgraph.ts'
 export type {
+  AlignmentSpan,
   HaplotypeAlignment,
   HaplotypeOutput,
   PathIdentity,
@@ -18,8 +14,9 @@ export type {
   ReferencePath,
   SnarlOutput,
   SubgraphJson,
+  SubgraphOptions,
+  SubgraphOutputOptions,
   SubgraphPath,
-  ToJsonOptions,
 } from './subgraph.ts'
 export {
   subgraphAroundNodes,
@@ -27,7 +24,7 @@ export {
   subgraphBetween,
   subgraphInInterval,
 } from './query.ts'
-export type { PathQuery, QueryOptions } from './query.ts'
+export type { QueryOptions } from './query.ts'
 export { SqliteDatabase } from './sqlite/database.ts'
 export type { GraphName } from './graphName.ts'
 export { weightedLcs } from './lcs.ts'
