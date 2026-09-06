@@ -15,8 +15,20 @@ interface PageHeader {
   cellPointers: number
 }
 
+function readUint16(page: Uint8Array, offset: number) {
+  return page[offset]! * 256 + page[offset + 1]!
+}
+
+function readUint32(page: Uint8Array, offset: number) {
+  return (
+    page[offset]! * 16777216 +
+    page[offset + 1]! * 65536 +
+    page[offset + 2]! * 256 +
+    page[offset + 3]!
+  )
+}
+
 function readHeader(page: Uint8Array, start: number): PageHeader {
-  const view = new DataView(page.buffer, page.byteOffset, page.byteLength)
   const type = page[start]
   if (
     type !== INTERIOR_INDEX &&
@@ -29,25 +41,27 @@ function readHeader(page: Uint8Array, start: number): PageHeader {
   const interior = type === INTERIOR_INDEX || type === INTERIOR_TABLE
   return {
     type,
-    cellCount: view.getUint16(start + 3),
-    rightChild: interior ? view.getUint32(start + 8) : 0,
+    cellCount: readUint16(page, start + 3),
+    rightChild: interior ? readUint32(page, start + 8) : 0,
     cellPointers: start + (interior ? 12 : 8),
   }
 }
 
 function cellOffset(page: Uint8Array, header: PageHeader, index: number) {
-  const view = new DataView(page.buffer, page.byteOffset, page.byteLength)
-  return view.getUint16(header.cellPointers + 2 * index)
+  return readUint16(page, header.cellPointers + 2 * index)
 }
 
-function readUint32(page: Uint8Array, offset: number) {
-  const view = new DataView(page.buffer, page.byteOffset, page.byteLength)
-  return view.getUint32(offset)
+interface IndexCell {
+  values: SqlValue[]
+  leftChild: number
 }
+
+const MAX_DECODED_INDEX_PAGES = 4096
 
 export class BTree {
   private readonly usable: number
   private pager: Pager
+  private decodedIndexPages = new Map<number, (IndexCell | undefined)[]>()
 
   constructor(pager: Pager, reservedBytes: number) {
     this.pager = pager
@@ -179,12 +193,42 @@ export class BTree {
     }
   }
 
-  private async indexCell(page: Uint8Array, header: PageHeader, index: number) {
-    const offset = cellOffset(page, header, index)
-    const interior = header.type === INTERIOR_INDEX
-    const [size, afterSize] = readVarint(page, interior ? offset + 4 : offset)
-    const values = decodeRecord(await this.payload(page, afterSize, size, true))
-    return { values, leftChild: interior ? readUint32(page, offset) : 0 }
+  private decodedCells(pageNumber: number, header: PageHeader) {
+    let cells = this.decodedIndexPages.get(pageNumber)
+    if (cells) {
+      this.decodedIndexPages.delete(pageNumber)
+    } else {
+      cells = new Array<IndexCell | undefined>(header.cellCount)
+      if (this.decodedIndexPages.size >= MAX_DECODED_INDEX_PAGES) {
+        const oldest = this.decodedIndexPages.keys().next().value
+        if (oldest !== undefined) {
+          this.decodedIndexPages.delete(oldest)
+        }
+      }
+    }
+    this.decodedIndexPages.set(pageNumber, cells)
+    return cells
+  }
+
+  private async indexCell(
+    pageNumber: number,
+    page: Uint8Array,
+    header: PageHeader,
+    index: number,
+  ): Promise<IndexCell> {
+    const cells = this.decodedCells(pageNumber, header)
+    let cell = cells[index]
+    if (!cell) {
+      const offset = cellOffset(page, header, index)
+      const interior = header.type === INTERIOR_INDEX
+      const [size, afterSize] = readVarint(page, interior ? offset + 4 : offset)
+      cell = {
+        values: decodeRecord(await this.payload(page, afterSize, size, true)),
+        leftChild: interior ? readUint32(page, offset) : 0,
+      }
+      cells[index] = cell
+    }
+    return cell
   }
 
   async *indexScanFrom(
@@ -196,7 +240,7 @@ export class BTree {
     let high = header.cellCount
     while (first < high) {
       const mid = (first + high) >> 1
-      const cell = await this.indexCell(page, header, mid)
+      const cell = await this.indexCell(root, page, header, mid)
       if (compareKey(cell.values, low) < 0) {
         first = mid + 1
       } else {
@@ -204,7 +248,7 @@ export class BTree {
       }
     }
     for (let i = first; i < header.cellCount; i++) {
-      const cell = await this.indexCell(page, header, i)
+      const cell = await this.indexCell(root, page, header, i)
       if (header.type === INTERIOR_INDEX) {
         yield* this.indexScanFrom(cell.leftChild, low)
       }
@@ -228,7 +272,7 @@ export class BTree {
       let child = 0
       while (low < high) {
         const mid = (low + high) >> 1
-        const cell = await this.indexCell(page, header, mid)
+        const cell = await this.indexCell(pageNumber, page, header, mid)
         if (compareKey(cell.values, key) <= 0) {
           best = cell.values
           low = mid + 1

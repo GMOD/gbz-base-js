@@ -247,6 +247,10 @@ export async function main(argv: string[]) {
   )
   if (args.stats) {
     const { fetches, bytesFetched } = db.sqlite.pager
+    const index =
+      db.index === db.sqlite
+        ? ''
+        : ` (haplotype index: ${db.index.pager.fetches} fetches, ${db.index.pager.bytesFetched} bytes)`
     const {
       orderedAlignments,
       lcsAlignments,
@@ -254,7 +258,7 @@ export async function main(argv: string[]) {
       identificationFetches,
     } = subgraph.stats
     process.stderr.write(
-      `Subgraph contains ${subgraph.nodeCount} nodes and ${subgraph.pathCount} paths; ${fetches} fetches, ${bytesFetched} bytes; ${orderedAlignments} ordered + ${lcsAlignments} lcs alignments; identification ${identificationSteps} steps, ${identificationFetches} lookups\n`,
+      `Subgraph contains ${subgraph.nodeCount} nodes and ${subgraph.pathCount} paths; ${fetches} fetches, ${bytesFetched} bytes${index}; ${orderedAlignments} ordered + ${lcsAlignments} lcs alignments; identification ${identificationSteps} steps, ${identificationFetches} lookups\n`,
     )
   }
 }

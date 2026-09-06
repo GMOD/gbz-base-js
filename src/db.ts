@@ -163,7 +163,7 @@ export class GBZBase {
   private indexTags: Map<string, string> | undefined
 
   readonly sqlite: SqliteDatabase
-  private readonly index: SqliteDatabase
+  readonly index: SqliteDatabase
 
   private constructor(sqlite: SqliteDatabase, index: SqliteDatabase) {
     this.sqlite = sqlite
