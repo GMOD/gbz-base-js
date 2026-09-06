@@ -115,6 +115,24 @@ export interface SubgraphOptions {
   signal?: AbortSignal | undefined
 }
 
+export class SubgraphLimitError extends Error {
+  override name = 'SubgraphLimitError'
+  readonly limit: number
+  readonly windowBp: number | undefined
+  readonly walkedBp: number | undefined
+
+  constructor(limit: number, walk?: { windowBp: number; walkedBp: number }) {
+    super(
+      walk === undefined
+        ? `Subgraph size limit of ${limit} nodes exceeded`
+        : `Subgraph size limit of ${limit} nodes exceeded ${walk.walkedBp} bp into a ${walk.windowBp} bp window`,
+    )
+    this.limit = limit
+    this.windowBp = walk?.windowBp
+    this.walkedBp = walk?.walkedBp
+  }
+}
+
 function sideBefore(
   a: [number, number, NodeSide],
   b: [number, number, NodeSide],
@@ -354,6 +372,7 @@ export class Subgraph {
   private refInterval: [number, number] | undefined
   private refIndexCache: Map<number, number[]> | undefined
   private refPrefixCache: number[] | undefined
+  private walkedBp: number | undefined
   readonly stats: SubgraphStats = {
     orderedAlignments: 0,
     lcsAlignments: 0,
@@ -423,7 +442,7 @@ export class Subgraph {
   private async addNode(id: number) {
     this.signal?.throwIfAborted()
     if (this.limit !== undefined && this.nodeCount >= this.limit) {
-      throw new Error(`Subgraph size limit of ${this.limit} nodes exceeded`)
+      throw new SubgraphLimitError(this.limit)
     }
     const forward = await this.db.getRecord(encodeNode(id, 'forward'))
     const reverse = await this.db.getRecord(encodeNode(id, 'reverse'))
@@ -539,6 +558,28 @@ export class Subgraph {
     if (len === 0) {
       throw new Error('Interval length must be greater than 0')
     }
+    this.walkedBp = 0
+    try {
+      return await this.walkInterval(start, len, context)
+    } catch (error) {
+      throw error instanceof SubgraphLimitError && error.windowBp === undefined
+        ? new SubgraphLimitError(error.limit, {
+            windowBp: len,
+            walkedBp: this.walkedBp,
+          })
+        : error
+    }
+  }
+
+  get referenceWalkedBp() {
+    return this.walkedBp
+  }
+
+  private async walkInterval(
+    start: PathPosition,
+    len: number,
+    context: number,
+  ) {
     let pos: Pos = { node: start.handle, offset: start.gbwtOffset }
     let offset = start.nodeOffset
     let remaining = len
@@ -546,6 +587,7 @@ export class Subgraph {
     for (;;) {
       const id = nodeId(pos.node)
       const orientation = nodeOrientation(pos.node)
+      this.walkedBp = len - remaining
       await this.ensureNode(id)
       const record = this.record(pos.node)
       if (offset >= record.sequenceLen) {
@@ -574,6 +616,7 @@ export class Subgraph {
       offset = 0
       remaining -= distanceToNext
     }
+    this.walkedBp = len
     return this.insertContext(active, context)
   }
 

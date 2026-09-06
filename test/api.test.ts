@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
 import { parsePathName } from '../src/pathName.ts'
+import { SubgraphLimitError } from '../src/subgraph.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
 const micb = path.join(dataDir, 'micb-kir3dl1.gbz.db')
@@ -126,6 +127,22 @@ describe('fragment selection', () => {
 })
 
 describe('getAlignmentsForRange', () => {
+  it('says how far into the window the node limit tripped', async () => {
+    const db = await openMicb()
+    const error = await db
+      .getAlignmentsForRange(chr6, 31500000, 31501000, { limit: 3 })
+      .then(() => undefined)
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(SubgraphLimitError)
+    if (error instanceof SubgraphLimitError) {
+      expect(error.limit).toBe(3)
+      expect(error.windowBp).toBe(1000)
+      expect(error.walkedBp).toBeGreaterThanOrEqual(0)
+      expect(error.walkedBp).toBeLessThan(1000)
+      expect(error.message).toMatch(/bp into a 1000 bp window/)
+    }
+  })
+
   it('takes a PanSN string and resolves names in one call', async () => {
     const db = await openMicb()
     const alignments = await db.getAlignmentsForRange(chr6, 31500000, 31501000)

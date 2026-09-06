@@ -1,5 +1,5 @@
 import { pathNameFor } from './pathName.ts'
-import { Subgraph } from './subgraph.ts'
+import { Subgraph, SubgraphLimitError } from './subgraph.ts'
 
 import type { GBZBase } from './db.ts'
 import type { PathQuery } from './pathName.ts'
@@ -41,15 +41,24 @@ export async function subgraphInInterval(
   opts: QueryOptions = {},
 ) {
   const subgraph = new Subgraph(db, opts)
-  const reference = await subgraph.pathPosition(pathNameFor(query, start))
-  await subgraph.prefetchReferenceWalk(reference, end - start)
-  await subgraph.aroundInterval(
-    reference.position,
-    end - start,
-    opts.context ?? 100,
-  )
-  await subgraph.extractSnarls(opts.snarls ?? 'none')
-  subgraph.extractPaths(reference, opts.haplotypes ?? 'all')
+  try {
+    const reference = await subgraph.pathPosition(pathNameFor(query, start))
+    await subgraph.prefetchReferenceWalk(reference, end - start)
+    await subgraph.aroundInterval(
+      reference.position,
+      end - start,
+      opts.context ?? 100,
+    )
+    await subgraph.extractSnarls(opts.snarls ?? 'none')
+    subgraph.extractPaths(reference, opts.haplotypes ?? 'all')
+  } catch (error) {
+    throw error instanceof SubgraphLimitError && error.windowBp === undefined
+      ? new SubgraphLimitError(error.limit, {
+          windowBp: end - start,
+          walkedBp: subgraph.referenceWalkedBp ?? 0,
+        })
+      : error
+  }
   return subgraph
 }
 
