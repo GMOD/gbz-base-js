@@ -255,14 +255,20 @@ export class GBZBase {
     return (await this.paths()).filter(p => p.name.sample === sample)
   }
 
-  async hasPath(ref: PathRef) {
+  private async pathsNamed(ref: PathRef) {
     const name = pathNameFor(toPathQuery(ref), 0)
-    return (await this.paths()).some(
-      p =>
-        p.name.sample === name.sample &&
-        p.name.contig === name.contig &&
-        p.name.haplotype === name.haplotype,
-    )
+    return (await this.paths())
+      .filter(
+        p =>
+          p.name.sample === name.sample &&
+          p.name.contig === name.contig &&
+          p.name.haplotype === name.haplotype,
+      )
+      .sort((a, b) => a.name.fragment - b.name.fragment)
+  }
+
+  async hasPath(ref: PathRef) {
+    return (await this.pathsNamed(ref)).length > 0
   }
 
   private pathLengths = new Map<number, Promise<number>>()
@@ -308,23 +314,19 @@ export class GBZBase {
     start: number,
     end: number,
   ): Promise<PathFragment[]> {
-    const name = pathNameFor(toPathQuery(ref), 0)
-    const named = (await this.paths()).filter(
-      p =>
-        p.name.sample === name.sample &&
-        p.name.contig === name.contig &&
-        p.name.haplotype === name.haplotype,
+    const ordered = await this.pathsNamed(ref)
+    const covering = ordered.filter(p => p.name.fragment <= start).slice(-1)
+    const within = ordered.filter(
+      p => p.name.fragment > start && p.name.fragment < end,
     )
     const fragments = await Promise.all(
-      named.map(async path => ({
+      [...covering, ...within].map(async path => ({
         path,
         start: path.name.fragment,
         end: path.name.fragment + (await this.pathLength(path.handle)),
       })),
     )
-    return fragments
-      .filter(f => f.start < end && start < f.end)
-      .sort((a, b) => a.start - b.start)
+    return fragments.filter(f => start < f.end)
   }
 
   private async subgraphForFragment(
