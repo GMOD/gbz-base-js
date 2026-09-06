@@ -85,7 +85,27 @@ cd tools/haplotype-index && cargo build --release
 
 The second form walks the paths through the database's own node records, so a
 database whose GBZ is no longer at hand can still be augmented; the two forms
-write identical tables.
+write identical tables. Walking a GBZ uses every core (`--threads`).
+
+With `--output index.db` the tool writes the same tables into a standalone
+companion database instead, and the reader opens the two side by side:
+
+```
+./target/release/gbz-haplotype-index --interval 16384 --output graph.haplotype-index.db graph.gbz
+gbz-base-query https://host/graph.gbz.db --haplotype-index https://host/graph.haplotype-index.db ...
+```
+
+```ts
+const db = await GBZBase.open(new RemoteFile(graphUrl), {
+  haplotypeIndex: new RemoteFile(indexUrl),
+})
+```
+
+This is how a database someone else publishes gets haplotype names without
+anyone rehosting it: HPRC publishes `hprc-v2.1-mc-grch38.gbz.db` (10 GB) beside
+its graphs, and the companion for it is built from the 5 GB GBZ. The companion
+records the graph's path count and the reader refuses one built for a different
+graph.
 
 `HaplotypeSamples` holds one GBWT position every `--interval` bp along every
 path in both orientations, with the path handle and the forward coordinate of

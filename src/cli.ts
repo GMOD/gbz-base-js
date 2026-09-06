@@ -29,6 +29,7 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --format FMT         json (default) or gfa
   --resolve            name haplotypes from the HaplotypeSamples table
   --alignments         print one alignment record per haplotype fragment instead of the subgraph
+  --haplotype-index F  companion database written by gbz-haplotype-index --output
   --block-size INT     bytes fetched per range request (default: 65536)
   --stats              print fetch statistics to stderr
 `
@@ -51,6 +52,7 @@ interface Args {
   resolve: boolean
   alignments: boolean
   blockSize: number
+  haplotypeIndex?: string
   stats: boolean
 }
 
@@ -149,6 +151,9 @@ function parseArgs(argv: string[]): Args {
       case '--block-size':
         args.blockSize = Number(next(i++))
         break
+      case '--haplotype-index':
+        args.haplotypeIndex = next(i++)
+        break
       case '--stats':
         args.stats = true
         break
@@ -180,10 +185,14 @@ function parseArgs(argv: string[]): Args {
 
 export async function main(argv: string[]) {
   const args = parseArgs(argv)
-  const source = /^https?:\/\//.test(args.file)
-    ? new RemoteFile(args.file)
-    : new LocalFile(args.file)
-  const db = await GBZBase.open(source, { blockSize: args.blockSize })
+  const open = (file: string) =>
+    /^https?:\/\//.test(file) ? new RemoteFile(file) : new LocalFile(file)
+  const db = await GBZBase.open(open(args.file), {
+    blockSize: args.blockSize,
+    ...(args.haplotypeIndex === undefined
+      ? {}
+      : { haplotypeIndex: open(args.haplotypeIndex) }),
+  })
   const opts = {
     context: args.context,
     haplotypes: args.haplotypes,

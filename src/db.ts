@@ -146,37 +146,63 @@ function rowToPath(rowid: number, values: SqlValue[]): GbzPath {
   }
 }
 
+export interface OpenOptions extends PagerOptions {
+  haplotypeIndex?: ByteSource
+}
+
+async function readTags(sqlite: SqliteDatabase) {
+  const tags = new Map<string, string>()
+  for await (const { values } of sqlite.scan('Tags')) {
+    tags.set(str(values[0], 'Tags.key'), str(values[1], 'Tags.value'))
+  }
+  return tags
+}
+
 export class GBZBase {
   private tagCache: Promise<Map<string, string>> | undefined
   private pathCache: Promise<GbzPath[]> | undefined
+  private indexTags: Map<string, string> | undefined
 
   readonly sqlite: SqliteDatabase
+  private readonly index: SqliteDatabase
 
-  private constructor(sqlite: SqliteDatabase) {
+  private constructor(sqlite: SqliteDatabase, index: SqliteDatabase) {
     this.sqlite = sqlite
+    this.index = index
   }
 
-  static async open(source: ByteSource, opts: PagerOptions = {}) {
-    const sqlite = await SqliteDatabase.open(source, opts)
+  static async open(source: ByteSource, opts: OpenOptions = {}) {
+    const { haplotypeIndex, ...pagerOptions } = opts
+    const sqlite = await SqliteDatabase.open(source, pagerOptions)
     for (const table of ['Tags', 'Nodes', 'Paths', 'ReferenceIndex']) {
       sqlite.rootPage(table)
     }
-    const db = new GBZBase(sqlite)
+    const index = haplotypeIndex
+      ? await SqliteDatabase.open(haplotypeIndex, pagerOptions)
+      : sqlite
+    const db = new GBZBase(sqlite, index)
     const version = await db.tag('version')
     if (version !== SCHEMA_VERSION) {
       throw new SchemaVersionError(version)
+    }
+    if (haplotypeIndex) {
+      for (const table of ['Tags', 'HaplotypeSamples', 'HaplotypeLengths']) {
+        index.rootPage(table)
+      }
+      db.indexTags = await readTags(index)
+      const indexed = db.indexTags.get('haplotype_index_paths')
+      const paths = await db.tag('paths')
+      if (indexed !== paths) {
+        throw new Error(
+          `haplotype index was built for ${indexed ?? 'an unknown number of'} paths but the graph has ${paths}`,
+        )
+      }
     }
     return db
   }
 
   tags() {
-    this.tagCache ??= (async () => {
-      const tags = new Map<string, string>()
-      for await (const { values } of this.sqlite.scan('Tags')) {
-        tags.set(str(values[0], 'Tags.key'), str(values[1], 'Tags.value'))
-      }
-      return tags
-    })()
+    this.tagCache ??= readTags(this.sqlite)
     return this.tagCache
   }
 
@@ -257,12 +283,14 @@ export class GBZBase {
 
   get hasHaplotypeIndex() {
     return (
-      this.sqlite.has('HaplotypeSamples') && this.sqlite.has('HaplotypeLengths')
+      this.index.has('HaplotypeSamples') && this.index.has('HaplotypeLengths')
     )
   }
 
   async haplotypeSampleInterval() {
-    const value = await this.tag('haplotype_index_interval')
+    const value = this.indexTags
+      ? this.indexTags.get('haplotype_index_interval')
+      : await this.tag('haplotype_index_interval')
     return value === undefined ? undefined : Number(value)
   }
 
@@ -281,7 +309,7 @@ export class GBZBase {
 
   async haplotypeSamplesInRange(minHandle: number, maxHandle: number) {
     const samples: HaplotypeSample[] = []
-    for await (const key of this.sqlite.indexScanFrom('HaplotypeSamples', [
+    for await (const key of this.index.indexScanFrom('HaplotypeSamples', [
       minHandle,
       0,
     ])) {
@@ -289,7 +317,7 @@ export class GBZBase {
       if (node > maxHandle) {
         break
       }
-      const row = await this.sqlite.byRowid(
+      const row = await this.index.byRowid(
         'HaplotypeSamples',
         num(key[2], 'HaplotypeSamples rowid'),
       )
@@ -301,14 +329,11 @@ export class GBZBase {
   }
 
   async haplotypeSampleAt(node: number, offset: number) {
-    const key = await this.sqlite.indexSeekLE('HaplotypeSamples', [
-      node,
-      offset,
-    ])
+    const key = await this.index.indexSeekLE('HaplotypeSamples', [node, offset])
     if (key?.[0] !== node || key[1] !== offset) {
       return undefined
     }
-    const row = await this.sqlite.byRowid(
+    const row = await this.index.byRowid(
       'HaplotypeSamples',
       num(key[2], 'HaplotypeSamples rowid'),
     )
@@ -316,7 +341,7 @@ export class GBZBase {
   }
 
   async haplotypeLength(pathHandle: number) {
-    const row = await this.sqlite.byRowid('HaplotypeLengths', pathHandle)
+    const row = await this.index.byRowid('HaplotypeLengths', pathHandle)
     return row ? num(row[1], 'HaplotypeLengths.length') : undefined
   }
 

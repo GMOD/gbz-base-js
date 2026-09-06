@@ -6,7 +6,7 @@ export {
   SchemaVersionError,
   formatPathName,
 } from './db.ts'
-export type { GbzPath, HaplotypeSample, PathName } from './db.ts'
+export type { GbzPath, HaplotypeSample, OpenOptions, PathName } from './db.ts'
 export type { ByteSource } from './filehandle.ts'
 export type { Pos } from './gbwt/record.ts'
 export { Subgraph } from './subgraph.ts'

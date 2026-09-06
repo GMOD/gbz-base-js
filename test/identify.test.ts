@@ -139,3 +139,40 @@ describe('haplotype identification', () => {
     await checkIdentities('example-v3.gbz.db', undefined, 'B', 0, 3, 2)
   })
 })
+
+describe('companion haplotype index', () => {
+  const graph = path.join(dataDir, 'micb-kir3dl1.gbz.db')
+  const companion = path.join(dataDir, 'micb-kir3dl1.haplotype-index.db')
+
+  async function alignmentsWith(db: GBZBase) {
+    const subgraph = await subgraphInInterval(
+      db,
+      { sample: 'GRCh38', contig: 'chr6' },
+      31500000,
+      31501000,
+      { context: 100 },
+    )
+    await subgraph.identifyPaths()
+    return subgraph.alignments().map(a => ({ ...a, start: undefined }))
+  }
+
+  it('names haplotypes exactly as the embedded tables do', async () => {
+    const embedded = await GBZBase.open(new LocalFile(graph))
+    const withCompanion = await GBZBase.open(new LocalFile(graph), {
+      haplotypeIndex: new LocalFile(companion),
+    })
+    expect(withCompanion.hasHaplotypeIndex).toBe(true)
+    expect(await withCompanion.haplotypeSampleInterval()).toBe(1000)
+    expect(await alignmentsWith(withCompanion)).toEqual(
+      await alignmentsWith(embedded),
+    )
+  })
+
+  it('rejects a companion built for a different graph', async () => {
+    await expect(
+      GBZBase.open(new LocalFile(path.join(dataDir, 'example.gbz.db')), {
+        haplotypeIndex: new LocalFile(companion),
+      }),
+    ).rejects.toThrow(/built for 169 paths but the graph has 6/)
+  })
+})
