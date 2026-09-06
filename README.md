@@ -74,12 +74,14 @@ for (const alignment of alignments) {
 }
 ```
 
-`refStart`/`refEnd` are the fragment's span on the reference path you queried,
-and `cigar` is its alignment to that reference, computed like upstream: a
-node-length-weighted LCS, with the diverging stretches scored using vg's match,
-mismatch and gap parameters. `path` is the walk as node handles, `weight` is how
-many identical haplotypes it stands for, and `start` is its GBWT position, which
-is a property of the graph and so is stable across refetches of the same window.
+`refStart`/`refEnd` are the fragment's span on the reference path you queried.
+They run to node boundaries, so a record can begin before the window you asked
+for and end after it. `cigar` is its alignment to that reference, computed like
+upstream: a node-length-weighted LCS, with the diverging stretches scored using
+vg's match, mismatch and gap parameters. `path` is the walk as node handles,
+`weight` is how many identical haplotypes it stands for, and `start` is its GBWT
+position, which is a property of the graph and so is stable across refetches of
+the same window.
 
 Naming a fragment needs the haplotype index described below, and a database
 without one cannot do it, so the record is a union on `resolved` rather than a
