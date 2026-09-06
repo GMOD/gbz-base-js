@@ -1,3 +1,15 @@
+## [2.0.0](https://github.com/GMOD/gbz-base-js/compare/v1.1.0...v2.0.0) (2026-09-06)
+
+### Other Changes
+
+- Gbz-haplotype-index reports progress per thread ([fb60239](https://github.com/GMOD/gbz-base-js/commit/fb60239f34a8e8dfd9ae350c402db39c4b4288e1))
+- Front-door range API on GBZBase ([462050e](https://github.com/GMOD/gbz-base-js/commit/462050e01ec5cca84ba0c317116d1f72dbcd9580))
+- Fragment-aware range API, replacing getFeatures/getGraph ([70b6522](https://github.com/GMOD/gbz-base-js/commit/70b652238df142f9788e98013c0de56f523afddc))
+- Measure only the fragments a window can overlap ([b7fad0c](https://github.com/GMOD/gbz-base-js/commit/b7fad0cd499afcff0f0c60c6994e84d5cd83b2cd))
+- Cover the fragment cases no fixture reaches ([bbe501a](https://github.com/GMOD/gbz-base-js/commit/bbe501a9bf8b6f61132b22f132da730c396f1249))
+- Index seeks reuse decoded cells, and --stats reports the companion pager ([7f42037](https://github.com/GMOD/gbz-base-js/commit/7f42037a100e91d596872cd465aeed618aa871c6))
+- Exercise fragment spanning against a real fragmented reference when one is at hand ([8c2a9b7](https://github.com/GMOD/gbz-base-js/commit/8c2a9b79471d74c1bfde59c8f9fb82275a49a10f))
+
 ## [1.1.0](https://github.com/GMOD/gbz-base-js/compare/v1.0.0...v1.1.0) (2026-09-06)
 
 ### Other Changes
