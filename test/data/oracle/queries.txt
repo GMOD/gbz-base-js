@@ -27,3 +27,5 @@ example_between_reverse	example.gbz.db	--between 17-:14-
 example_A_i_snarls	example.gbz.db	--contig A --interval 1..4 --context 0 --snarls --cigar
 micb_between	micb-kir3dl1.gbz.db	--between 129+:160+ --cigar
 micb_between_snarl	micb-kir3dl1.gbz.db	--between 154-:150- --haplotypes distinct
+split_chr1_frag2_i	split-contig.gbz.db	--sample GRCh38 --contig chr1 --interval 1550..1700 --context 10 --cigar
+split_chr1_frag1_end	split-contig.gbz.db	--sample GRCh38 --contig chr1 --interval 400..501 --context 0 --cigar

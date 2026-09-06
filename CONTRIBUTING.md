@@ -21,6 +21,15 @@ byte for byte. `test/data/oracle/generate.sh` regenerates those files, and needs
 the Rust tool on your PATH; nothing in CI runs it, so a regeneration has to be
 committed.
 
+`test/data/split-contig.gfa` is the source of the one fixture whose reference
+contig is stored as two path fragments with a gap between them. Its database is
+`vg gbwt -G split-contig.gfa --gbz-format -g split-contig.gbz` followed by
+`gbz-base construct split-contig.gbz -o split-contig.gbz.db`, and its companion
+is
+`gbz-haplotype-index --interval 200 --output split-contig.haplotype-index.db split-contig.gbz split-contig.gbz.db`.
+Upstream builds with `cargo install --git https://github.com/jltsiren/gbz-base`,
+and `quay.io/vgteam/vg` is the easiest `vg` on a Mac.
+
 `tools/haplotype-index/` is the Rust helper that writes the haplotype index some
 of those databases carry. It is shipped in the npm tarball as source only —
 nothing here builds it.
