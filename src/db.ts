@@ -1,10 +1,12 @@
 import { ENDMARKER, nodeId, nodeOrientation } from './gbwt/node.ts'
 import { GbwtRecord, decompressEdges } from './gbwt/record.ts'
 import { decodeSequence, encodedSequenceLength } from './gbwt/sequence.ts'
+import { graphNameFromTags } from './graphName.ts'
 import { SqliteDatabase } from './sqlite/database.ts'
 
 import type { ByteSource } from './filehandle.ts'
 import type { Pos } from './gbwt/record.ts'
+import type { GraphName } from './graphName.ts'
 import type { PagerOptions } from './sqlite/pager.ts'
 import type { SqlValue } from './sqlite/record.ts'
 
@@ -226,6 +228,26 @@ export class GBZBase {
 
   async pathsForSample(sample: string) {
     return (await this.paths()).filter(p => p.name.sample === sample)
+  }
+
+  async graphName() {
+    const gbzTags = new Map<string, string>()
+    for (const [key, value] of await this.tags()) {
+      if (key.startsWith('gbz_')) {
+        gbzTags.set(key.slice('gbz_'.length), value)
+      }
+    }
+    let name: GraphName = {
+      name: undefined,
+      subgraph: new Map(),
+      translation: new Map(),
+    }
+    try {
+      name = graphNameFromTags(gbzTags)
+    } catch {
+      // upstream falls back to an empty name when the tags do not parse
+    }
+    return name
   }
 
   async hasChainLinks() {

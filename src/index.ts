@@ -29,5 +29,6 @@ export {
 } from './query.ts'
 export type { PathQuery, QueryOptions } from './query.ts'
 export { SqliteDatabase } from './sqlite/database.ts'
+export type { GraphName } from './graphName.ts'
 export { weightedLcs } from './lcs.ts'
 export * as nodes from './gbwt/node.ts'

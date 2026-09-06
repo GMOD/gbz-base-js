@@ -77,7 +77,7 @@ async function runQuery(query: OracleQuery) {
             opts,
           )
         : await subgraphAroundNodes(db, nodes, opts)
-  return subgraph.toJSON(cigar)
+  return { json: subgraph.toJSON(cigar), gfa: await subgraph.toGFA(cigar) }
 }
 
 function parseHandle(text: string) {
@@ -90,10 +90,16 @@ function parseHandle(text: string) {
 describe('matches upstream gbz-base query output', () => {
   for (const query of queries) {
     it(query.name, async () => {
-      const expected = JSON.parse(
+      const expectedJson = JSON.parse(
         readFileSync(path.join(oracleDir, `${query.name}.json`), 'utf8'),
       )
-      expect(await runQuery(query)).toEqual(expected)
+      const expectedGfa = readFileSync(
+        path.join(oracleDir, `${query.name}.gfa`),
+        'utf8',
+      )
+      const { json, gfa } = await runQuery(query)
+      expect(json).toEqual(expectedJson)
+      expect(gfa).toBe(expectedGfa)
     })
   }
 })

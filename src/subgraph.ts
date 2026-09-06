@@ -14,6 +14,7 @@ import {
   nodeOrientation,
   pathIsCanonical,
 } from './gbwt/node.ts'
+import { gfaHeaderLines, sha256Hex, subgraphName } from './graphName.ts'
 import { weightedLcs } from './lcs.ts'
 
 import type {
@@ -1093,6 +1094,125 @@ export class Subgraph {
       })
     })
     return result
+  }
+
+  private canonicalEdges(id: number) {
+    const edges: [number, number, number][] = []
+    for (const orientation of ['forward', 'reverse'] as const) {
+      const handle = encodeNode(id, orientation)
+      for (const successor of this.record(handle).successors()) {
+        if (this.hasHandle(successor) && edgeIsCanonical(handle, successor)) {
+          edges.push([
+            orientation === 'reverse' ? 1 : 0,
+            nodeId(successor),
+            isReverse(successor) ? 1 : 0,
+          ])
+        }
+      }
+    }
+    edges.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
+    return edges.filter(
+      (edge, i) =>
+        i === 0 ||
+        edge[0] !== edges[i - 1]![0] ||
+        edge[1] !== edges[i - 1]![1] ||
+        edge[2] !== edges[i - 1]![2],
+    )
+  }
+
+  async stableName() {
+    const encoder = new TextEncoder()
+    const chunks: Uint8Array[] = []
+    for (const handle of this.sortedHandles()) {
+      if (!isReverse(handle)) {
+        const id = nodeId(handle)
+        let text = `S\t${id}\t${this.record(handle).sequence}\n`
+        for (const [fromReverse, toId, toReverse] of this.canonicalEdges(id)) {
+          text += `L\t${id}\t${fromReverse ? '-' : '+'}\t${toId}\t${toReverse ? '-' : '+'}\n`
+        }
+        chunks.push(encoder.encode(text))
+      }
+    }
+    return sha256Hex(chunks)
+  }
+
+  async toGFA(cigar: boolean, opts: ToJsonOptions = {}) {
+    const lines = [
+      this.refPath ? `H\tVN:Z:1.1\tRS:Z:${this.refPath.sample}` : 'H\tVN:Z:1.1',
+      ...gfaHeaderLines(
+        subgraphName(await this.stableName(), await this.db.graphName()),
+      ),
+    ]
+    const handles = this.sortedHandles()
+    for (const handle of handles) {
+      if (!isReverse(handle)) {
+        lines.push(`S\t${nodeId(handle)}\t${this.record(handle).sequence}`)
+      }
+    }
+    const sign = (handle: number) => (isReverse(handle) ? '-' : '+')
+    for (const handle of handles) {
+      for (const successor of this.record(handle).successors()) {
+        if (this.hasHandle(successor) && edgeIsCanonical(handle, successor)) {
+          lines.push(
+            `L\t${nodeId(handle)}\t${sign(handle)}\t${nodeId(successor)}\t${sign(successor)}\t0M`,
+          )
+        }
+      }
+    }
+    const walk = (
+      info: PathInfo,
+      name: PathName,
+      end: number,
+      cigarString: string | undefined,
+    ) => {
+      const steps = info.path
+        .map(handle => `${isReverse(handle) ? '<' : '>'}${nodeId(handle)}`)
+        .join('')
+      const weight = info.weight === undefined ? '' : `\tWT:i:${info.weight}`
+      const cg = cigarString === undefined ? '' : `\tCG:Z:${cigarString}`
+      return `W\t${name.sample}\t${name.haplotype}\t${name.contig}\t${name.fragment}\t${end}\t${steps}${weight}${cg}`
+    }
+    const contig = this.refPath?.contig ?? 'unknown'
+    if (this.refId !== undefined && this.refPath && this.refInterval) {
+      lines.push(
+        walk(
+          this.paths[this.refId]!,
+          {
+            ...this.refPath,
+            fragment: this.refPath.fragment + this.refInterval[0],
+          },
+          this.refPath.fragment + this.refInterval[1],
+          undefined,
+        ),
+      )
+    }
+    let haplotype = 1
+    this.paths.forEach((info, index) => {
+      if (index !== this.refId) {
+        const resolved = opts.names === 'resolved' ? info.identity : undefined
+        const cigarString = cigar ? this.alignToRef(index) : undefined
+        lines.push(
+          resolved
+            ? walk(
+                info,
+                {
+                  ...resolved.name,
+                  fragment: resolved.name.fragment + resolved.hapStart,
+                },
+                resolved.name.fragment + resolved.hapEnd,
+                cigarString,
+              )
+            : walk(
+                info,
+                { sample: 'unknown', contig, haplotype, fragment: 0 },
+                info.len,
+                cigarString,
+              ),
+        )
+        haplotype += 1
+      }
+    })
+    return `${lines.join('\n')}\n`
   }
 
   toJSON(cigar: boolean, opts: ToJsonOptions = {}): SubgraphJson {

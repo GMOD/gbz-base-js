@@ -26,6 +26,7 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --limit INT          safety limit for the number of nodes
   --haplotypes SEL     all, distinct, reference-only or none (default: all)
   --cigar              output CIGAR strings for the haplotypes
+  --format FMT         json (default) or gfa
   --resolve            name haplotypes from the HaplotypeSamples table
   --alignments         print one alignment record per haplotype fragment instead of the subgraph
   --block-size INT     bytes fetched per range request (default: 65536)
@@ -46,6 +47,7 @@ interface Args {
   limit?: number
   haplotypes: HaplotypeOutput
   cigar: boolean
+  format: 'json' | 'gfa'
   resolve: boolean
   alignments: boolean
   blockSize: number
@@ -70,6 +72,7 @@ function parseArgs(argv: string[]): Args {
     snarls: 'none',
     haplotypes: 'all',
     cigar: false,
+    format: 'json',
     resolve: false,
     alignments: false,
     blockSize: 65536,
@@ -149,9 +152,14 @@ function parseArgs(argv: string[]): Args {
       case '--stats':
         args.stats = true
         break
-      case '--format':
-        next(i++)
+      case '--format': {
+        const format = next(i++)
+        if (format !== 'json' && format !== 'gfa') {
+          throw new Error(`Unknown output format ${format}`)
+        }
+        args.format = format
         break
+      }
       case '-h':
       case '--help':
         process.stdout.write(USAGE)
@@ -210,6 +218,7 @@ export async function main(argv: string[]) {
   if (args.resolve) {
     await subgraph.identifyPaths()
   }
+  const names = args.resolve ? 'resolved' : 'anonymous'
   const output = args.alignments
     ? subgraph.alignments().map(a => ({
         ...a,
@@ -219,10 +228,12 @@ export async function main(argv: string[]) {
             : undefined,
         start: undefined,
       }))
-    : subgraph.toJSON(args.cigar, {
-        names: args.resolve ? 'resolved' : 'anonymous',
-      })
-  process.stdout.write(`${JSON.stringify(output)}\n`)
+    : subgraph.toJSON(args.cigar, { names })
+  process.stdout.write(
+    args.format === 'gfa' && !args.alignments
+      ? await subgraph.toGFA(args.cigar, { names })
+      : `${JSON.stringify(output)}\n`,
+  )
   if (args.stats) {
     const { fetches, bytesFetched } = db.sqlite.pager
     const {

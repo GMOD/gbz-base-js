@@ -57,13 +57,60 @@ export class Pager {
     })
     this.fetches += 1
     this.blocks.set(index, pending)
-    if (this.blocks.size > this.maxBlocks) {
-      const oldest = this.blocks.keys().next().value
-      if (oldest !== undefined) {
-        this.blocks.delete(oldest)
-      }
-    }
+    this.evict()
     return pending
+  }
+
+  prefetch(pageNumbers: number[]) {
+    const wanted = [
+      ...new Set(
+        pageNumbers.map(pageNumber =>
+          Math.floor(((pageNumber - 1) * this.pageSize) / this.blockSize),
+        ),
+      ),
+    ]
+      .filter(index => !this.blocks.has(index))
+      .sort((a, b) => a - b)
+    let runStart = 0
+    while (runStart < wanted.length) {
+      let runEnd = runStart + 1
+      while (
+        runEnd < wanted.length &&
+        wanted[runEnd] === wanted[runEnd - 1]! + 1
+      ) {
+        runEnd += 1
+      }
+      this.fetchRun(wanted[runStart]!, runEnd - runStart)
+      runStart = runEnd
+    }
+  }
+
+  private fetchRun(firstIndex: number, count: number) {
+    const start = firstIndex * this.blockSize
+    const length = Math.min(count * this.blockSize, this.fileSize - start)
+    const pending = this.source.read(length, start).then(bytes => {
+      this.bytesFetched += bytes.length
+      return bytes
+    })
+    this.fetches += 1
+    for (let i = 0; i < count; i++) {
+      const within = i * this.blockSize
+      this.blocks.set(
+        firstIndex + i,
+        pending.then(bytes => bytes.subarray(within, within + this.blockSize)),
+      )
+    }
+    this.evict()
+  }
+
+  private evict() {
+    while (this.blocks.size > this.maxBlocks) {
+      const oldest = this.blocks.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.blocks.delete(oldest)
+    }
   }
 
   async page(pageNumber: number) {

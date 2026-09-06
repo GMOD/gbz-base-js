@@ -167,10 +167,15 @@ export class BTree {
         }
       }
     } else {
+      const children: number[] = []
       for (let i = 0; i < header.cellCount; i++) {
-        yield* this.tableScan(readUint32(page, cellOffset(page, header, i)))
+        children.push(readUint32(page, cellOffset(page, header, i)))
       }
-      yield* this.tableScan(header.rightChild)
+      children.push(header.rightChild)
+      this.pager.prefetch(children)
+      for (const child of children) {
+        yield* this.tableScan(child)
+      }
     }
   }
 

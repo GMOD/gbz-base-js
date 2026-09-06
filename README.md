@@ -113,7 +113,7 @@ The test suite requires this library's output to be deep equal to every one of
 them, CIGAR strings included. `generate.sh` regenerates the oracle with an
 upstream binary.
 
-Not ported: GFA output, GAF-base.
+Not ported: GAF-base.
 
 CIGARs are computed by matching each shared node to its earliest usable
 occurrence on the reference walk, which is weight-optimal whenever every shared
