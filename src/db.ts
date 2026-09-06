@@ -196,6 +196,13 @@ export class GBZBase {
           `haplotype index was built for ${indexed ?? 'an unknown number of'} paths but the graph has ${paths}`,
         )
       }
+      const indexedNodes = db.indexTags.get('haplotype_index_nodes')
+      const nodes = await db.tag('nodes')
+      if (indexedNodes !== undefined && indexedNodes !== nodes) {
+        throw new Error(
+          `haplotype index was built for a graph with ${indexedNodes} nodes but this one has ${nodes}`,
+        )
+      }
     }
     return db
   }
