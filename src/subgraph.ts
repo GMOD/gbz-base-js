@@ -1045,13 +1045,19 @@ export class Subgraph {
     appendEdit(edits, 'M', suffix)
   }
 
-  private edits(pathIndex: number): Edit[] | undefined {
-    const info = this.paths[pathIndex]
-    if (this.refId === undefined || pathIndex === this.refId || !info) {
-      return undefined
+  private sharedWeight(path: number[], ref: number[]) {
+    const index = this.refIndex(ref)
+    let weight = 0
+    for (const handle of path) {
+      if (index.has(handle)) {
+        weight += this.record(handle).sequenceLen
+      }
     }
-    const ref = this.paths[this.refId]!.path
-    const ordered = this.orderedMatches(info.path, ref)
+    return weight
+  }
+
+  private editsAgainst(path: number[], ref: number[]) {
+    const ordered = this.orderedMatches(path, ref)
     if (ordered) {
       this.stats.orderedAlignments += 1
     } else {
@@ -1059,27 +1065,63 @@ export class Subgraph {
     }
     const lcs =
       ordered ??
-      weightedLcs(info.path, ref, handle => this.record(handle).sequenceLen)[0]
+      weightedLcs(path, ref, handle => this.record(handle).sequenceLen)[0]
     const edits: Edit[] = []
+    let matched = 0
     let pathOffset = 0
     let refOffset = 0
     for (const [nextPath, nextRef] of lcs) {
       this.align(
-        info.path.slice(pathOffset, nextPath),
+        path.slice(pathOffset, nextPath),
         ref.slice(refOffset, nextRef),
         edits,
       )
-      appendEdit(edits, 'M', this.record(info.path[nextPath]!).sequenceLen)
+      const nodeLen = this.record(path[nextPath]!).sequenceLen
+      appendEdit(edits, 'M', nodeLen)
+      matched += nodeLen
       pathOffset = nextPath + 1
       refOffset = nextRef + 1
     }
-    this.align(info.path.slice(pathOffset), ref.slice(refOffset), edits)
-    return edits
+    this.align(path.slice(pathOffset), ref.slice(refOffset), edits)
+    return { edits, matched }
+  }
+
+  private alignment(pathIndex: number) {
+    const info = this.paths[pathIndex]
+    if (this.refId === undefined || pathIndex === this.refId || !info) {
+      return undefined
+    }
+    const ref = this.paths[this.refId]!.path
+    const flippedPath = pathIsCanonical(ref)
+      ? []
+      : info.path.map(handle => flipNode(handle)).reverse()
+    const forwardBound = this.sharedWeight(info.path, ref)
+    const flippedBound = this.sharedWeight(flippedPath, ref)
+    let result: { edits: Edit[]; flipped: boolean }
+    if (flippedBound === 0) {
+      result = {
+        edits: this.editsAgainst(info.path, ref).edits,
+        flipped: false,
+      }
+    } else if (forwardBound === 0) {
+      result = {
+        edits: this.editsAgainst(flippedPath, ref).edits,
+        flipped: true,
+      }
+    } else {
+      const forward = this.editsAgainst(info.path, ref)
+      const flipped = this.editsAgainst(flippedPath, ref)
+      result =
+        flipped.matched > forward.matched
+          ? { edits: flipped.edits, flipped: true }
+          : { edits: forward.edits, flipped: false }
+    }
+    return result
   }
 
   alignToRef(pathIndex: number) {
-    return this.edits(pathIndex)
-      ?.map(([op, len]) => `${len}${op}`)
+    return this.alignment(pathIndex)
+      ?.edits.map(([op, len]) => `${len}${op}`)
       .join('')
   }
 
@@ -1095,7 +1137,7 @@ export class Subgraph {
       if (index === this.refId) {
         return
       }
-      const edits = this.edits(index)!
+      const { edits, flipped } = this.alignment(index)!
       let first = 0
       let leading = 0
       while (first < edits.length && edits[first]![0] === 'D') {
@@ -1109,17 +1151,11 @@ export class Subgraph {
         last -= 1
       }
       const identity = info.identity
-      const walkStrand =
-        info.path.some(handle => isReverse(handle)) &&
-        !info.path.some(handle => !isReverse(handle))
-          ? '-'
-          : '+'
+      const alongReference = identity
+        ? (identity.orientation === 'forward') !== flipped
+        : !flipped
       const span: AlignmentSpan = {
-        strand: identity
-          ? identity.orientation === 'forward'
-            ? '+'
-            : '-'
-          : walkStrand,
+        strand: alongReference ? '+' : '-',
         refStart: reference.start + leading,
         refEnd: reference.start + refTotal - trailing,
         cigar: edits

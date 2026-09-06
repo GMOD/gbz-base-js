@@ -65,6 +65,37 @@ describe.skipIf(!existsSync(chr20))('a reference stored in fragments', () => {
     expect(subgraph?.referenceInterval?.end).toBe(a!.end)
   })
 
+  it('aligns haplotypes to a reference walk stored against node orientation', async () => {
+    const db = await openChr20()
+    const start = 30368374
+    const fromChm13 = await db.getAlignmentsForRange(
+      chm13,
+      start,
+      start + 300,
+      {
+        context: 0,
+      },
+    )
+    expect(fromChm13.length).toBeGreaterThan(100)
+    expect(fromChm13.every(a => a.refEnd > a.refStart)).toBe(true)
+    expect(fromChm13.every(a => a.cigar.includes('M'))).toBe(true)
+    const grch38 = fromChm13.find(a => a.resolved && a.name.sample === 'GRCh38')
+    expect(grch38?.resolved && grch38.strand).toBe('-')
+    expect(grch38?.cigar).toBe('102M')
+    if (grch38?.resolved) {
+      const fromGrch38 = await db.getAlignmentsForRange(
+        'GRCh38#0#chr20',
+        grch38.hapStart,
+        grch38.hapEnd,
+        { context: 0 },
+      )
+      const seenBack = fromGrch38.filter(
+        a => a.resolved && a.name.sample === 'CHM13',
+      )
+      expect(seenBack.map(a => [a.strand, a.cigar])).toEqual([['-', '102M']])
+    }
+  })
+
   it('answers nothing inside the gap between two fragments', async () => {
     const db = await openChr20()
     const [a, b] = await db.pathFragmentsForRange(chm13, 30_000_000, 30_400_000)

@@ -78,10 +78,12 @@ for (const alignment of alignments) {
 They run to node boundaries, so a record can begin before the window you asked
 for and end after it. `cigar` is its alignment to that reference, computed like
 upstream: a node-length-weighted LCS, with the diverging stretches scored using
-vg's match, mismatch and gap parameters. `path` is the walk as node handles,
-`weight` is how many identical haplotypes it stands for, and `start` is its GBWT
-position, which is a property of the graph and so is stable across refetches of
-the same window.
+vg's match, mismatch and gap parameters. `strand` is `-` when the haplotype runs
+through the window in the opposite direction to the reference, so the same pair
+of paths reports the same strand whichever of the two is the reference. `path`
+is the walk as node handles, `weight` is how many identical haplotypes it stands
+for, and `start` is its GBWT position, which is a property of the graph and so
+is stable across refetches of the same window.
 
 Naming a fragment needs the haplotype index described below, and a database
 without one cannot do it, so the record is a union on `resolved` rather than a
@@ -190,8 +192,8 @@ const db = await GBZBase.open(new RemoteFile(graphUrl), {
 This is how a database someone else publishes gets haplotype names without
 anyone rehosting it: HPRC publishes `hprc-v2.1-mc-grch38.gbz.db` (10 GB) beside
 its graphs, and the companion for it is built from the 5 GB GBZ. The companion
-records the graph's path count and the reader refuses one built for a different
-graph.
+records the graph's path and node counts and the reader refuses one built for a
+different graph.
 
 `HaplotypeSamples` holds one GBWT position every `--interval` bp along every
 path in both orientations, with the path handle and the forward coordinate of
@@ -239,6 +241,15 @@ occurrence on the reference walk, which is weight-optimal whenever every shared
 node can be placed in order; the Myers-based weighted LCS from gbwt-rs runs only
 for the fragments where that fails (inversions, repeats). The two can pick
 different equal-weight alignments only when the reference walk repeats a node.
+
+One deliberate departure: where a reference walk is stored against node
+orientation (upstream prints "the reference path is not in canonical
+orientation" there), every other walk comes out in the opposite orientation, and
+upstream aligns them handle for handle, giving all-insertion CIGARs against the
+reference despite the nodes being shared. This reader aligns each walk in
+whichever orientation shares more sequence with the reference and reports `-` on
+such records. CHM13 on HPRC chr20 has one such region, right after the fragment
+starting at 30368374.
 
 ## Measured
 
