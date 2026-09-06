@@ -32,6 +32,20 @@ async function walkBack(db: GBZBase, pos: Pos) {
   }
 }
 
+function cigarConsumption(cigar: string) {
+  let query = 0
+  let reference = 0
+  for (const [, len, op] of cigar.matchAll(/(\d+)([MID])/g)) {
+    if (op !== 'D') {
+      query += Number(len)
+    }
+    if (op !== 'I') {
+      reference += Number(len)
+    }
+  }
+  return { query, reference }
+}
+
 async function checkIdentities(
   file: string,
   sample: string | undefined,
@@ -72,7 +86,10 @@ async function checkIdentities(
       for (const handle of alignment.path) {
         pathLen += (await db.getRecord(handle))?.sequenceLen ?? 0
       }
-      expect(local.end - local.start).toBe(pathLen)
+      expect(local.end - local.start).toBeGreaterThanOrEqual(pathLen)
+      const consumed = cigarConsumption(alignment.cigar)
+      expect(local.end - local.start).toBe(consumed.query)
+      expect(alignment.refEnd - alignment.refStart).toBe(consumed.reference)
       expect(alignment.refEnd).toBeGreaterThan(alignment.refStart)
       expect(
         alignment.cigar.startsWith('D') || /^\d+D/.test(alignment.cigar),

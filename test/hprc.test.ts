@@ -34,7 +34,7 @@ describe.skipIf(!existsSync(companion))('the published HPRC v2.1 graph', () => {
     await subgraph.identifyPaths()
     const alignments = subgraph.alignments()
     expect(subgraph.nodeCount).toBe(12240)
-    expect(alignments.length).toBe(1912)
+    expect(alignments.length).toBe(1395)
     expect(alignments.every(a => a.resolved)).toBe(true)
     const haplotypes = new Set(
       alignments.flatMap(a => (a.resolved ? [a.pathHandle] : [])),
@@ -45,13 +45,16 @@ describe.skipIf(!existsSync(companion))('the published HPRC v2.1 graph', () => {
     expect(windowSamples).toBeLessThan(10000)
     expect(chains.reduce((n, c) => n + c.fragments, 0)).toBe(1912)
     expect(db.index.pager.bytesFetched).toBeLessThan(4 * 1024 * 1024)
-    for (const alignment of alignments.filter((_, i) => i % 97 === 0)) {
+    for (const alignment of alignments) {
       if (alignment.resolved) {
-        let pathLen = 0
-        for (const handle of alignment.path) {
-          pathLen += (await db.getRecord(handle))?.sequenceLen ?? 0
+        let query = 0
+        let reference = 0
+        for (const [, len, op] of alignment.cigar.matchAll(/(\d+)([MID])/g)) {
+          query += op === 'D' ? 0 : Number(len)
+          reference += op === 'I' ? 0 : Number(len)
         }
-        expect(alignment.hapEnd - alignment.hapStart).toBe(pathLen)
+        expect(alignment.hapEnd - alignment.hapStart).toBe(query)
+        expect(alignment.refEnd - alignment.refStart).toBe(reference)
       }
     }
   }, 120000)

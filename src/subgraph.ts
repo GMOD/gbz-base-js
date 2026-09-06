@@ -179,6 +179,108 @@ function posKey(pos: Pos) {
   return `${pos.node}:${pos.offset}`
 }
 
+interface FragmentAlignment {
+  strand: '+' | '-'
+  refStart: number
+  refEnd: number
+  edits: Edit[]
+  weight: number | undefined
+  path: number[]
+  start: Pos
+  identity:
+    | {
+        pathHandle: number
+        name: PathName
+        hapStart: number
+        hapEnd: number
+        walkForward: boolean
+      }
+    | undefined
+}
+
+function joinable(a: FragmentAlignment, b: FragmentAlignment) {
+  const insertion = b.identity!.hapStart - a.identity!.hapEnd
+  const deletion =
+    a.strand === '+' ? b.refStart - a.refEnd : a.refStart - b.refEnd
+  return a.strand === b.strand && insertion >= 0 && deletion >= 0
+    ? { insertion, deletion }
+    : undefined
+}
+
+function joinPair(
+  a: FragmentAlignment,
+  b: FragmentAlignment,
+  gap: { insertion: number; deletion: number },
+): FragmentAlignment {
+  const [left, right] = a.strand === '+' ? [a, b] : [b, a]
+  const edits = left.edits.map(([op, len]): Edit => [op, len])
+  appendGap(edits, gap.insertion, gap.deletion)
+  for (const [op, len] of right.edits) {
+    appendEdit(edits, op, len)
+  }
+  const walkForward = a.identity!.walkForward
+  const [first, second] = walkForward ? [a, b] : [b, a]
+  return {
+    strand: a.strand,
+    refStart: left.refStart,
+    refEnd: right.refEnd,
+    edits,
+    weight: undefined,
+    path: [...first.path, ...second.path],
+    start: first.start,
+    identity: {
+      pathHandle: a.identity!.pathHandle,
+      name: a.identity!.name,
+      hapStart: a.identity!.hapStart,
+      hapEnd: b.identity!.hapEnd,
+      walkForward,
+    },
+  }
+}
+
+function joinSiblings(fragments: FragmentAlignment[]) {
+  if (fragments.some(f => f.weight !== undefined)) {
+    return fragments
+  }
+  const byPath = new Map<number, number[]>()
+  fragments.forEach((fragment, index) => {
+    if (fragment.identity) {
+      const siblings = byPath.get(fragment.identity.pathHandle)
+      if (siblings) {
+        siblings.push(index)
+      } else {
+        byPath.set(fragment.identity.pathHandle, [index])
+      }
+    }
+  })
+  const joined = new Map<number, FragmentAlignment>()
+  const consumed = new Set<number>()
+  for (const siblings of byPath.values()) {
+    siblings.sort(
+      (x, y) =>
+        fragments[x]!.identity!.hapStart - fragments[y]!.identity!.hapStart,
+    )
+    let head = siblings[0]!
+    let current = fragments[head]!
+    for (const index of siblings.slice(1)) {
+      const next = fragments[index]!
+      const gap = joinable(current, next)
+      if (gap) {
+        current = joinPair(current, next, gap)
+        consumed.add(index)
+      } else {
+        joined.set(head, current)
+        head = index
+        current = next
+      }
+    }
+    joined.set(head, current)
+  }
+  return fragments.flatMap((fragment, index) =>
+    consumed.has(index) ? [] : [joined.get(index) ?? fragment],
+  )
+}
+
 function pathPosition(info: PathInfo, k: number): Pos {
   return { node: info.path[k]!, offset: info.offsets[k]! }
 }
@@ -1224,28 +1326,7 @@ export class Subgraph {
       suffix = refLen - prefix
     }
     appendEdit(edits, 'M', prefix)
-    const pathMiddle = pathLen - prefix - suffix
-    const refMiddle = refLen - prefix - suffix
-    if (pathMiddle === 0) {
-      appendEdit(edits, 'D', refMiddle)
-    } else if (refMiddle === 0) {
-      appendEdit(edits, 'I', pathMiddle)
-    } else {
-      const mismatch = Math.min(pathMiddle, refMiddle)
-      const mismatchIndel =
-        4 * mismatch +
-        gapPenalty(pathMiddle - mismatch) +
-        gapPenalty(refMiddle - mismatch)
-      const insertionDeletion = gapPenalty(pathMiddle) + gapPenalty(refMiddle)
-      if (mismatchIndel <= insertionDeletion) {
-        appendEdit(edits, 'M', mismatch)
-        appendEdit(edits, 'I', pathMiddle - mismatch)
-        appendEdit(edits, 'D', refMiddle - mismatch)
-      } else {
-        appendEdit(edits, 'I', pathMiddle)
-        appendEdit(edits, 'D', refMiddle)
-      }
-    }
+    appendGap(edits, pathLen - prefix - suffix, refLen - prefix - suffix)
     appendEdit(edits, 'M', suffix)
   }
 
@@ -1271,22 +1352,37 @@ export class Subgraph {
       ordered ??
       weightedLcs(path, ref, handle => this.record(handle).sequenceLen)[0]
     const edits: Edit[] = []
+    const refPrefix = this.refPrefix(ref)
+    const alignGap = (
+      pathFrom: number,
+      pathTo: number,
+      refFrom: number,
+      refTo: number,
+    ) => {
+      if (pathFrom === pathTo) {
+        appendEdit(edits, 'D', refPrefix[refTo]! - refPrefix[refFrom]!)
+      } else if (refFrom === refTo) {
+        appendEdit(edits, 'I', this.pathLen(path.slice(pathFrom, pathTo)))
+      } else {
+        this.align(
+          path.slice(pathFrom, pathTo),
+          ref.slice(refFrom, refTo),
+          edits,
+        )
+      }
+    }
     let matched = 0
     let pathOffset = 0
     let refOffset = 0
     for (const [nextPath, nextRef] of lcs) {
-      this.align(
-        path.slice(pathOffset, nextPath),
-        ref.slice(refOffset, nextRef),
-        edits,
-      )
+      alignGap(pathOffset, nextPath, refOffset, nextRef)
       const nodeLen = this.record(path[nextPath]!).sequenceLen
       appendEdit(edits, 'M', nodeLen)
       matched += nodeLen
       pathOffset = nextPath + 1
       refOffset = nextRef + 1
     }
-    this.align(path.slice(pathOffset), ref.slice(refOffset), edits)
+    alignGap(pathOffset, path.length, refOffset, ref.length)
     return { edits, matched }
   }
 
@@ -1336,7 +1432,7 @@ export class Subgraph {
     }
     const ref = this.paths[this.refId]!.path
     const refTotal = this.refPrefix(ref)[ref.length]!
-    const result: HaplotypeAlignment[] = []
+    const fragments: FragmentAlignment[] = []
     this.paths.forEach((info, index) => {
       if (index === this.refId) {
         return
@@ -1358,38 +1454,44 @@ export class Subgraph {
       const alongReference = identity
         ? (identity.orientation === 'forward') !== flipped
         : !flipped
-      const span: AlignmentSpan = {
+      fragments.push({
         strand: alongReference ? '+' : '-',
         refStart: reference.start + leading,
         refEnd: reference.start + refTotal - trailing,
-        cigar: edits
-          .slice(first, last)
-          .map(([op, len]) => `${len}${op}`)
-          .join(''),
+        edits: edits.slice(first, last),
         weight: info.weight,
         path: info.path,
         start: pathPosition(info, 0),
-      }
-      if (identity) {
-        const hapStart = identity.name.fragment + identity.hapStart
-        const hapEnd = identity.name.fragment + identity.hapEnd
-        result.push({
-          ...span,
-          resolved: true,
-          name: identity.name,
-          label: formatPathName(
-            { ...identity.name, fragment: hapStart },
-            hapEnd,
-          ),
-          pathHandle: identity.pathHandle,
-          hapStart,
-          hapEnd,
-        })
-      } else {
-        result.push({ ...span, resolved: false })
-      }
+        identity:
+          identity === undefined
+            ? undefined
+            : {
+                pathHandle: identity.pathHandle,
+                name: identity.name,
+                hapStart: identity.name.fragment + identity.hapStart,
+                hapEnd: identity.name.fragment + identity.hapEnd,
+                walkForward: identity.orientation === 'forward',
+              },
+      })
     })
-    return result
+    return joinSiblings(fragments).map(fragment => {
+      const { edits, identity, ...rest } = fragment
+      const span: AlignmentSpan = { ...rest, cigar: cigarOf(edits) }
+      return identity
+        ? {
+            ...span,
+            resolved: true,
+            name: identity.name,
+            label: formatPathName(
+              { ...identity.name, fragment: identity.hapStart },
+              identity.hapEnd,
+            ),
+            pathHandle: identity.pathHandle,
+            hapStart: identity.hapStart,
+            hapEnd: identity.hapEnd,
+          }
+        : { ...span, resolved: false }
+    })
   }
 
   private canonicalEdges(id: number) {
@@ -1619,4 +1721,31 @@ function appendEdit(edits: Edit[], op: EditOp, len: number) {
 
 function gapPenalty(len: number) {
   return len === 0 ? 0 : 6 + (len - 1)
+}
+
+function appendGap(edits: Edit[], pathMiddle: number, refMiddle: number) {
+  if (pathMiddle === 0) {
+    appendEdit(edits, 'D', refMiddle)
+  } else if (refMiddle === 0) {
+    appendEdit(edits, 'I', pathMiddle)
+  } else {
+    const mismatch = Math.min(pathMiddle, refMiddle)
+    const mismatchIndel =
+      4 * mismatch +
+      gapPenalty(pathMiddle - mismatch) +
+      gapPenalty(refMiddle - mismatch)
+    const insertionDeletion = gapPenalty(pathMiddle) + gapPenalty(refMiddle)
+    if (mismatchIndel <= insertionDeletion) {
+      appendEdit(edits, 'M', mismatch)
+      appendEdit(edits, 'I', pathMiddle - mismatch)
+      appendEdit(edits, 'D', refMiddle - mismatch)
+    } else {
+      appendEdit(edits, 'I', pathMiddle)
+      appendEdit(edits, 'D', refMiddle)
+    }
+  }
+}
+
+function cigarOf(edits: Edit[]) {
+  return edits.map(([op, len]) => `${len}${op}`).join('')
 }

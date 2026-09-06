@@ -16,7 +16,7 @@ const db = await GBZBase.open(
   new RemoteFile('https://example.org/graph.gbz.db'),
 )
 
-// one record per haplotype fragment crossing the window
+// one record per haplotype crossing the window
 const alignments = await db.getAlignmentsForRange(
   'GRCh38#0#chr6',
   31500000,
@@ -83,7 +83,18 @@ for (const alignment of alignments) {
 }
 ```
 
-`refStart`/`refEnd` are the fragment's span on the reference path you queried.
+A record is one haplotype's passage through the window. Where a haplotype's walk
+leaves the subgraph and comes back (a bubble whose nodes the window does not
+hold, a private insertion), the pieces on either side are identified separately
+and then joined back into one record when they are the same haplotype's
+consecutive fragments, on the same strand and monotone on both the reference and
+the haplotype; the stretch between them becomes the record's insertion and
+deletion, scored the way the diverging stretches inside the window are. Pieces
+that fail those tests (an inversion between them, a tandem repeat mapping both
+to the same reference interval) stay separate records, as do fragments the index
+could not name.
+
+`refStart`/`refEnd` are the record's span on the reference path you queried.
 They run to node boundaries, so a record can begin before the window you asked
 for and end after it. `cigar` is its alignment to that reference, computed like
 upstream: a node-length-weighted LCS, with the diverging stretches scored using

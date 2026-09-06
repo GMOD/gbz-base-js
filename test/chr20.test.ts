@@ -76,12 +76,12 @@ describe.skipIf(!existsSync(chr20))('a reference stored in fragments', () => {
         context: 0,
       },
     )
-    expect(fromChm13.length).toBeGreaterThan(100)
+    expect(fromChm13.length).toBeGreaterThan(50)
     expect(fromChm13.every(a => a.refEnd > a.refStart)).toBe(true)
     expect(fromChm13.every(a => a.cigar.includes('M'))).toBe(true)
     const grch38 = fromChm13.find(a => a.resolved && a.name.sample === 'GRCh38')
     expect(grch38?.resolved && grch38.strand).toBe('-')
-    expect(grch38?.cigar).toBe('102M')
+    expect(grch38?.cigar).toBe('395M')
     if (grch38?.resolved) {
       const fromGrch38 = await db.getAlignmentsForRange(
         'GRCh38#0#chr20',
@@ -92,7 +92,7 @@ describe.skipIf(!existsSync(chr20))('a reference stored in fragments', () => {
       const seenBack = fromGrch38.filter(
         a => a.resolved && a.name.sample === 'CHM13',
       )
-      expect(seenBack.map(a => [a.strand, a.cigar])).toEqual([['-', '102M']])
+      expect(seenBack.map(a => [a.strand, a.cigar])).toEqual([['-', '395M']])
     }
   })
 

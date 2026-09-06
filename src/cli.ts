@@ -34,7 +34,7 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --cigar              output CIGAR strings for the haplotypes
   --format FMT         json (default) or gfa
   --resolve            name haplotypes from the HaplotypeSamples table
-  --alignments         print one alignment record per haplotype fragment instead of the subgraph
+  --alignments         print one alignment record per haplotype instead of the subgraph
   --haplotype-index F  companion database written by gbz-haplotype-index --output
   --block-size INT     bytes fetched per range request (default: 65536)
   --stats              print fetch statistics to stderr
