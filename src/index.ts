@@ -1,10 +1,17 @@
-export { GBZBase, GbzRecord, SCHEMA_VERSION, SchemaVersionError } from './db.ts'
+export {
+  ForwardOnlyIndexError,
+  GBZBase,
+  GbzRecord,
+  SCHEMA_VERSION,
+  SchemaVersionError,
+} from './db.ts'
 export type {
   AlignmentOptions,
   GbzPath,
   HaplotypeSample,
   OpenOptions,
   PathFragment,
+  RangeOptions,
 } from './db.ts'
 export { GENERIC_SAMPLE, formatPathName, parsePathName } from './pathName.ts'
 export type { PathName, PathQuery, PathRef } from './pathName.ts'

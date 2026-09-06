@@ -3,7 +3,7 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { GBZBase } from '../src/db.ts'
+import { ForwardOnlyIndexError, GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode, flipNode } from '../src/gbwt/node.ts'
 import { subgraphInInterval } from '../src/query.ts'
 
@@ -302,6 +302,18 @@ describe('named walks in output', () => {
       )
       expect(isContiguousRun(await walkOf(pathHandle!), steps)).toBe(true)
     }
+  })
+})
+
+describe('a forward-only haplotype index', () => {
+  it('is refused at open, since it cannot name walks stored against the reference', async () => {
+    await expect(
+      GBZBase.open(new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')), {
+        haplotypeIndex: new LocalFile(
+          path.join(dataDir, 'micb-kir3dl1.forward-only.haplotype-index.db'),
+        ),
+      }),
+    ).rejects.toThrow(ForwardOnlyIndexError)
   })
 })
 

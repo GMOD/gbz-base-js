@@ -23,11 +23,25 @@ export interface PathFragment {
   end: number
 }
 
+export interface RangeOptions extends QueryOptions {
+  keep?: ((name: PathName) => boolean) | undefined
+}
+
 export interface AlignmentOptions extends Pick<
-  QueryOptions,
-  'context' | 'limit' | 'signal'
+  RangeOptions,
+  'context' | 'limit' | 'signal' | 'keep'
 > {
   haplotypes?: 'all' | 'distinct' | undefined
+}
+
+export class ForwardOnlyIndexError extends Error {
+  override name = 'ForwardOnlyIndexError'
+
+  constructor() {
+    super(
+      'the haplotype index was written with --forward-only, which cannot name the walks stored against their reference (about half of them); rebuild it with gbz-haplotype-index without --forward-only',
+    )
+  }
 }
 
 export class SchemaVersionError extends Error {
@@ -211,6 +225,14 @@ export class GBZBase {
         )
       }
     }
+    if (db.hasHaplotypeIndex) {
+      const orientations = await db.haplotypeIndexTag(
+        'haplotype_index_orientations',
+      )
+      if (orientations === 'forward') {
+        throw new ForwardOnlyIndexError()
+      }
+    }
     return db
   }
 
@@ -358,20 +380,29 @@ export class GBZBase {
     fragment: PathFragment,
     start: number,
     end: number,
-    opts: QueryOptions,
+    opts: RangeOptions,
   ) {
+    const { keep, ...queryOptions } = opts
+    if (keep !== undefined && !this.hasHaplotypeIndex) {
+      throw new Error(
+        'keep needs the haplotype index: this database cannot name its walks',
+      )
+    }
     const { sample, contig, haplotype } = fragment.path.name
     const subgraph = await subgraphInInterval(
       this,
       { sample, contig, haplotype },
       Math.max(start, fragment.start),
       Math.min(end, fragment.end),
-      opts,
+      queryOptions,
     )
     const haplotypes = opts.haplotypes ?? 'all'
     const named = haplotypes === 'all' || haplotypes === 'distinct'
     if (this.hasHaplotypeIndex && named) {
       await subgraph.identifyPaths()
+      if (keep !== undefined) {
+        subgraph.keepHaplotypes(keep)
+      }
     }
     return subgraph
   }
@@ -380,7 +411,7 @@ export class GBZBase {
     ref: PathRef,
     start: number,
     end: number,
-    opts: QueryOptions = {},
+    opts: RangeOptions = {},
   ) {
     const [fragment] = await this.pathFragmentsForRange(ref, start, end)
     return fragment
@@ -438,10 +469,12 @@ export class GBZBase {
     )
   }
 
+  private async haplotypeIndexTag(key: string) {
+    return this.indexTags ? this.indexTags.get(key) : await this.tag(key)
+  }
+
   async haplotypeSampleInterval() {
-    const value = this.indexTags
-      ? this.indexTags.get('haplotype_index_interval')
-      : await this.tag('haplotype_index_interval')
+    const value = await this.haplotypeIndexTag('haplotype_index_interval')
     return value === undefined ? undefined : Number(value)
   }
 

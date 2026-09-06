@@ -270,3 +270,42 @@ describe('getSubgraphForRange', () => {
     )
   })
 })
+
+describe('keep', () => {
+  const wanted = (name: { sample: string }) => name.sample === 'HG01106'
+
+  it('narrows a range subgraph to the reference and the kept walks', async () => {
+    const db = await openMicb()
+    const whole = await db.getSubgraphForRange(chr6, 31500000, 31501000)
+    const kept = await db.getSubgraphForRange(chr6, 31500000, 31501000, {
+      keep: wanted,
+    })
+    expect(kept?.pathCount).toBe(3)
+    expect(kept!.nodeCount).toBeLessThan(whole!.nodeCount)
+    const walks = (await kept!.toGFA({ names: 'resolved' }))
+      .split('\n')
+      .filter(line => line.startsWith('W\t'))
+      .map(line => line.split('\t')[1])
+    expect(walks).toEqual(['GRCh38', 'HG01106', 'HG01106'])
+  })
+
+  it('aligns only the kept walks, and each the same as in the whole window', async () => {
+    const db = await openMicb()
+    const whole = await db.getAlignmentsForRange(chr6, 31500000, 31501000)
+    const kept = await db.getAlignmentsForRange(chr6, 31500000, 31501000, {
+      keep: wanted,
+    })
+    expect(kept.length).toBe(2)
+    expect(kept).toEqual(
+      whole.filter(alignment => alignment.resolved && wanted(alignment.name)),
+    )
+  })
+
+  it('refuses on a database that cannot name its walks', async () => {
+    const db = await openMicb()
+    Object.defineProperty(db, 'hasHaplotypeIndex', { value: false })
+    await expect(
+      db.getAlignmentsForRange(chr6, 31500000, 31501000, { keep: wanted }),
+    ).rejects.toThrow(/keep needs the haplotype index/)
+  })
+})

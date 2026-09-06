@@ -40,10 +40,29 @@ The path is a PanSN `sample#haplotype#contig` string, or a bare contig for a
 graph whose reference paths have no sample. `{ sample, haplotype, contig }`
 works too, and `parsePathName` is the parser if you want it separately.
 
-Both take `{ context, haplotypes, limit, signal }`, and `getSubgraphForRange`
-also `snarls`; both resolve haplotype names when the database can. For
-alignments `haplotypes` is `all` or `distinct`, the two outputs that leave
-something to align against the reference.
+Both take `{ context, haplotypes, keep, limit, signal }`, and
+`getSubgraphForRange` also `snarls`; both resolve haplotype names when the
+database can. For alignments `haplotypes` is `all` or `distinct`, the two
+outputs that leave something to align against the reference.
+
+`keep` is a predicate over the `PathName` of each named walk, applied after
+identification: the walks it rejects are neither aligned nor written, and the
+subgraph loses every node only they visited, so a query for a chosen set draws
+that set's private sequence and nothing else's (the reference walk always
+stays). It needs the haplotype index and throws without one. What it saves is
+the alignment and the output, not the fetch or the identification, which has to
+name a walk before the predicate can see it. Measured on the 30 kb LPA KIV-2
+window of the HPRC v2.1 graph (`GRCh38#0#chr6:160616002..160646753`, context
+1000, contained snarls; graph over HTTPS, companion local), all 464 haplotypes
+against the tutorial's eight: the fetch and walk extraction take 4.3-5.4 s
+either way and identification 0.2 s; alignment goes from 0.63 s for 464 records
+to 0.02 s for 8, the alignment JSON from 44.3 MB to 0.63 MB, the resolved GFA
+from 45.5 MB (465 W lines, 0.5 s to write) to 1.56 MB (9 W lines, 0.1 s), and
+the subgraph from 21,721 nodes to 15,808. End to end that is 6.0-6.6 s against
+4.6-5.8 s in the library, and 9.1-9.5 s against 6.4-8.5 s for
+`gbz-base-query --alignments` with and without eight `--keep`s, so a chosen set
+saves the alignment and the output, about a fifth of the window, and the rest
+waits on a walk the companion can start from the reference.
 
 `context` is the graph context in bp to extend past the window, 100 by default.
 It does not decide how many records come back, since the pieces of a walk that
@@ -103,9 +122,11 @@ upstream: a node-length-weighted LCS, with the diverging stretches scored using
 vg's match, mismatch and gap parameters. `strand` is `-` when the haplotype runs
 through the window in the opposite direction to the reference, so the same pair
 of paths reports the same strand whichever of the two is the reference. `path`
-is the walk as node handles, `weight` is how many identical haplotypes it stands
-for, and `start` is its GBWT position, which is a property of the graph and so
-is stable across refetches of the same window.
+is the walk as node handles, in subgraph order; for a joined record it is the
+pieces concatenated, with the private stretch between them absent, so it is not
+a contiguous walk through the graph. `weight` is how many identical haplotypes
+it stands for, and `start` is the first piece's GBWT position, which is a
+property of the graph and so is stable across refetches of the same window.
 
 Naming a fragment needs the haplotype index described below, and a database
 without one cannot do it, so the record is a union on `resolved` rather than a
@@ -222,7 +243,12 @@ different graph.
 `HaplotypeSamples` holds one GBWT position every `--interval` bp along every
 path in both orientations, with the path handle and the forward coordinate of
 that node, and `HaplotypeLengths` holds each path's length. The upstream `query`
-binary keeps working on the augmented database.
+binary keeps working on the augmented database. Both orientations are needed:
+about half the contigs of a graph like HPRC's are stored against their
+reference, and a walk of one of those meets no sample from a forward-only index.
+`GBZBase.open` refuses an index the tool wrote with `--forward-only` (its
+`haplotype_index_orientations` tag says `forward`) with `ForwardOnlyIndexError`,
+so the half-named result never reaches a caller.
 
 At query time `subgraph.identifyPaths()` loads the samples for the window's
 nodes with one index scan per run of consecutive node ids (a window whose nodes
@@ -241,9 +267,10 @@ A named walk in GFA or JSON output lists its steps in the haplotype's own
 direction, whichever twin of the walk the extraction kept, so `start..end` and
 the steps agree as the W line spec requires. `keepHaplotypes(name => ...)`
 narrows an identified subgraph to the reference walk and the walks whose PanSN
-name the predicate accepts, dropping every node only the other walks visited; on
-the command line `--keep SAMPLE` or `--keep SAMPLE#HAP` (repeatable). This is
-how a cut for a chosen set of haplotypes is written once and drawn as it is.
+name the predicate accepts, dropping every node only the other walks visited; it
+is what the range queries' `keep` option calls, and on the command line
+`--keep SAMPLE` or `--keep SAMPLE#HAP` (repeatable). This is how a cut for a
+chosen set of haplotypes is written once and drawn as it is.
 
 The tests check every resolved fragment against an independent backward walk
 through the bidirectional GBWT to the path's recorded start position.
