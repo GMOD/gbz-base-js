@@ -12,3 +12,18 @@ example_A_i	example.gbz.db	--contig A --interval 1..4 --context 1 --cigar
 example_B_o	example.gbz.db	--contig B --offset 2 --context 2 --cigar
 example_A_distinct	example.gbz.db	--contig A --interval 0..5 --context 0 --haplotypes distinct --cigar
 example_v3_A_i	example-v3.gbz.db	--contig A --interval 1..4 --context 1 --cigar
+micb_chr6_i_snarls	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --interval 31500000..31501000 --context 0 --snarls --cigar
+micb_chr6_i_extend	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --interval 31500000..31501000 --context 0 --extend-snarls --cigar
+micb_chr19_i_snarls	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr19 --interval 54817000..54818000 --context 100 --snarls --cigar
+micb_chm13_i_extend	micb-kir3dl1.gbz.db	--sample CHM13 --contig chr6 --interval 31352000..31352500 --context 20 --extend-snarls --cigar
+micb_chr6_o_extend	micb-kir3dl1.gbz.db	--sample GRCh38 --contig chr6 --offset 31500500 --context 50 --extend-snarls --cigar
+micb_node_extend	micb-kir3dl1.gbz.db	--node 200 --context 0 --extend-snarls
+micb_nodes_snarls	micb-kir3dl1.gbz.db	--node 200 --node 201 --context 10 --snarls
+example_nodes_snarls	example.gbz.db	--node 14 --node 17 --context 0 --snarls
+example_node_extend	example.gbz.db	--node 15 --context 0 --extend-snarls
+example_node_extend_boundary	example.gbz.db	--node 14 --context 0 --extend-snarls
+example_between	example.gbz.db	--between 14+:17+
+example_between_reverse	example.gbz.db	--between 17-:14-
+example_A_i_snarls	example.gbz.db	--contig A --interval 1..4 --context 0 --snarls --cigar
+micb_between	micb-kir3dl1.gbz.db	--between 129+:160+ --cigar
+micb_between_snarl	micb-kir3dl1.gbz.db	--between 154-:150- --haplotypes distinct

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "14", "sequence": "T"}], "edges": [], "paths": [{"name": "unknown#1#unknown[0-1]", "path": [{"id": "14", "is_reverse": false}]}, {"name": "unknown#2#unknown[0-1]", "path": [{"id": "14", "is_reverse": false}]}, {"name": "unknown#3#unknown[0-1]", "path": [{"id": "14", "is_reverse": false}]}]}

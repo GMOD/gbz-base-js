@@ -7,6 +7,7 @@ import {
   entrySide,
   exitOrientation,
   exitSide,
+  flipNode,
   flipSide,
   isReverse,
   nodeId,
@@ -26,6 +27,13 @@ import type { NodeSide, Orientation } from './gbwt/node.ts'
 import type { Pos } from './gbwt/record.ts'
 
 export type HaplotypeOutput = 'all' | 'distinct' | 'reference-only' | 'none'
+
+export type SnarlOutput = 'none' | 'contained' | 'overlapping'
+
+type HandleType =
+  | { kind: 'snarl-exit'; snarl: [number, number] }
+  | { kind: 'chain' }
+  | { kind: 'regular' }
 
 export interface PathPosition {
   seqOffset: number
@@ -394,6 +402,150 @@ export class Subgraph {
     return { inserted, removed: toRemove.size }
   }
 
+  async betweenNodes(start: number, end: number) {
+    this.clearPaths()
+    const active = [start, flipNode(end)]
+    const visited = new Set([nodeId(start), nodeId(end)])
+    let inserted = 0
+    while (active.length > 0) {
+      const curr = active.pop()!
+      const id = nodeId(curr)
+      if (!this.hasNode(id)) {
+        await this.addNode(id)
+        inserted += 1
+      }
+      for (const successor of this.record(curr).successors()) {
+        const successorId = nodeId(successor)
+        if (!visited.has(successorId)) {
+          active.push(successor, flipNode(successor))
+          visited.add(successorId)
+        }
+      }
+    }
+    return inserted
+  }
+
+  async extractSnarls(snarls: SnarlOutput) {
+    let inserted = 0
+    for (const [start, end] of await this.overlappingSnarls(snarls)) {
+      inserted += await this.betweenNodes(start, end)
+    }
+    return inserted
+  }
+
+  private async overlappingSnarls(snarls: SnarlOutput) {
+    const result: [number, number][] = []
+    if (snarls !== 'none') {
+      let foundLink = false
+      for (const handle of this.sortedHandles()) {
+        const record = this.record(handle)
+        const next = record.next
+        if (next !== undefined) {
+          foundLink = true
+          if (this.hasHandle(next)) {
+            if (edgeIsCanonical(handle, next)) {
+              result.push([handle, next])
+            }
+          } else if (
+            snarls === 'overlapping' &&
+            this.isSnarlEntryInSubgraph(record)
+          ) {
+            result.push([handle, next])
+          }
+        }
+      }
+      if (
+        !foundLink &&
+        snarls === 'overlapping' &&
+        (await this.db.hasChainLinks())
+      ) {
+        const covering = await this.findCoveringSnarl()
+        if (covering) {
+          result.push(covering)
+        }
+      }
+    }
+    return result
+  }
+
+  private isSnarlEntryInSubgraph(record: GbzRecord) {
+    const successors = record.successors()
+    const first = successors.find(handle => this.hasHandle(handle))
+    return first === undefined
+      ? false
+      : successors.length > 1 ||
+          this.record(flipNode(first)).successors().length > 1
+  }
+
+  private recordReader(onFetch?: () => void) {
+    const outside = new Map<number, GbzRecord>()
+    return async (handle: number) => {
+      const inside = this.records.get(handle)
+      if (inside) {
+        return inside
+      }
+      let record = outside.get(handle)
+      if (!record) {
+        record = await this.db.getRecord(handle)
+        onFetch?.()
+        if (!record) {
+          throw new Error(`Node record ${handle} is missing from the database`)
+        }
+        outside.set(handle, record)
+      }
+      return record
+    }
+  }
+
+  private async findCoveringSnarl() {
+    const read = this.recordReader()
+    const isSnarlEntry = async (record: GbzRecord) => {
+      const successors = record.successors()
+      const first = successors[0]
+      return first === undefined
+        ? false
+        : successors.length > 1 ||
+            (await read(flipNode(first))).successors().length > 1
+    }
+    const classify = async (handle: number): Promise<HandleType> => {
+      const reverse = await read(flipNode(handle))
+      return reverse.next !== undefined
+        ? (await isSnarlEntry(reverse))
+          ? { kind: 'snarl-exit', snarl: [flipNode(handle), reverse.next] }
+          : { kind: 'chain' }
+        : (await read(handle)).next !== undefined
+          ? { kind: 'chain' }
+          : { kind: 'regular' }
+    }
+    const visited = new Set<number>()
+    const queue = this.sortedHandles().flatMap(handle =>
+      this.record(handle).successors(),
+    )
+    let result: [number, number] | undefined
+    let done = false
+    while (!done && queue.length > 0) {
+      const handle = queue.shift()!
+      const id = nodeId(handle)
+      if (!this.hasHandle(handle) && !visited.has(id)) {
+        visited.add(id)
+        const type = await classify(handle)
+        if (type.kind === 'snarl-exit') {
+          result = type.snarl
+          done = true
+        } else if (type.kind === 'chain') {
+          done = true
+        } else {
+          for (const orientation of ['forward', 'reverse'] as const) {
+            queue.push(
+              ...(await read(encodeNode(id, orientation))).successors(),
+            )
+          }
+        }
+      }
+    }
+    return result
+  }
+
   extractPaths(reference: ReferencePath | undefined, output: HaplotypeOutput) {
     this.clearPaths()
     if (output === 'none') {
@@ -551,23 +703,9 @@ export class Subgraph {
         starts.set(posKey(first), index)
       }
     })
-    const outside = new Map<number, GbzRecord>()
-    const recordAt = async (handle: number) => {
-      const inside = this.records.get(handle)
-      if (inside) {
-        return inside
-      }
-      let record = outside.get(handle)
-      if (!record) {
-        record = await this.db.getRecord(handle)
-        this.stats.identificationFetches += 1
-        if (!record) {
-          throw new Error(`Node record ${handle} is missing from the database`)
-        }
-        outside.set(handle, record)
-      }
-      return record
-    }
+    const recordAt = this.recordReader(() => {
+      this.stats.identificationFetches += 1
+    })
     const sampleAt = async (pos: Pos) => {
       if (pos.node >= minHandle && pos.node <= maxHandle) {
         return samples.get(posKey(pos))

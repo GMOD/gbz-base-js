@@ -228,6 +228,11 @@ export class GBZBase {
     return (await this.paths()).filter(p => p.name.sample === sample)
   }
 
+  async hasChainLinks() {
+    const links = await this.tag('chain_links')
+    return links !== undefined && Number(links) > 0
+  }
+
   get hasHaplotypeIndex() {
     return (
       this.sqlite.has('HaplotypeSamples') && this.sqlite.has('HaplotypeLengths')

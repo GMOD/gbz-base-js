@@ -1,13 +1,15 @@
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
 import { GBZBase, formatPathName } from './db.ts'
+import { encodeNode } from './gbwt/node.ts'
 import {
   subgraphAroundNodes,
   subgraphAtOffset,
+  subgraphBetween,
   subgraphInInterval,
 } from './query.ts'
 
-import type { HaplotypeOutput } from './subgraph.ts'
+import type { HaplotypeOutput, SnarlOutput } from './subgraph.ts'
 
 const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
 
@@ -17,7 +19,10 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   -o, --offset INT     sequence offset
   -i, --interval A..B  half-open sequence interval
   -n, --node INT       node identifier (may repeat)
+  -b, --between A:B    subgraph between two chain boundary handles, each INT[+-]
   --context INT        context length in bp (default: 100)
+  --snarls             extend the subgraph with contained top-level snarls
+  --extend-snarls      extend the subgraph with overlapping top-level snarls
   --limit INT          safety limit for the number of nodes
   --haplotypes SEL     all, distinct, reference-only or none (default: all)
   --cigar              output CIGAR strings for the haplotypes
@@ -35,7 +40,9 @@ interface Args {
   offset?: number
   interval?: [number, number]
   nodes: number[]
+  between?: [number, number]
   context: number
+  snarls: SnarlOutput
   limit?: number
   haplotypes: HaplotypeOutput
   cigar: boolean
@@ -45,12 +52,22 @@ interface Args {
   stats: boolean
 }
 
+function parseHandle(text: string) {
+  const orientation = text.endsWith('-') ? 'reverse' : 'forward'
+  const digits = /[+-]$/.test(text) ? text.slice(0, -1) : text
+  if (!/^\d+$/.test(digits)) {
+    throw new Error(`Failed to parse oriented node ${text}`)
+  }
+  return encodeNode(Number(digits), orientation)
+}
+
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     file: '',
     haplotype: 0,
     nodes: [],
     context: 100,
+    snarls: 'none',
     haplotypes: 'all',
     cigar: false,
     resolve: false,
@@ -91,8 +108,24 @@ function parseArgs(argv: string[]): Args {
       case '--node':
         args.nodes.push(Number(next(i++)))
         break
+      case '-b':
+      case '--between': {
+        const [a, b, extra] = next(i++).split(':')
+        if (a === undefined || b === undefined || extra !== undefined) {
+          throw new Error(`--between needs two oriented nodes, like 14+:17-`)
+        }
+        args.between = [parseHandle(a), parseHandle(b)]
+        break
+      }
       case '--context':
         args.context = Number(next(i++))
+        break
+      case '--snarls':
+        args.snarls =
+          args.snarls === 'overlapping' ? 'overlapping' : 'contained'
+        break
+      case '--extend-snarls':
+        args.snarls = 'overlapping'
         break
       case '--limit':
         args.limit = Number(next(i++))
@@ -146,6 +179,7 @@ export async function main(argv: string[]) {
   const opts = {
     context: args.context,
     haplotypes: args.haplotypes,
+    snarls: args.snarls,
     ...(args.limit === undefined ? {} : { limit: args.limit }),
   }
   const query = {
@@ -153,8 +187,9 @@ export async function main(argv: string[]) {
     haplotype: args.haplotype,
     ...(args.sample === undefined ? {} : { sample: args.sample }),
   }
-  const subgraph =
-    args.nodes.length > 0
+  const subgraph = args.between
+    ? await subgraphBetween(db, args.between[0], args.between[1], opts)
+    : args.nodes.length > 0
       ? await subgraphAroundNodes(db, args.nodes, opts)
       : args.interval
         ? await subgraphInInterval(
@@ -169,7 +204,7 @@ export async function main(argv: string[]) {
           : undefined
   if (!subgraph) {
     throw new Error(
-      'Query type must be specified using --offset, --interval or --node',
+      'Query type must be specified using --offset, --interval, --node or --between',
     )
   }
   if (args.resolve) {

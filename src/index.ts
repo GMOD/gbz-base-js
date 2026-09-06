@@ -16,6 +16,7 @@ export type {
   PathIdentity,
   PathPosition,
   ReferencePath,
+  SnarlOutput,
   SubgraphJson,
   SubgraphPath,
   ToJsonOptions,
@@ -23,6 +24,7 @@ export type {
 export {
   subgraphAroundNodes,
   subgraphAtOffset,
+  subgraphBetween,
   subgraphInInterval,
 } from './query.ts'
 export type { PathQuery, QueryOptions } from './query.ts'

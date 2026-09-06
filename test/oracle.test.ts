@@ -5,13 +5,15 @@ import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
+import { encodeNode } from '../src/gbwt/node.ts'
 import {
   subgraphAroundNodes,
   subgraphAtOffset,
+  subgraphBetween,
   subgraphInInterval,
 } from '../src/query.ts'
 
-import type { HaplotypeOutput } from '../src/subgraph.ts'
+import type { HaplotypeOutput, SnarlOutput } from '../src/subgraph.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
 const oracleDir = path.join(dataDir, 'oracle')
@@ -46,10 +48,16 @@ async function runQuery(query: OracleQuery) {
   const sample = option(query.args, '--sample')
   const contig = option(query.args, '--contig') ?? ''
   const cigar = query.args.includes('--cigar')
-  const opts = { context, haplotypes }
+  const snarls: SnarlOutput = query.args.includes('--extend-snarls')
+    ? 'overlapping'
+    : query.args.includes('--snarls')
+      ? 'contained'
+      : 'none'
+  const opts = { context, haplotypes, snarls }
   const pathQuery = { contig, ...(sample === undefined ? {} : { sample }) }
   const interval = option(query.args, '--interval')
   const offset = option(query.args, '--offset')
+  const between = option(query.args, '--between')
   const nodes = query.args.flatMap((arg, i) =>
     arg === '--node' ? [Number(query.args[i + 1])] : [],
   )
@@ -62,8 +70,21 @@ async function runQuery(query: OracleQuery) {
       )
     : offset
       ? await subgraphAtOffset(db, pathQuery, Number(offset), opts)
-      : await subgraphAroundNodes(db, nodes, opts)
+      : between
+        ? await subgraphBetween(
+            db,
+            ...(between.split(':').map(parseHandle) as [number, number]),
+            opts,
+          )
+        : await subgraphAroundNodes(db, nodes, opts)
   return subgraph.toJSON(cigar)
+}
+
+function parseHandle(text: string) {
+  return encodeNode(
+    Number(text.slice(0, -1)),
+    text.endsWith('-') ? 'reverse' : 'forward',
+  )
 }
 
 describe('matches upstream gbz-base query output', () => {

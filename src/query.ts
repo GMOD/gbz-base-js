@@ -2,11 +2,12 @@ import { GENERIC_SAMPLE } from './db.ts'
 import { Subgraph } from './subgraph.ts'
 
 import type { GBZBase, PathName } from './db.ts'
-import type { HaplotypeOutput } from './subgraph.ts'
+import type { HaplotypeOutput, SnarlOutput } from './subgraph.ts'
 
 export interface QueryOptions {
   context?: number
   haplotypes?: HaplotypeOutput
+  snarls?: SnarlOutput
   limit?: number
 }
 
@@ -39,6 +40,7 @@ export async function subgraphAtOffset(
     reference.position.nodeOffset,
     opts.context ?? 100,
   )
+  await subgraph.extractSnarls(opts.snarls ?? 'none')
   subgraph.extractPaths(reference, opts.haplotypes ?? 'all')
   return subgraph
 }
@@ -58,6 +60,7 @@ export async function subgraphInInterval(
     end - start,
     opts.context ?? 100,
   )
+  await subgraph.extractSnarls(opts.snarls ?? 'none')
   subgraph.extractPaths(reference, opts.haplotypes ?? 'all')
   return subgraph
 }
@@ -68,12 +71,36 @@ export async function subgraphAroundNodes(
   opts: QueryOptions = {},
 ) {
   const haplotypes = opts.haplotypes ?? 'all'
+  const snarls = opts.snarls ?? 'none'
+  if (haplotypes === 'reference-only') {
+    throw new Error('Cannot output a reference path in a node-based query')
+  }
+  if (snarls === 'overlapping' && nodes.length > 1) {
+    throw new Error(
+      'Overlapping snarls cannot be extracted for a node-based query with multiple nodes',
+    )
+  }
+  const subgraph = new Subgraph(db)
+  subgraph.limit = opts.limit
+  await subgraph.aroundNodes(nodes, opts.context ?? 100)
+  await subgraph.extractSnarls(snarls)
+  subgraph.extractPaths(undefined, haplotypes)
+  return subgraph
+}
+
+export async function subgraphBetween(
+  db: GBZBase,
+  start: number,
+  end: number,
+  opts: Pick<QueryOptions, 'haplotypes' | 'limit'> = {},
+) {
+  const haplotypes = opts.haplotypes ?? 'all'
   if (haplotypes === 'reference-only') {
     throw new Error('Cannot output a reference path in a node-based query')
   }
   const subgraph = new Subgraph(db)
   subgraph.limit = opts.limit
-  await subgraph.aroundNodes(nodes, opts.context ?? 100)
+  await subgraph.betweenNodes(start, end)
   subgraph.extractPaths(undefined, haplotypes)
   return subgraph
 }
