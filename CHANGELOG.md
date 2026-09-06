@@ -1,3 +1,9 @@
+## [2.5.0](https://github.com/GMOD/gbz-base-js/compare/v2.4.0...v2.5.0) (2026-09-06)
+
+### Other Changes
+
+- The range queries take a keep predicate, and a forward-only haplotype index is refused at open ([ba2ea66](https://github.com/GMOD/gbz-base-js/commit/ba2ea665cad681ae8813c282d219563d129a96c1))
+
 ## [2.4.0](https://github.com/GMOD/gbz-base-js/compare/v2.3.0...v2.4.0) (2026-09-06)
 
 ### Other Changes
