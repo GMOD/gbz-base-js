@@ -1012,6 +1012,33 @@ export class Subgraph {
     this.refId = refId
   }
 
+  // Narrows an identified subgraph to the reference walk and the named walks
+  // `wanted` accepts, and drops every node only the discarded walks visited,
+  // so a cut for a chosen set draws that set's private sequence and nothing
+  // else's. Unresolved walks are discarded with the rest.
+  keepHaplotypes(wanted: (name: PathName) => boolean) {
+    const refInfo =
+      this.refId === undefined ? undefined : this.paths[this.refId]
+    const kept = this.paths.filter(
+      (info, index) =>
+        index === this.refId ||
+        (info.identity !== undefined && wanted(info.identity.name)),
+    )
+    const visited = new Set<number>()
+    for (const info of kept) {
+      for (const handle of info.path) {
+        visited.add(nodeId(handle))
+      }
+    }
+    for (const handle of [...this.records.keys()]) {
+      if (!visited.has(nodeId(handle))) {
+        this.records.delete(handle)
+      }
+    }
+    this.paths = kept
+    this.refId = refInfo === undefined ? undefined : kept.indexOf(refInfo)
+  }
+
   async identifyPaths() {
     if (!this.db.hasHaplotypeIndex) {
       throw new Error(
@@ -1603,11 +1630,12 @@ export class Subgraph {
     }
     const walk = (
       info: PathInfo,
+      identity: PathIdentity | undefined,
       name: PathName,
       end: number,
       cigarString: string | undefined,
     ) => {
-      const steps = info.path
+      const steps = haplotypeOrderedPath(info, identity)
         .map(handle => `${isReverse(handle) ? '<' : '>'}${nodeId(handle)}`)
         .join('')
       const weight = info.weight === undefined ? '' : `\tWT:i:${info.weight}`
@@ -1619,6 +1647,7 @@ export class Subgraph {
       lines.push(
         walk(
           this.paths[this.refId]!,
+          undefined,
           {
             ...this.refPath,
             fragment: this.refPath.fragment + this.refInterval[0],
@@ -1637,6 +1666,7 @@ export class Subgraph {
           resolved
             ? walk(
                 info,
+                resolved,
                 {
                   ...resolved.name,
                   fragment: resolved.name.fragment + resolved.hapStart,
@@ -1646,6 +1676,7 @@ export class Subgraph {
               )
             : walk(
                 info,
+                undefined,
                 { sample: 'unknown', contig, haplotype, fragment: 0 },
                 info.len,
                 cigarString,
@@ -1690,6 +1721,7 @@ export class Subgraph {
       paths.push(
         jsonPath(
           info,
+          undefined,
           formatPathName(name, this.refPath.fragment + this.refInterval[1]),
           undefined,
         ),
@@ -1714,7 +1746,12 @@ export class Subgraph {
             info.len,
           )
       paths.push(
-        jsonPath(info, name, cigar ? this.alignToRef(index) : undefined),
+        jsonPath(
+          info,
+          resolved,
+          name,
+          cigar ? this.alignToRef(index) : undefined,
+        ),
       )
       haplotype += 1
     })
@@ -1722,8 +1759,23 @@ export class Subgraph {
   }
 }
 
+// A named walk lists its steps in the haplotype's own direction, as the W line
+// spec and the start..end coordinates beside it require. extractPaths keeps
+// whichever twin of a walk is canonical, which is a property of the handles
+// and not of the haplotype, so the kept walk runs against the haplotype for
+// about half of them; identification records which.
+function haplotypeOrderedPath(
+  info: PathInfo,
+  identity: PathIdentity | undefined,
+) {
+  return identity?.orientation === 'reverse'
+    ? info.path.map(handle => flipNode(handle)).reverse()
+    : info.path
+}
+
 function jsonPath(
   info: PathInfo,
+  identity: PathIdentity | undefined,
   name: string,
   cigar: string | undefined,
 ): SubgraphPath {
@@ -1731,7 +1783,7 @@ function jsonPath(
     name,
     ...(info.weight === undefined ? {} : { weight: info.weight }),
     ...(cigar === undefined ? {} : { cigar }),
-    path: info.path.map(handle => ({
+    path: haplotypeOrderedPath(info, identity).map(handle => ({
       id: String(nodeId(handle)),
       is_reverse: isReverse(handle),
     })),

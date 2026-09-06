@@ -4,7 +4,7 @@ import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
-import { flipNode } from '../src/gbwt/node.ts'
+import { ENDMARKER, encodeNode, flipNode } from '../src/gbwt/node.ts'
 import { subgraphInInterval } from '../src/query.ts'
 
 import type { Pos } from '../src/gbwt/record.ts'
@@ -222,5 +222,116 @@ describe('companion haplotype index', () => {
         haplotypeIndex: new LocalFile(companion),
       }),
     ).rejects.toThrow(/built for 169 paths but the graph has 6/)
+  })
+})
+
+async function forwardWalk(db: GBZBase, pathHandle: number) {
+  const gbzPath = await db.getPath(pathHandle)
+  const handles: number[] = []
+  let pos = gbzPath?.fwStart
+  while (pos && pos.node !== ENDMARKER) {
+    handles.push(pos.node)
+    const record = await db.getRecord(pos.node)
+    pos = record?.gbwt().lf(pos.offset)
+  }
+  return handles
+}
+
+function isContiguousRun(walk: number[], steps: number[]) {
+  return walk.some((_, at) => steps.every((step, k) => walk[at + k] === step))
+}
+
+function parseSteps(body: string) {
+  return [...body.matchAll(/([<>])(\d+)/g)].map(m =>
+    encodeNode(Number(m[2]), m[1] === '<' ? 'reverse' : 'forward'),
+  )
+}
+
+describe('named walks in output', () => {
+  it('list every resolved W line and JSON path in the haplotype direction', async () => {
+    const db = await GBZBase.open(
+      new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
+    )
+    const subgraph = await subgraphInInterval(
+      db,
+      { sample: 'GRCh38', contig: 'chr6' },
+      31500000,
+      31501000,
+      { context: 100 },
+    )
+    await subgraph.identifyPaths()
+    const handleOfWalk = new Map<string, number>()
+    for (const alignment of subgraph.alignments()) {
+      if (alignment.resolved) {
+        handleOfWalk.set(alignment.label, alignment.pathHandle)
+      }
+    }
+    expect(handleOfWalk.size).toBeGreaterThan(50)
+    const walks = new Map<number, number[]>()
+    const walkOf = async (pathHandle: number) => {
+      const cached = walks.get(pathHandle)
+      const walk = cached ?? (await forwardWalk(db, pathHandle))
+      walks.set(pathHandle, walk)
+      return walk
+    }
+
+    const gfa = await subgraph.toGFA({ names: 'resolved' })
+    let checkedLines = 0
+    for (const line of gfa.split('\n')) {
+      const [tag, sample, haplotype, contig, start, end, body] =
+        line.split('\t')
+      if (tag === 'W' && sample !== 'GRCh38') {
+        const pathHandle = handleOfWalk.get(
+          `${sample}#${haplotype}#${contig}[${start}-${end}]`,
+        )
+        expect(pathHandle).toBeDefined()
+        expect(
+          isContiguousRun(await walkOf(pathHandle!), parseSteps(body!)),
+        ).toBe(true)
+        checkedLines += 1
+      }
+    }
+    expect(checkedLines).toBe(handleOfWalk.size)
+
+    const json = subgraph.toSubgraphJson({ names: 'resolved' })
+    for (const jsonPath of json.paths.slice(1)) {
+      const pathHandle = handleOfWalk.get(jsonPath.name)
+      expect(pathHandle).toBeDefined()
+      const steps = jsonPath.path.map(step =>
+        encodeNode(Number(step.id), step.is_reverse ? 'reverse' : 'forward'),
+      )
+      expect(isContiguousRun(await walkOf(pathHandle!), steps)).toBe(true)
+    }
+  })
+})
+
+describe('keepHaplotypes', () => {
+  it('keeps the reference and the wanted walks with only the nodes they visit', async () => {
+    const db = await GBZBase.open(
+      new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
+    )
+    const subgraph = await subgraphInInterval(
+      db,
+      { sample: 'GRCh38', contig: 'chr6' },
+      31500000,
+      31501000,
+      { context: 100 },
+    )
+    await subgraph.identifyPaths()
+    const before = { nodes: subgraph.nodeCount, paths: subgraph.pathCount }
+    subgraph.keepHaplotypes(name => name.sample === 'HG01106')
+    expect(subgraph.pathCount).toBe(3)
+    expect(subgraph.nodeCount).toBeLessThan(before.nodes)
+    expect(subgraph.pathCount).toBeLessThan(before.paths)
+    const walks = (await subgraph.toGFA({ names: 'resolved' }))
+      .split('\n')
+      .filter(line => line.startsWith('W\t'))
+      .map(line => line.split('\t')[1])
+    expect(walks).toEqual(['GRCh38', 'HG01106', 'HG01106'])
+    const alignments = subgraph.alignments()
+    expect(alignments.length).toBe(2)
+    expect(
+      alignments.every(a => a.resolved && a.name.sample === 'HG01106'),
+    ).toBe(true)
   })
 })

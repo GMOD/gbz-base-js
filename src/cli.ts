@@ -34,6 +34,7 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --cigar              output CIGAR strings for the haplotypes
   --format FMT         json (default) or gfa
   --resolve            name haplotypes from the HaplotypeSamples table
+  --keep NAME          keep only the walks of this sample or sample#haplotype (may repeat; implies --resolve)
   --alignments         print one alignment record per haplotype instead of the subgraph
   --haplotype-index F  companion database written by gbz-haplotype-index --output
   --block-size INT     bytes fetched per range request (default: 65536)
@@ -56,10 +57,22 @@ interface Args {
   cigar: boolean
   format: 'json' | 'gfa'
   resolve: boolean
+  keep: string[]
   alignments: boolean
   blockSize: number
   haplotypeIndex?: string
   stats: boolean
+}
+
+const HAPLOTYPE_OUTPUTS = [
+  'all',
+  'distinct',
+  'reference-only',
+  'none',
+] as const satisfies readonly HaplotypeOutput[]
+
+function isHaplotypeOutput(text: string): text is HaplotypeOutput {
+  return HAPLOTYPE_OUTPUTS.some(output => output === text)
 }
 
 function parseHandle(text: string) {
@@ -82,6 +95,7 @@ function parseArgs(argv: string[]): Args {
     cigar: false,
     format: 'json',
     resolve: false,
+    keep: [],
     alignments: false,
     blockSize: 65536,
     stats: false,
@@ -141,13 +155,22 @@ function parseArgs(argv: string[]): Args {
       case '--limit':
         args.limit = Number(next(i++))
         break
-      case '--haplotypes':
-        args.haplotypes = next(i++) as HaplotypeOutput
+      case '--haplotypes': {
+        const output = next(i++)
+        if (!isHaplotypeOutput(output)) {
+          throw new Error(`--haplotypes must be one of `)
+        }
+        args.haplotypes = output
         break
+      }
       case '--cigar':
         args.cigar = true
         break
       case '--resolve':
+        args.resolve = true
+        break
+      case '--keep':
+        args.keep.push(next(i++))
         args.resolve = true
         break
       case '--alignments':
@@ -272,6 +295,16 @@ export async function main(argv: string[]) {
   }
   if (args.resolve) {
     await subgraph.identifyPaths()
+  }
+  if (args.keep.length > 0) {
+    const wanted = args.keep.map(text => text.split('#'))
+    subgraph.keepHaplotypes(name =>
+      wanted.some(
+        ([sample, haplotype]) =>
+          sample === name.sample &&
+          (haplotype === undefined || Number(haplotype) === name.haplotype),
+      ),
+    )
   }
   const names = args.resolve ? 'resolved' : 'anonymous'
   const output = args.alignments

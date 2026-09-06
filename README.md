@@ -237,6 +237,14 @@ database has the tables; on the lower-level path you call it yourself before
 `alignments()` or `toSubgraphJson({ names: 'resolved' })`. On the command line,
 `--resolve` and `--alignments`.
 
+A named walk in GFA or JSON output lists its steps in the haplotype's own
+direction, whichever twin of the walk the extraction kept, so `start..end` and
+the steps agree as the W line spec requires. `keepHaplotypes(name => ...)`
+narrows an identified subgraph to the reference walk and the walks whose PanSN
+name the predicate accepts, dropping every node only the other walks visited; on
+the command line `--keep SAMPLE` or `--keep SAMPLE#HAP` (repeatable). This is
+how a cut for a chosen set of haplotypes is written once and drawn as it is.
+
 The tests check every resolved fragment against an independent backward walk
 through the bidirectional GBWT to the path's recorded start position.
 
