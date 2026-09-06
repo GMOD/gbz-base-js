@@ -95,8 +95,8 @@ export type HaplotypeAlignment = AlignmentSpan &
   (
     | {
         resolved: true
-        name: string
-        pathName: PathName
+        name: PathName
+        label: string
         pathHandle: number
         hapStart: number
         hapEnd: number
@@ -1136,11 +1136,11 @@ export class Subgraph {
         result.push({
           ...span,
           resolved: true,
-          name: formatPathName(
+          name: identity.name,
+          label: formatPathName(
             { ...identity.name, fragment: hapStart },
             hapEnd,
           ),
-          pathName: identity.name,
           pathHandle: identity.pathHandle,
           hapStart,
           hapEnd,

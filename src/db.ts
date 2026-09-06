@@ -9,13 +9,19 @@ import { SqliteDatabase } from './sqlite/database.ts'
 import type { ByteSource } from './filehandle.ts'
 import type { Pos } from './gbwt/record.ts'
 import type { GraphName } from './graphName.ts'
-import type { PathName, PathQuery, PathRef } from './pathName.ts'
+import type { PathName, PathRef } from './pathName.ts'
 import type { QueryOptions } from './query.ts'
 import type { PagerOptions } from './sqlite/pager.ts'
 import type { SqlValue } from './sqlite/record.ts'
-import type { HaplotypeAlignment, SubgraphJson } from './subgraph.ts'
+import type { HaplotypeAlignment, Subgraph } from './subgraph.ts'
 
 export const SCHEMA_VERSION = 'GBZ-base version 4'
+
+export interface PathFragment {
+  path: GbzPath
+  start: number
+  end: number
+}
 
 export class SchemaVersionError extends Error {
   override name = 'SchemaVersionError'
@@ -259,57 +265,126 @@ export class GBZBase {
     )
   }
 
-  private async subgraphForRange(
-    query: PathQuery,
+  private pathLengths = new Map<number, Promise<number>>()
+
+  pathLength(handle: number) {
+    let length = this.pathLengths.get(handle)
+    if (!length) {
+      length = this.walkPathLength(handle)
+      this.pathLengths.set(handle, length)
+    }
+    return length
+  }
+
+  private async walkPathLength(handle: number) {
+    const indexed = this.hasHaplotypeIndex
+      ? await this.haplotypeLength(handle)
+      : undefined
+    if (indexed === undefined) {
+      const last = await this.indexedPosition(handle, Number.MAX_SAFE_INTEGER)
+      if (!last) {
+        throw new Error(`Path ${handle} has not been indexed for random access`)
+      }
+      let length = last.pathOffset
+      let pos = last.pos
+      for (;;) {
+        const record = await this.getRecord(pos.node)
+        if (!record) {
+          throw new Error(`Node ${pos.node} does not exist in the graph`)
+        }
+        length += record.sequenceLen
+        const next = record.gbwt().lf(pos.offset)
+        if (!next || next.node === ENDMARKER) {
+          return length
+        }
+        pos = next
+      }
+    }
+    return indexed
+  }
+
+  async pathFragmentsForRange(
+    ref: PathRef,
+    start: number,
+    end: number,
+  ): Promise<PathFragment[]> {
+    const name = pathNameFor(toPathQuery(ref), 0)
+    const named = (await this.paths()).filter(
+      p =>
+        p.name.sample === name.sample &&
+        p.name.contig === name.contig &&
+        p.name.haplotype === name.haplotype,
+    )
+    const fragments = await Promise.all(
+      named.map(async path => ({
+        path,
+        start: path.name.fragment,
+        end: path.name.fragment + (await this.pathLength(path.handle)),
+      })),
+    )
+    return fragments
+      .filter(f => f.start < end && start < f.end)
+      .sort((a, b) => a.start - b.start)
+  }
+
+  private async subgraphForFragment(
+    fragment: PathFragment,
     start: number,
     end: number,
     opts: QueryOptions,
   ) {
-    const subgraph = await subgraphInInterval(this, query, start, end, {
-      context: 0,
-      ...opts,
-    })
-    if (this.hasHaplotypeIndex) {
-      await subgraph.identifyPaths()
+    const lo = Math.max(start, fragment.start)
+    const hi = Math.min(end, fragment.end)
+    let subgraph: Subgraph | undefined
+    if (hi > lo) {
+      const { sample, contig, haplotype } = fragment.path.name
+      subgraph = await subgraphInInterval(
+        this,
+        { sample, contig, haplotype },
+        lo,
+        hi,
+        opts,
+      )
+      const haplotypes = opts.haplotypes ?? 'all'
+      const named = haplotypes === 'all' || haplotypes === 'distinct'
+      if (this.hasHaplotypeIndex && named) {
+        await subgraph.identifyPaths()
+      }
     }
     return subgraph
   }
 
-  async getFeaturesForRange(
+  async getSubgraphForRange(
     ref: PathRef,
     start: number,
     end: number,
     opts: QueryOptions = {},
-  ): Promise<HaplotypeAlignment[]> {
-    const query = toPathQuery(ref)
-    if (await this.hasPath(query)) {
-      const subgraph = await this.subgraphForRange(query, start, end, opts)
-      return subgraph.alignments()
-    }
-    return []
+  ) {
+    const [fragment] = await this.pathFragmentsForRange(ref, start, end)
+    return fragment
+      ? this.subgraphForFragment(fragment, start, end, opts)
+      : undefined
   }
 
-  async getGraphForRange(
+  async getAlignmentsForRange(
     ref: PathRef,
     start: number,
     end: number,
-    opts: QueryOptions & { cigar?: boolean | undefined } = {},
-  ): Promise<SubgraphJson> {
-    const query = toPathQuery(ref)
-    if (await this.hasPath(query)) {
-      const { cigar, ...queryOptions } = opts
-      const subgraph = await this.subgraphForRange(
-        query,
+    opts: QueryOptions = {},
+  ) {
+    const result: HaplotypeAlignment[] = []
+    for (const fragment of await this.pathFragmentsForRange(ref, start, end)) {
+      const subgraph = await this.subgraphForFragment(
+        fragment,
         start,
         end,
-        queryOptions,
+        opts,
       )
-      return subgraph.toSubgraphJson({
-        cigar: cigar ?? true,
-        names: this.hasHaplotypeIndex ? 'resolved' : 'anonymous',
-      })
+      if (subgraph) {
+        result.push(...subgraph.alignments())
+      }
     }
-    return { nodes: [], edges: [], paths: [] }
+    return result
   }
 
   async graphName() {

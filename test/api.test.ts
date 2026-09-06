@@ -8,6 +8,7 @@ import { parsePathName } from '../src/pathName.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
 const micb = path.join(dataDir, 'micb-kir3dl1.gbz.db')
+const chr6 = 'GRCh38#0#chr6'
 
 function openMicb() {
   return GBZBase.open(new LocalFile(micb))
@@ -15,7 +16,7 @@ function openMicb() {
 
 describe('parsePathName', () => {
   it('reads a PanSN name', () => {
-    expect(parsePathName('GRCh38#0#chr6')).toEqual({
+    expect(parsePathName(chr6)).toEqual({
       sample: 'GRCh38',
       haplotype: 0,
       contig: 'chr6',
@@ -39,30 +40,56 @@ describe('parsePathName', () => {
   })
 })
 
-describe('getFeaturesForRange', () => {
+describe('pathFragmentsForRange', () => {
+  it('bounds a fragment by its own length', async () => {
+    const db = await openMicb()
+    const [fragment] = await db.pathFragmentsForRange(chr6, 31500000, 31501000)
+    expect(fragment?.start).toBe(31498140)
+    expect(fragment?.end).toBe(31498140 + 13033)
+  })
+
+  it('measures a fragment without consulting the haplotype index', async () => {
+    const withIndex = await openMicb()
+    const withoutIndex = await openMicb()
+    Object.defineProperty(withoutIndex, 'hasHaplotypeIndex', { value: false })
+    const indexed = (await withIndex.paths()).filter(p => p.isIndexed)
+    for (const gbzPath of indexed) {
+      expect(await withoutIndex.pathLength(gbzPath.handle)).toBe(
+        await withIndex.pathLength(gbzPath.handle),
+      )
+    }
+  })
+
+  it('reports nothing outside the fragment, and nothing for an unknown path', async () => {
+    const db = await openMicb()
+    expect(await db.pathFragmentsForRange(chr6, 0, 1000)).toEqual([])
+    expect(await db.pathFragmentsForRange('nonexistent', 0, 1000)).toEqual([])
+    expect(await db.hasPath(chr6)).toBe(true)
+    expect(await db.hasPath('nonexistent')).toBe(false)
+  })
+})
+
+describe('getAlignmentsForRange', () => {
   it('takes a PanSN string and resolves names in one call', async () => {
     const db = await openMicb()
-    const features = await db.getFeaturesForRange(
-      'GRCh38#0#chr6',
-      31500000,
-      31501000,
-    )
-    expect(features.length).toBeGreaterThan(0)
-    for (const feature of features) {
-      expect(feature.resolved).toBe(true)
-      if (feature.resolved) {
-        expect(feature.name).toMatch(/^\S+#\d+#\S+\[\d+-\d+\]$/)
-        expect(feature.hapEnd).toBeGreaterThan(feature.hapStart)
+    const alignments = await db.getAlignmentsForRange(chr6, 31500000, 31501000)
+    expect(alignments.length).toBeGreaterThan(0)
+    for (const alignment of alignments) {
+      expect(alignment.resolved).toBe(true)
+      if (alignment.resolved) {
+        expect(alignment.label).toMatch(/^\S+#\d+#\S+\[\d+-\d+\]$/)
+        expect(alignment.name.sample).toBeTruthy()
+        expect(alignment.hapEnd).toBeGreaterThan(alignment.hapStart)
       }
-      expect(feature.refEnd).toBeGreaterThan(feature.refStart)
+      expect(alignment.refEnd).toBeGreaterThan(alignment.refStart)
     }
   })
 
   it('matches the object form of the path reference', async () => {
     const db = await openMicb()
     const [fromString, fromObject] = await Promise.all([
-      db.getFeaturesForRange('GRCh38#0#chr6', 31500000, 31501000),
-      db.getFeaturesForRange(
+      db.getAlignmentsForRange(chr6, 31500000, 31501000),
+      db.getAlignmentsForRange(
         { sample: 'GRCh38', haplotype: 0, contig: 'chr6' },
         31500000,
         31501000,
@@ -71,82 +98,70 @@ describe('getFeaturesForRange', () => {
     expect(fromString).toEqual(fromObject)
   })
 
-  it('adds no context unless asked, unlike the low-level query', async () => {
+  it('clamps the window to the fragment rather than walking off its end', async () => {
     const db = await openMicb()
-    const bare = await db.getFeaturesForRange(
-      'GRCh38#0#chr6',
-      31500000,
-      31501000,
+    const [fragment] = await db.pathFragmentsForRange(chr6, 31500000, 31501000)
+    const alignments = await db.getAlignmentsForRange(
+      chr6,
+      fragment!.end - 200,
+      fragment!.end + 100000,
     )
-    const padded = await db.getFeaturesForRange(
-      'GRCh38#0#chr6',
-      31500000,
-      31501000,
-      { context: 100 },
+    expect(alignments.length).toBeGreaterThan(0)
+    expect(Math.max(...alignments.map(a => a.refEnd))).toBeLessThanOrEqual(
+      fragment!.end,
     )
-    expect(padded.length).not.toBe(bare.length)
   })
 
-  it('returns nothing for a contig the graph does not have', async () => {
+  it('returns nothing for a window or path with no fragment', async () => {
     const db = await openMicb()
-    expect(await db.getFeaturesForRange('nonexistent', 0, 1000)).toEqual([])
-    expect(await db.getFeaturesForRange('GRCh38#7#chr6', 0, 1000)).toEqual([])
-    expect(await db.hasPath('GRCh38#0#chr6')).toBe(true)
-    expect(await db.hasPath('nonexistent')).toBe(false)
+    expect(await db.getAlignmentsForRange('nonexistent', 0, 1000)).toEqual([])
+    expect(await db.getAlignmentsForRange(chr6, 0, 1000)).toEqual([])
   })
 
   it('leaves haplotypes unresolved on a database with no index', async () => {
     const db = await openMicb()
     Object.defineProperty(db, 'hasHaplotypeIndex', { value: false })
-    const features = await db.getFeaturesForRange(
-      'GRCh38#0#chr6',
-      31500000,
-      31501000,
-    )
-    expect(features.length).toBeGreaterThan(0)
-    expect(features.every(f => !f.resolved)).toBe(true)
+    const alignments = await db.getAlignmentsForRange(chr6, 31500000, 31501000)
+    expect(alignments.length).toBeGreaterThan(0)
+    expect(alignments.every(a => !a.resolved)).toBe(true)
   })
 
   it('rejects an aborted signal', async () => {
     const db = await openMicb()
     await expect(
-      db.getFeaturesForRange('GRCh38#0#chr6', 31500000, 31501000, {
+      db.getAlignmentsForRange(chr6, 31500000, 31501000, {
         signal: AbortSignal.abort(),
       }),
     ).rejects.toThrow()
   })
 })
 
-describe('getGraphForRange', () => {
-  it('returns a named subgraph in one call', async () => {
+describe('getSubgraphForRange', () => {
+  it('hands back a query object with names already resolved', async () => {
     const db = await openMicb()
-    const graph = await db.getGraphForRange('GRCh38#0#chr6', 31500000, 31501000)
-    expect(graph.nodes.length).toBeGreaterThan(0)
-    expect(graph.edges.length).toBeGreaterThan(0)
-    expect(graph.paths[0]?.name).toMatch(/^GRCh38#0#chr6\[\d+-\d+\]$/)
-    expect(
-      graph.paths.slice(1).every(p => !p.name.startsWith('unknown#')),
-    ).toBe(true)
-    expect(graph.paths.slice(1).every(p => p.cigar !== undefined)).toBe(true)
+    const subgraph = await db.getSubgraphForRange(chr6, 31500000, 31501000)
+    const gfa = await subgraph!.toGFA({ names: 'resolved' })
+    expect(gfa).not.toMatch(/\bunknown#/)
+    const json = subgraph!.toSubgraphJson({ cigar: true, names: 'resolved' })
+    expect(json.nodes.length).toBeGreaterThan(0)
+    expect(json.paths[0]?.name).toMatch(/^GRCh38#0#chr6\[\d+-\d+\]$/)
   })
 
-  it('omits cigars when asked to', async () => {
+  it('reports the interval it actually answered', async () => {
     const db = await openMicb()
-    const graph = await db.getGraphForRange(
-      'GRCh38#0#chr6',
+    const [fragment] = await db.pathFragmentsForRange(chr6, 31500000, 31501000)
+    const subgraph = await db.getSubgraphForRange(
+      chr6,
       31500000,
-      31501000,
-      { cigar: false },
+      fragment!.end + 100000,
+      { context: 0 },
     )
-    expect(graph.paths.every(p => p.cigar === undefined)).toBe(true)
+    expect(subgraph?.referenceInterval?.end).toBe(fragment!.end)
   })
 
-  it('returns an empty graph for a contig the graph does not have', async () => {
+  it('is undefined when no fragment covers the window', async () => {
     const db = await openMicb()
-    expect(await db.getGraphForRange('nonexistent', 0, 1000)).toEqual({
-      nodes: [],
-      edges: [],
-      paths: [],
-    })
+    expect(await db.getSubgraphForRange('nonexistent', 0, 1000)).toBeUndefined()
+    expect(await db.getSubgraphForRange(chr6, 0, 1000)).toBeUndefined()
   })
 })

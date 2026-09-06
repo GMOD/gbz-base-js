@@ -17,18 +17,19 @@ const db = await GBZBase.open(
 )
 
 // one record per haplotype fragment crossing the window
-const features = await db.getFeaturesForRange(
+const alignments = await db.getAlignmentsForRange(
   'GRCh38#0#chr6',
   31500000,
   31501000,
 )
 
-// the graph itself, for a pangenome view
-const { nodes, edges, paths } = await db.getGraphForRange(
+// the same window as a subgraph, for a pangenome view
+const subgraph = await db.getSubgraphForRange(
   'GRCh38#0#chr6',
   31500000,
   31501000,
 )
+const gfa = await subgraph?.toGFA({ names: 'resolved' })
 ```
 
 Coordinates are 0-based half-open, and are offsets along the path you named, so
@@ -37,25 +38,38 @@ Coordinates are 0-based half-open, and are offsets along the path you named, so
 
 The path is a PanSN `sample#haplotype#contig` string, or a bare contig for a
 graph whose reference paths have no sample. `{ sample, haplotype, contig }`
-works too, and `parsePathName` is the parser if you want it separately. A path
-the graph does not have is not an error: `getFeaturesForRange` returns `[]` and
-`getGraphForRange` an empty graph, so a browser asking for every contig it knows
-about gets an empty track rather than a thrown error. `hasPath` answers the same
-question on its own.
+works too, and `parsePathName` is the parser if you want it separately.
 
-Both take `{ context, haplotypes, snarls, limit, signal }`. `signal` is an
-`AbortSignal` that stops the query between range requests. `context` is a
-padding radius in bp and defaults to **0** here — exactly the window you asked
-for — where the lower-level query functions below default to 100 as upstream
-does.
+Both take `{ context, haplotypes, snarls, limit, signal }` and both resolve
+haplotype names when the database can. `signal` is an `AbortSignal`; a query
+checks it between range requests, so an abort stops the next fetch rather than
+the one in flight.
 
-### What a feature is
+### One returns records, the other a query object
+
+`getAlignmentsForRange` hands back data, and spans path fragments — a window
+crossing a boundary queries each fragment and concatenates, which is
+coordinate-correct because a record's `refStart`/`refEnd` are absolute.
+
+`getSubgraphForRange` hands back the `Subgraph` itself, because two disjoint
+fragments do not merge into one graph. It answers for the first fragment
+overlapping the window, clamped to it, and `subgraph.referenceInterval` says
+which interval that was. It is `undefined` when the path is unknown, when no
+fragment overlaps the window, or when the clamped window is empty. Use
+`pathFragmentsForRange` to see the fragments yourself, and `hasPath` to ask
+about a path alone.
+
+A path that exists but was never indexed for random access throws rather than
+returning nothing — that is a database that needs rebuilding, not an empty
+window.
+
+### What an alignment is
 
 ```ts
-for (const feature of features) {
-  const { refStart, refEnd, strand, cigar } = feature
-  if (feature.resolved) {
-    console.log(feature.name, feature.hapStart, feature.hapEnd)
+for (const alignment of alignments) {
+  const { refStart, refEnd, strand, cigar } = alignment
+  if (alignment.resolved) {
+    console.log(alignment.label, alignment.hapStart, alignment.hapEnd)
   }
 }
 ```
@@ -63,20 +77,19 @@ for (const feature of features) {
 `refStart`/`refEnd` are the fragment's span on the reference path you queried,
 and `cigar` is its alignment to that reference, computed like upstream: a
 node-length-weighted LCS, with the diverging stretches scored using vg's match,
-mismatch and gap parameters. `path` is the walk as node handles, and `weight` is
-how many identical haplotypes it stands for.
+mismatch and gap parameters. `path` is the walk as node handles, `weight` is how
+many identical haplotypes it stands for, and `start` is its GBWT position, which
+is a property of the graph and so is stable across refetches of the same window.
 
 Naming a fragment needs the haplotype index described below, and a database
 without one cannot do it, so the record is a union on `resolved` rather than a
-handful of separately-undefined fields. A resolved one adds `name` (the
-`HG02723#1#JAHEOU010000100.1[4392999-4393486]` form), the structured `pathName`,
+handful of separately-undefined fields. A resolved one adds the `PathName` as
+`name`, its `HG02723#1#JAHEOU010000100.1[4392999-4393486]` rendering as `label`,
 the `pathHandle`, and `hapStart`/`hapEnd` in that haplotype's own coordinates.
-`getFeaturesForRange` resolves when the database can and leaves the fragments
-unresolved when it cannot.
 
-For the graph, `paths[0]` is the reference interval, named
-`GRCh38#0#chr6[start-end]`. Every other entry is one haplotype's walk through
-the subgraph, with the same `cigar`. Pass `{ cigar: false }` to leave them out.
+A haplotype whose walk shares no node with the reference has
+`refEnd <= refStart` and an all-insertion CIGAR; those come back like any other,
+to drop or keep as you like.
 
 ### Sources
 
@@ -87,9 +100,10 @@ and cached.
 
 ### Lower-level queries
 
-`getFeaturesForRange` and `getGraphForRange` cover the interval query. The four
-query functions underneath answer the rest of what `gbz-base query` does, and
-hand back a `Subgraph` you drive yourself:
+The two above cover the interval query and hide where a contig is stored split
+into path fragments. The four query functions underneath are what
+`gbz-base query` itself does, take a window you have already resolved, and leave
+identification to you:
 
 ```ts
 import { subgraphAtOffset, subgraphInInterval } from '@gmod/gbz-base'
@@ -107,7 +121,8 @@ const gfa = await subgraph.toGFA({ cigar: true, names: 'resolved' })
 ```
 
 `subgraphAtOffset` and `subgraphAroundNodes` are the other two;
-`subgraphBetween` is described under Snarls.
+`subgraphBetween` is described under Snarls. They throw for a window that runs
+past the end of a path fragment, where `getAlignmentsForRange` clamps.
 
 The command line mirrors the upstream tool for the query types it supports:
 
@@ -186,10 +201,10 @@ range in one index scan, chains each haplotype's fragments to the next through
 the private nodes between them, and walks at most one interval past the window
 for a chain that met no sample inside it. This is what fills in the `resolved`
 half of a feature: PanSN name, haplotype interval in that contig's coordinates,
-and the path handle. `getFeaturesForRange` and `getGraphForRange` run it for you
-when the database has the tables; on the lower-level path you call it yourself
-before `alignments()` or `toSubgraphJson({ names: 'resolved' })`. On the command
-line, `--resolve` and `--alignments`.
+and the path handle. `getAlignmentsForRange` and `getSubgraphForRange` run it
+for you when the database has the tables; on the lower-level path you call it
+yourself before `alignments()` or `toSubgraphJson({ names: 'resolved' })`. On
+the command line, `--resolve` and `--alignments`.
 
 The tests check every resolved fragment against an independent backward walk
 through the bidirectional GBWT to the path's recorded start position.

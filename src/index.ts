@@ -1,5 +1,10 @@
 export { GBZBase, GbzRecord, SCHEMA_VERSION, SchemaVersionError } from './db.ts'
-export type { GbzPath, HaplotypeSample, OpenOptions } from './db.ts'
+export type {
+  GbzPath,
+  HaplotypeSample,
+  OpenOptions,
+  PathFragment,
+} from './db.ts'
 export { GENERIC_SAMPLE, formatPathName, parsePathName } from './pathName.ts'
 export type { PathName, PathQuery, PathRef } from './pathName.ts'
 export type { ByteSource } from './filehandle.ts'

@@ -94,7 +94,7 @@ describe('haplotype identification', () => {
     )
     const samples = new Set(
       alignments.flatMap(a =>
-        a.resolved ? [`${a.pathName.sample}#${a.pathName.haplotype}`] : [],
+        a.resolved ? [`${a.name.sample}#${a.name.haplotype}`] : [],
       ),
     )
     expect(samples.size).toBeGreaterThan(50)

@@ -9,7 +9,11 @@ import {
   subgraphInInterval,
 } from './query.ts'
 
-import type { HaplotypeOutput, SnarlOutput } from './subgraph.ts'
+import type {
+  HaplotypeAlignment,
+  HaplotypeOutput,
+  SnarlOutput,
+} from './subgraph.ts'
 
 const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
 
@@ -183,6 +187,11 @@ function parseArgs(argv: string[]): Args {
   return args
 }
 
+function alignmentRecord(alignment: HaplotypeAlignment) {
+  const { start, ...rest } = alignment
+  return rest.resolved ? { ...rest, name: rest.label, label: undefined } : rest
+}
+
 export async function main(argv: string[]) {
   const args = parseArgs(argv)
   const open = (file: string) =>
@@ -229,7 +238,7 @@ export async function main(argv: string[]) {
   }
   const names = args.resolve ? 'resolved' : 'anonymous'
   const output = args.alignments
-    ? subgraph.alignments().map(({ start, ...rest }) => rest)
+    ? subgraph.alignments().map(alignmentRecord)
     : subgraph.toSubgraphJson({ cigar: args.cigar, names })
   process.stdout.write(
     args.format === 'gfa' && !args.alignments
