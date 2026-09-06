@@ -1,3 +1,14 @@
+## [2.3.0](https://github.com/GMOD/gbz-base-js/compare/v2.2.0...v2.3.0) (2026-09-06)
+
+### Other Changes
+
+- A fixture whose reference contig is stored as two fragments ([bca5c1a](https://github.com/GMOD/gbz-base-js/commit/bca5c1a5649933dccf3e865ae5a84b5c551ed15c))
+- Identification scans the companion per run of node ids, and --stats reports how each chain ended ([fd91599](https://github.com/GMOD/gbz-base-js/commit/fd9159975f07524f1989a617a8dbec442784363d))
+- Walk the subgraph once over typed arrays, skip provable twin walks, and prefetch the reference walk's node records ([ad48851](https://github.com/GMOD/gbz-base-js/commit/ad488514b9c6fa08d5ed3ba5a47c81123a171e4f))
+- One alignment record per haplotype: consecutive sibling fragments join through the identified chain ([cf9b8b8](https://github.com/GMOD/gbz-base-js/commit/cf9b8b837cb006a57d47066e36ff08daff444063))
+- Context no longer decides the record count, and the README says what it trades instead ([3d9f480](https://github.com/GMOD/gbz-base-js/commit/3d9f480b68cf963106ddc6961c386877c40b24d3))
+- The node limit error says how far into the window the reference walk got ([fcbd029](https://github.com/GMOD/gbz-base-js/commit/fcbd029da2d75c9fd289c4454862140bf44d0540))
+
 ## [2.2.0](https://github.com/GMOD/gbz-base-js/compare/v2.1.0...v2.2.0) (2026-09-06)
 
 ### Other Changes
