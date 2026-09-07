@@ -45,24 +45,38 @@ Both take `{ context, haplotypes, keep, limit, signal }`, and
 database can. For alignments `haplotypes` is `all` or `distinct`, the two
 outputs that leave something to align against the reference.
 
-`keep` is a predicate over the `PathName` of each named walk, applied after
-identification: the walks it rejects are neither aligned nor written, and the
-subgraph loses every node only they visited, so a query for a chosen set draws
-that set's private sequence and nothing else's (the reference walk always
-stays). It needs the haplotype index and throws without one. What it saves is
-the alignment and the output, not the fetch or the identification, which has to
-name a walk before the predicate can see it. Measured on the 30 kb LPA KIV-2
-window of the HPRC v2.1 graph (`GRCh38#0#chr6:160616002..160646753`, context
-1000, contained snarls; graph over HTTPS, companion local), all 464 haplotypes
-against the tutorial's eight: the fetch and walk extraction take 4.3-5.4 s
-either way and identification 0.2 s; alignment goes from 0.63 s for 464 records
-to 0.02 s for 8, the alignment JSON from 44.3 MB to 0.63 MB, the resolved GFA
-from 45.5 MB (465 W lines, 0.5 s to write) to 1.56 MB (9 W lines, 0.1 s), and
-the subgraph from 21,721 nodes to 15,808. End to end that is 6.0-6.6 s against
-4.6-5.8 s in the library, and 9.1-9.5 s against 6.4-8.5 s for
-`gbz-base-query --alignments` with and without eight `--keep`s, so a chosen set
-saves the alignment and the output, about a fifth of the window, and the rest
-waits on a walk the companion can start from the reference.
+`keep` is a predicate over the `PathName` of each walk: the window comes back
+with the reference walk, the walks it accepts and the nodes those walks visit,
+so a query for a chosen set draws that set's private sequence and nothing
+else's. It needs the haplotype index and throws without one. With a companion
+that carries anchors (see below) the wanted haplotypes are walked from the
+anchor before the window and nothing else is extracted or named, so the cost is
+the set's; with an older companion every walk is named first and the predicate
+only trims the alignment and the output. Measured against the HPRC v2.1 graph
+and its hosted companion, both over HTTPS, context 1000, contained snarls, the
+tutorial's eight haplotypes against all 464, on a fresh open after one warm-up
+window elsewhere and again with the window's pages cached:
+
+| Window       | Set   | Open       | Route    | Records | Nodes  | Graph           | Companion       | Time   |
+| ------------ | ----- | ---------- | -------- | ------- | ------ | --------------- | --------------- | ------ |
+| KIV-2 30 kb  | eight | after open | anchored | 8       | 3,140  | 9 req, 2.23 MB  | 9 req, 0.59 MB  | 3.08 s |
+| KIV-2 30 kb  | eight | cached     | anchored | 8       | 3,140  | 0 req, 0.00 MB  | 0 req, 0.00 MB  | 0.38 s |
+| KIV-2 30 kb  | all   | after open | sampled  | 464     | 21,721 | 7 req, 1.57 MB  | 9 req, 0.59 MB  | 3.75 s |
+| KIV-2 30 kb  | all   | cached     | sampled  | 464     | 21,721 | 0 req, 0.00 MB  | 0 req, 0.00 MB  | 2.17 s |
+| KIV-2 130 kb | eight | after open | anchored | 8       | 7,383  | 11 req, 2.62 MB | 13 req, 0.85 MB | 2.87 s |
+| KIV-2 130 kb | eight | cached     | anchored | 8       | 7,383  | 0 req, 0.00 MB  | 0 req, 0.00 MB  | 0.51 s |
+| KIV-2 130 kb | all   | after open | sampled  | 464     | 27,438 | 8 req, 1.90 MB  | 14 req, 0.92 MB | 4.80 s |
+| KIV-2 130 kb | all   | cached     | sampled  | 464     | 27,438 | 0 req, 0.00 MB  | 0 req, 0.00 MB  | 3.74 s |
+| AMY1         | eight | after open | anchored | 13      | 8,164  | 28 req, 3.21 MB | 15 req, 0.98 MB | 6.11 s |
+| AMY1         | eight | cached     | anchored | 13      | 8,164  | 0 req, 0.00 MB  | 0 req, 0.00 MB  | 0.48 s |
+| AMY1         | all   | after open | sampled  | 1,395   | 12,240 | 23 req, 2.23 MB | 23 req, 1.51 MB | 8.43 s |
+| AMY1         | all   | cached     | sampled  | 1,395   | 12,240 | 0 req, 0.00 MB  | 0 req, 0.00 MB  | 3.00 s |
+| MHC class II | eight | after open | anchored | 8       | 31,008 | 11 req, 4.06 MB | 10 req, 0.66 MB | 5.46 s |
+| MHC class II | eight | cached     | anchored | 8       | 31,008 | 0 req, 0.00 MB  | 0 req, 0.00 MB  | 0.97 s |
+| MHC class II | all   | after open | sampled  | 463     | 43,540 | 12 req, 2.62 MB | 8 req, 0.52 MB  | 9.59 s |
+| MHC class II | all   | cached     | sampled  | 463     | 43,540 | 0 req, 0.00 MB  | 0 req, 0.00 MB  | 9.16 s |
+
+The "all" rows are the sampled route the same query takes without `keep`.
 
 `context` is the graph context in bp to extend past the window, 100 by default.
 It does not decide how many records come back, since the pieces of a walk that
@@ -212,8 +226,8 @@ tool writes into an existing database, built on the unmodified upstream crates:
 
 ```
 cd tools/haplotype-index && cargo build --release
-./target/release/gbz-haplotype-index --interval 4096 graph.gbz graph.gbz.db
-./target/release/gbz-haplotype-index --interval 4096 --from-db graph.gbz.db
+./target/release/gbz-haplotype-index --interval 4096 --anchor-spacing 131072 graph.gbz graph.gbz.db
+./target/release/gbz-haplotype-index --interval 4096 --anchor-spacing 131072 --from-db graph.gbz.db
 ```
 
 The second form walks the paths through the database's own node records, so a
@@ -224,7 +238,7 @@ With `--output index.db` the tool writes the same tables into a standalone
 companion database instead, and the reader opens the two side by side:
 
 ```
-./target/release/gbz-haplotype-index --interval 16384 --output graph.haplotype-index.db graph.gbz
+./target/release/gbz-haplotype-index --interval 16384 --anchor-spacing 131072 --output graph.haplotype-index.db graph.gbz
 gbz-base-query https://host/graph.gbz.db --haplotype-index https://host/graph.haplotype-index.db ...
 ```
 
@@ -242,11 +256,23 @@ different graph.
 
 `HaplotypeSamples` holds one GBWT position every `--interval` bp along every
 path in both orientations, with the path handle and the forward coordinate of
-that node, and `HaplotypeLengths` holds each path's length. The upstream `query`
-binary keeps working on the augmented database. Both orientations are needed:
-about half the contigs of a graph like HPRC's are stored against their
-reference, and a walk of one of those meets no sample from a forward-only index.
-`GBZBase.open` refuses an index the tool wrote with `--forward-only` (its
+that node, and `HaplotypeLengths` holds each path's length. `HaplotypeAnchors`
+names one anchor node per multiple of `--anchor-spacing` along every path the
+database indexes for random access (its reference paths): the path's first node
+for the multiple 0, and otherwise the node with the most GBWT positions among
+those overlapping the half spacing before the multiple, so it is a node most
+haplotypes of that stretch pass rather than whichever node happens to contain
+the multiple, which in a variable region can be a rare allele. Every path's
+visit through an anchor node is written to `HaplotypeSamples` as well, in both
+orientations, so the rows at one node list every haplotype passing that point of
+the reference with its own coordinate. On the HPRC v2.1 graph at the default
+131,072 bp that is 45,557 anchors over the 292 GRCh38 and CHM13 paths, and the
+companion grows from 7.0 to about 7.9 GB. `--anchor-spacing 0` writes none, and
+the `Tags` table records the spacing and the rule. The upstream `query` binary
+keeps working on the augmented database. Both orientations are needed: about
+half the contigs of a graph like HPRC's are stored against their reference, and
+a walk of one of those meets no sample from a forward-only index. `GBZBase.open`
+refuses an index the tool wrote with `--forward-only` (its
 `haplotype_index_orientations` tag says `forward`) with `ForwardOnlyIndexError`,
 so the half-named result never reaches a caller.
 
@@ -262,6 +288,28 @@ interval in that contig's coordinates, and the path handle.
 database has the tables; on the lower-level path you call it yourself before
 `alignments()` or `toSubgraphJson({ names: 'resolved' })`. On the command line,
 `--resolve` and `--alignments`.
+
+A query with `keep` on a companion that carries anchors takes a different route,
+and `--stats` reports it as the anchored walk. The reader looks up the anchor
+for the multiple of the spacing at or before the window, walks the reference
+from that node to a little past the window to learn which nodes are the
+reference's and where, reads the rows at the anchor node, and for each row whose
+path the predicate wants walks that path with `lf()` from its own position
+through the window, so its identity and coordinate come from the row and no
+chain walk or index scan is needed. A path through a duplicated stretch has
+several rows at the anchor node, one per visit, and only one visit is followed
+by the window: the reader tries the visit whose row sits nearest the reference's
+own first (GBWT rows are ordered by the sequence before them) and stops at the
+first that goes through, so HG01109#1's second amylase copy costs nothing where
+it used to walk 30,000 steps to the bound. A wanted contig with no row at the
+anchor, because it bypasses that node or starts inside the window, is found the
+way the sampled route finds every haplotype, from its per-path samples on the
+window's nodes: one sample of the orientation that runs with the reference (both
+are indexed, and the other would walk out of the window backwards) is followed
+back to the reference before the window and the walk starts there. When a walk
+cannot be completed, the whole window falls back to the sampled route and
+`--stats` says why. A companion without `HaplotypeAnchors` takes the sampled
+route and trims it, as does `haplotypes: 'distinct'`.
 
 A named walk in GFA or JSON output lists its steps in the haplotype's own
 direction, whichever twin of the walk the extraction kept, so `start..end` and

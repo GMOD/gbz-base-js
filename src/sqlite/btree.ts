@@ -183,11 +183,12 @@ export class BTree {
         }
       })
       if (children.length > PREFETCH_PAGE_LIMIT) {
-        return
+        return false
       }
       this.pager.prefetch(children)
       pages = children
     }
+    return true
   }
 
   async tableRowid(

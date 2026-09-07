@@ -3,48 +3,12 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
+import { cigarConsumption, walkBack } from './walkBack.ts'
 import { ForwardOnlyIndexError, GBZBase } from '../src/db.ts'
-import { ENDMARKER, encodeNode, flipNode } from '../src/gbwt/node.ts'
+import { ENDMARKER, encodeNode } from '../src/gbwt/node.ts'
 import { subgraphInInterval } from '../src/query.ts'
 
-import type { Pos } from '../src/gbwt/record.ts'
-
 const dataDir = path.join(import.meta.dirname, 'data')
-
-async function walkBack(db: GBZBase, pos: Pos) {
-  let current = pos
-  let bpBefore = 0
-  for (;;) {
-    const flipped = await db.getRecord(flipNode(current.node))
-    const predecessor = flipped?.gbwt().predecessorAt(current.offset)
-    if (predecessor === undefined) {
-      return { start: current, bpBefore }
-    }
-    const record = await db.getRecord(predecessor)
-    const offset = record?.gbwt().offsetTo(current)
-    if (!record || offset === undefined) {
-      throw new Error(
-        `No offset in ${predecessor} leads to ${current.node}:${current.offset}`,
-      )
-    }
-    current = { node: predecessor, offset }
-    bpBefore += record.sequenceLen
-  }
-}
-
-function cigarConsumption(cigar: string) {
-  let query = 0
-  let reference = 0
-  for (const [, len, op] of cigar.matchAll(/(\d+)([MID])/g)) {
-    if (op !== 'D') {
-      query += Number(len)
-    }
-    if (op !== 'I') {
-      reference += Number(len)
-    }
-  }
-  return { query, reference }
-}
 
 async function checkIdentities(
   file: string,

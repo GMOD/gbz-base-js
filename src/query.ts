@@ -2,7 +2,7 @@ import { pathNameFor } from './pathName.ts'
 import { Subgraph, SubgraphLimitError } from './subgraph.ts'
 
 import type { GBZBase } from './db.ts'
-import type { PathQuery } from './pathName.ts'
+import type { PathName, PathQuery } from './pathName.ts'
 import type { HaplotypeOutput, SnarlOutput } from './subgraph.ts'
 
 export type { PathQuery } from './pathName.ts'
@@ -60,6 +60,70 @@ export async function subgraphInInterval(
       : error
   }
   return subgraph
+}
+
+export interface HaplotypeQueryOptions extends QueryOptions {
+  keep: (name: PathName) => boolean
+}
+
+// The window for a chosen set of haplotypes. With a companion that carries
+// anchor rows the set's walks come from the anchor node before the window
+// and nothing else is extracted or identified; without one, or when a wanted
+// contig starts inside the window, it is the sampled route narrowed after
+// identification, which is what a caller without `keep` gets.
+export async function subgraphForHaplotypes(
+  db: GBZBase,
+  query: PathQuery,
+  start: number,
+  end: number,
+  opts: HaplotypeQueryOptions,
+) {
+  if (!db.hasHaplotypeIndex) {
+    throw new Error(
+      'keep needs the haplotype index: this database cannot name its walks',
+    )
+  }
+  const spacing = await db.haplotypeAnchorSpacing()
+  let anchored: Subgraph | undefined
+  let fallback: string | undefined
+  if (spacing !== undefined && (opts.haplotypes ?? 'all') === 'all') {
+    const subgraph = new Subgraph(db, opts)
+    try {
+      const reference = await subgraph.pathPosition(pathNameFor(query, start))
+      fallback = await subgraph.walkHaplotypesFromAnchor(
+        reference,
+        end - start,
+        spacing,
+        opts.keep,
+        opts.context ?? 100,
+      )
+    } catch (error) {
+      throw error instanceof SubgraphLimitError && error.windowBp === undefined
+        ? new SubgraphLimitError(error.limit, {
+            windowBp: end - start,
+            walkedBp: subgraph.referenceWalkedBp ?? 0,
+          })
+        : error
+    }
+    if (fallback === undefined) {
+      anchored = subgraph
+    } else {
+      fallback = `${fallback}; identified from the per-path samples instead`
+      const sampled = await subgraphInInterval(db, query, start, end, opts)
+      await sampled.identifyPaths()
+      sampled.keepHaplotypes(opts.keep)
+      sampled.stats.anchorWalk = subgraph.stats.anchorWalk
+      if (sampled.stats.anchorWalk) {
+        sampled.stats.anchorWalk.fallback = fallback
+      }
+      anchored = sampled
+    }
+  } else {
+    anchored = await subgraphInInterval(db, query, start, end, opts)
+    await anchored.identifyPaths()
+    anchored.keepHaplotypes(opts.keep)
+  }
+  return anchored
 }
 
 export async function subgraphAroundNodes(

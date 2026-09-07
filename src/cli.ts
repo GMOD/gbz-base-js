@@ -6,10 +6,14 @@ import {
   subgraphAroundNodes,
   subgraphAtOffset,
   subgraphBetween,
+  subgraphForHaplotypes,
   subgraphInInterval,
 } from './query.ts'
 
+import type { PathName } from './pathName.ts'
 import type {
+  AnchorWalkEnd,
+  AnchorWalkStats,
   ChainEnd,
   HaplotypeAlignment,
   HaplotypeOutput,
@@ -247,6 +251,42 @@ function identificationReport(stats: IdentificationStats) {
   ].join('\n')
 }
 
+const ANCHOR_WALK_ENDS: AnchorWalkEnd[] = [
+  'through the window',
+  'before the window',
+  'past the window',
+  'ended in the window',
+  'bound',
+  'cycle',
+]
+
+function anchorWalkReport(stats: AnchorWalkStats) {
+  const ends = ANCHOR_WALK_ENDS.map(
+    end => `${end} ${stats.walks.filter(w => w.end === end).length}`,
+  ).join(', ')
+  const steps = stats.walks.reduce((n, w) => n + w.steps, 0)
+  const pieces = stats.walks.reduce((n, w) => n + w.pieces, 0)
+  const scanned = stats.scans.reduce((n, [a, b]) => n + ((b - a) >> 1) + 1, 0)
+  return [
+    `anchored walk: spacing ${stats.spacing}; anchor for multiple ${stats.anchorOffset} at reference offset ${stats.anchorNodeOffset}, node ${stats.anchorHandle >> 1}, ${stats.rows} rows; reference ${stats.referenceSteps} steps`,
+    `  ${stats.walks.length} walks (${stats.walks.filter(w => w.from === 'sample').length} from a sample in the window), ${steps} steps in ${pieces} monotone pieces, ${stats.graphFetches} graph record lookups outside the subgraph`,
+    `  walk ends: ${ends}`,
+    `  completeness: ${stats.scans.length} index scans over ${scanned} nodes for ${stats.scanRows} samples`,
+    `  ms: reference ${stats.ms.reference.toFixed(0)}, rows ${stats.ms.rows.toFixed(0)}, walks ${stats.ms.walks.toFixed(0)}, scan ${stats.ms.scan.toFixed(0)}, sampled ${stats.ms.sampled.toFixed(0)}`,
+    `  ${stats.fallback ?? 'no fallback'}`,
+  ].join('\n')
+}
+
+function keepPredicate(keep: string[]) {
+  const wanted = keep.map(text => text.split('#'))
+  return (name: PathName) =>
+    wanted.some(
+      ([sample, haplotype]) =>
+        sample === name.sample &&
+        (haplotype === undefined || Number(haplotype) === name.haplotype),
+    )
+}
+
 function alignmentRecord(alignment: HaplotypeAlignment) {
   const { start, ...rest } = alignment
   return rest.resolved ? { ...rest, name: rest.label, label: undefined } : rest
@@ -273,18 +313,28 @@ export async function main(argv: string[]) {
     haplotype: args.haplotype,
     ...(args.sample === undefined ? {} : { sample: args.sample }),
   }
+  const keep = args.keep.length > 0 ? keepPredicate(args.keep) : undefined
+  const anchoredQuery = keep !== undefined && args.interval !== undefined
   const subgraph = args.between
     ? await subgraphBetween(db, args.between[0], args.between[1], opts)
     : args.nodes.length > 0
       ? await subgraphAroundNodes(db, args.nodes, opts)
       : args.interval
-        ? await subgraphInInterval(
-            db,
-            query,
-            args.interval[0],
-            args.interval[1],
-            opts,
-          )
+        ? keep === undefined
+          ? await subgraphInInterval(
+              db,
+              query,
+              args.interval[0],
+              args.interval[1],
+              opts,
+            )
+          : await subgraphForHaplotypes(
+              db,
+              query,
+              args.interval[0],
+              args.interval[1],
+              { ...opts, keep },
+            )
         : args.offset !== undefined
           ? await subgraphAtOffset(db, query, args.offset, opts)
           : undefined
@@ -293,18 +343,11 @@ export async function main(argv: string[]) {
       'Query type must be specified using --offset, --interval, --node or --between',
     )
   }
-  if (args.resolve) {
+  if (args.resolve && !anchoredQuery) {
     await subgraph.identifyPaths()
   }
-  if (args.keep.length > 0) {
-    const wanted = args.keep.map(text => text.split('#'))
-    subgraph.keepHaplotypes(name =>
-      wanted.some(
-        ([sample, haplotype]) =>
-          sample === name.sample &&
-          (haplotype === undefined || Number(haplotype) === name.haplotype),
-      ),
-    )
+  if (keep !== undefined && !anchoredQuery) {
+    subgraph.keepHaplotypes(keep)
   }
   const names = args.resolve ? 'resolved' : 'anonymous'
   const output = args.alignments
@@ -334,6 +377,10 @@ export async function main(argv: string[]) {
       process.stderr.write(
         `${identificationReport(subgraph.stats.identification)}\n`,
       )
+    }
+    const { anchorWalk } = subgraph.stats
+    if (anchorWalk) {
+      process.stderr.write(`${anchorWalkReport(anchorWalk)}\n`)
     }
   }
 }

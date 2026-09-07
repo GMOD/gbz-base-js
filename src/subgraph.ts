@@ -18,7 +18,14 @@ import { gfaHeaderLines, sha256Hex, subgraphName } from './graphName.ts'
 import { weightedLcs } from './lcs.ts'
 import { formatPathName } from './pathName.ts'
 
-import type { GBZBase, GbzPath, GbzRecord, HaplotypeSample } from './db.ts'
+import type {
+  GBZBase,
+  GbzPath,
+  GbzRecord,
+  HaplotypeAnchor,
+  HaplotypeSample,
+  IndexedPosition,
+} from './db.ts'
 import type { NodeSide, Orientation } from './gbwt/node.ts'
 import type { Pos } from './gbwt/record.ts'
 import type { PathName } from './pathName.ts'
@@ -354,12 +361,74 @@ export interface IdentificationStats {
   chains: ChainRecord[]
 }
 
+export type AnchorWalkEnd =
+  | 'through the window'
+  | 'before the window'
+  | 'past the window'
+  | 'ended in the window'
+  | 'bound'
+  | 'cycle'
+
+export interface AnchorWalkRecord {
+  pathHandle: number
+  from: 'anchor' | 'sample'
+  steps: number
+  pieces: number
+  end: AnchorWalkEnd
+}
+
+export interface AnchorWalkStats {
+  spacing: number
+  anchorOffset: number
+  anchorNodeOffset: number
+  anchorHandle: number
+  referenceSteps: number
+  rows: number
+  walks: AnchorWalkRecord[]
+  graphFetches: number
+  scans: [number, number][]
+  scanRows: number
+  fallback: string | undefined
+  ms: {
+    reference: number
+    rows: number
+    walks: number
+    scan: number
+    sampled: number
+  }
+}
+
 interface SubgraphStats {
   orderedAlignments: number
   lcsAlignments: number
   identificationSteps: number
   identificationFetches: number
   identification: IdentificationStats
+  anchorWalk: AnchorWalkStats | undefined
+}
+
+const PREFETCH_RUN_GAP = 32768
+
+interface WalkStep {
+  pos: Pos
+  at: number
+  len: number
+}
+
+const ANCHOR_WALK_MARGIN = 65536
+
+function rowidRuns(handles: number[]) {
+  const sorted = [...handles].sort((a, b) => a - b)
+  const runs: [number, number][] = []
+  for (const handle of sorted) {
+    const last = runs[runs.length - 1]
+    if (last && handle - last[1] <= PREFETCH_RUN_GAP) {
+      last[1] = handle
+    } else {
+      runs.push([handle, handle])
+    }
+  }
+  return runs
 }
 
 export class Subgraph {
@@ -389,6 +458,7 @@ export class Subgraph {
       graphFetches: 0,
       chains: [],
     },
+    anchorWalk: undefined,
   }
 
   private db: GBZBase
@@ -542,16 +612,47 @@ export class Subgraph {
     return this.insertContext(active, context)
   }
 
-  async prefetchReferenceWalk(reference: ReferencePath, len: number) {
-    const last = await this.db.indexedPosition(
+  prefetchReferenceWalk(reference: ReferencePath, len: number) {
+    return this.prefetchReferenceRange(
       reference.handle,
+      reference.position.seqOffset,
       reference.position.seqOffset + len,
     )
-    if (last) {
-      const a = reference.position.handle
+  }
+
+  // One request for the reference walk's node records where their rowids are
+  // close, and one per run of them where the walk crosses a gap in node ids
+  // (AMY1's reference walk spans two gaps of millions), so the walk after it
+  // never fetches leaf pages one at a time.
+  private async prefetchReferenceRange(
+    pathHandle: number,
+    fromOffset: number,
+    toOffset: number,
+  ) {
+    const [first, last] = await Promise.all([
+      this.db.indexedPosition(pathHandle, fromOffset),
+      this.db.indexedPosition(pathHandle, toOffset),
+    ])
+    if (first && last) {
+      const a = first.pos.node
       const b = last.pos.node
-      await this.db.prefetchRecords(Math.min(a, b), Math.max(a, b) + 1)
+      const whole = await this.db.prefetchRecords(
+        Math.min(a, b),
+        Math.max(a, b) + 1,
+      )
+      if (!whole) {
+        const positions = await this.db.indexedPositionsBetween(
+          pathHandle,
+          fromOffset,
+          toOffset,
+        )
+        const runs = rowidRuns(positions.map(p => p.pos.node))
+        await Promise.all(
+          runs.map(([lo, hi]) => this.db.prefetchRecords(lo, hi + 2)),
+        )
+      }
     }
+    return first
   }
 
   async aroundInterval(start: PathPosition, len: number, context: number) {
@@ -1037,6 +1138,634 @@ export class Subgraph {
     }
     this.paths = kept
     this.refId = refInfo === undefined ? undefined : kept.indexOf(refInfo)
+  }
+
+  // Builds the window for a chosen set from the companion's anchor rows: the
+  // reference walk through the window from the anchor the index names for the
+  // multiple of the spacing at or before the window, and for every wanted path
+  // visiting that anchor node, the path's own walk from its row through the
+  // window, named without a chain walk. Returns the reason the caller has to
+  // fall back to the sampled route instead, or undefined when the subgraph is
+  // complete.
+  async walkHaplotypesFromAnchor(
+    reference: ReferencePath,
+    len: number,
+    spacing: number,
+    wanted: (name: PathName) => boolean,
+    context: number,
+  ) {
+    const windowStart = reference.position.seqOffset
+    const windowEnd = windowStart + len
+    const anchorOffset = Math.floor(windowStart / spacing) * spacing
+    const margin = Math.min(spacing, ANCHOR_WALK_MARGIN)
+    const bound = 4 * (spacing + len) + margin
+    const stats: AnchorWalkStats = {
+      spacing,
+      anchorOffset,
+      anchorNodeOffset: -1,
+      anchorHandle: -1,
+      referenceSteps: 0,
+      rows: 0,
+      walks: [],
+      graphFetches: 0,
+      scans: [],
+      scanRows: 0,
+      fallback: undefined,
+      ms: { reference: 0, rows: 0, walks: 0, scan: 0, sampled: 0 },
+    }
+    this.stats.anchorWalk = stats
+    let clock = performance.now()
+    const lap = () => {
+      const now = performance.now()
+      const elapsed = now - clock
+      clock = now
+      return elapsed
+    }
+    this.clearPaths()
+    this.records.clear()
+    const read = this.recordReader(() => {
+      stats.graphFetches += 1
+    })
+    const named = await this.db.haplotypeAnchor(reference.handle, anchorOffset)
+    if (named === undefined) {
+      throw new Error(
+        `The haplotype index names no anchor for ${formatPathName(reference.name, reference.name.fragment)} at offset ${anchorOffset}; it was not built with anchors at ${spacing} bp for this graph`,
+      )
+    }
+    stats.anchorNodeOffset = named.pathOffset
+    const indexed = await this.prefetchReferenceRange(
+      reference.handle,
+      named.pathOffset,
+      windowEnd + margin,
+    )
+    if (!indexed) {
+      throw new Error(
+        `Path ${formatPathName(reference.name, reference.name.fragment)} has not been indexed for random access`,
+      )
+    }
+    const reach = await this.walkReference(
+      read,
+      indexed,
+      named,
+      windowStart,
+      windowEnd,
+      windowEnd + margin,
+    )
+    const { anchor, refOffsetOf, refHandles, windowSteps } = reach
+    stats.anchorHandle = anchor.pos.node
+    stats.referenceSteps = reach.steps
+    this.walkedBp = len
+    const refPath: number[] = []
+    const refOffsets: number[] = []
+    let refLen = 0
+    for (const step of windowSteps) {
+      await this.ensureNode(nodeId(step.pos.node))
+      refPath.push(step.pos.node)
+      refOffsets.push(step.pos.offset)
+      refLen += this.record(step.pos.node).sequenceLen
+    }
+    const firstStep = windowSteps[0]
+    if (firstStep === undefined) {
+      throw new Error('The reference walk has no node in the window')
+    }
+    this.refPath = reference.name
+    this.refHandle = reference.handle
+    this.refInterval = [firstStep.refOffset, firstStep.refOffset + refLen]
+    this.refId = 0
+    this.paths.push({
+      path: refPath,
+      offsets: refOffsets,
+      len: refLen,
+      weight: undefined,
+      identity: {
+        pathHandle: reference.handle,
+        name: reference.name,
+        orientation: 'forward',
+        hapStart: firstStep.refOffset,
+        hapEnd: firstStep.refOffset + refLen,
+      },
+    })
+    stats.ms.reference = lap()
+    const rows = await this.db.haplotypeSamplesAtNode(anchor.pos.node)
+    stats.rows = rows.length
+    stats.ms.rows = lap()
+    const ownRow = rows.find(
+      row =>
+        row.offset === anchor.pos.offset &&
+        row.pathHandle === reference.handle &&
+        row.pathOffset === anchor.offset,
+    )
+    if (ownRow === undefined) {
+      throw new Error(
+        `The haplotype index has no anchor row for ${formatPathName(reference.name, reference.name.fragment)} at offset ${anchor.offset} (node ${nodeId(anchor.pos.node)}); it was not built with anchors at ${spacing} bp for this graph`,
+      )
+    }
+    const pathsByHandle = await this.db.pathsByHandle()
+    const nameOf = (pathHandle: number) => {
+      const path = pathsByHandle.get(pathHandle)
+      if (!path) {
+        throw new Error(`Path ${pathHandle} is missing from the database`)
+      }
+      return path.name
+    }
+    const handled = new Set<number>([reference.handle])
+    const visitsByPath = new Map<number, HaplotypeSample[]>()
+    for (const row of rows) {
+      if (row !== ownRow && wanted(nameOf(row.pathHandle))) {
+        const visits = visitsByPath.get(row.pathHandle)
+        if (visits) {
+          visits.push(row)
+        } else {
+          visitsByPath.set(row.pathHandle, [row])
+        }
+      }
+    }
+    // A path through a duplicated stretch visits the anchor node more than
+    // once, and only one visit is followed by the window. GBWT rows sit in
+    // the order of the sequence before them, so the visit nearest the
+    // reference's own row is tried first, and the path fails only when no
+    // visit reaches the window's end.
+    let fallback: string | undefined
+    for (const [pathHandle, visits] of visitsByPath) {
+      if (fallback === undefined) {
+        const nearest = (row: HaplotypeSample) =>
+          Math.abs(row.offset - ownRow.offset)
+        visits.sort((x, y) => nearest(x) - nearest(y))
+        let reason: string | undefined
+        for (const visit of visits) {
+          if (!handled.has(pathHandle)) {
+            reason = await this.walkAndKeep(
+              read,
+              visit,
+              'anchor',
+              nameOf(pathHandle),
+              refOffsetOf,
+              windowEnd,
+              bound,
+              context,
+              handled,
+              stats,
+            )
+          }
+        }
+        if (!handled.has(pathHandle)) {
+          fallback = reason
+        }
+      }
+    }
+    stats.ms.walks = lap()
+    const unwalked =
+      fallback === undefined
+        ? await this.samplesOfUnwalkedContigs(
+            refPath,
+            refOffsetOf,
+            refHandles,
+            wanted,
+            handled,
+            nameOf,
+            stats,
+          )
+        : new Map<number, HaplotypeSample[]>()
+    stats.ms.scan = lap()
+    if (unwalked.size > 0) {
+      await this.mapReferenceBefore(
+        read,
+        reference.handle,
+        Math.max(0, named.pathOffset - 2 * spacing),
+        named.pathOffset,
+        refOffsetOf,
+        refHandles,
+      )
+      for (const [pathHandle, samples] of unwalked) {
+        if (fallback === undefined) {
+          const name = nameOf(pathHandle)
+          let entry: HaplotypeSample | undefined
+          for (const sample of samples) {
+            entry ??= await this.entryBefore(
+              read,
+              sample,
+              refOffsetOf,
+              refHandles,
+              this.refInterval[0],
+              bound,
+            )
+          }
+          fallback =
+            entry === undefined
+              ? `no sample of ${formatPathName(name, name.fragment)} on the window's nodes runs with the reference`
+              : await this.walkAndKeep(
+                  read,
+                  entry,
+                  'sample',
+                  name,
+                  refOffsetOf,
+                  windowEnd,
+                  bound,
+                  context,
+                  handled,
+                  stats,
+                )
+        }
+      }
+      stats.ms.sampled = lap()
+    }
+    stats.fallback = fallback
+    return fallback
+  }
+
+  private async walkAndKeep(
+    read: (handle: number) => Promise<GbzRecord>,
+    row: HaplotypeSample,
+    from: 'anchor' | 'sample',
+    name: PathName,
+    refOffsetOf: Map<number, number>,
+    windowEnd: number,
+    bound: number,
+    context: number,
+    handled: Set<number>,
+    stats: AnchorWalkStats,
+  ) {
+    const walked = await this.walkFromRow(
+      read,
+      row,
+      name,
+      refOffsetOf,
+      this.refInterval![0],
+      windowEnd,
+      bound,
+      context,
+    )
+    stats.walks.push({
+      pathHandle: row.pathHandle,
+      from,
+      steps: walked.steps,
+      pieces: walked.infos.length,
+      end: walked.end,
+    })
+    let reason: string | undefined
+    if (walked.end === 'bound' || walked.end === 'cycle') {
+      reason = `${formatPathName(name, row.pathOffset)} walked ${walked.steps} steps from its ${from} without reaching the window's end (${walked.end})`
+    } else {
+      handled.add(row.pathHandle)
+      this.paths.push(...walked.infos)
+    }
+    return reason
+  }
+
+  // Adds the reference nodes of an earlier stretch to the map, so a walk
+  // back from a sample can stop on the reference before the window even
+  // when the contig rejoined it before the anchor.
+  private async mapReferenceBefore(
+    read: (handle: number) => Promise<GbzRecord>,
+    pathHandle: number,
+    fromOffset: number,
+    toOffset: number,
+    refOffsetOf: Map<number, number>,
+    refHandles: Set<number>,
+  ) {
+    const indexed = await this.prefetchReferenceRange(
+      pathHandle,
+      fromOffset,
+      toOffset,
+    )
+    let pos: Pos | undefined = indexed?.pos
+    let offset = indexed?.pathOffset ?? toOffset
+    while (pos !== undefined && pos.node !== ENDMARKER && offset < toOffset) {
+      this.signal?.throwIfAborted()
+      const record = await read(pos.node)
+      const id = nodeId(pos.node)
+      if (!refOffsetOf.has(id)) {
+        refOffsetOf.set(id, offset)
+        refHandles.add(pos.node)
+      }
+      offset += record.sequenceLen
+      pos = record.gbwt().lf(pos.offset)
+    }
+  }
+
+  // Whether a per-path sample's orientation of its path runs the reference's
+  // way. A sample on a mapped reference node says so by its handle; from one
+  // on another node the path is followed forward to the first mapped node.
+  // Both orientations of a path are sampled, so the wrong one is simply
+  // skipped in favour of a sample of the other.
+  private async runsWithReference(
+    read: (handle: number) => Promise<GbzRecord>,
+    sample: HaplotypeSample,
+    refOffsetOf: Map<number, number>,
+    refHandles: Set<number>,
+    bound: number,
+  ) {
+    let pos: Pos | undefined = { node: sample.node, offset: sample.offset }
+    let walked = 0
+    let verdict: boolean | undefined
+    while (verdict === undefined) {
+      this.signal?.throwIfAborted()
+      if (pos === undefined || pos.node === ENDMARKER || walked > bound) {
+        verdict = false
+      } else if (refOffsetOf.has(nodeId(pos.node))) {
+        verdict = refHandles.has(pos.node)
+      } else {
+        const record = await read(pos.node)
+        walked += record.sequenceLen
+        pos = record.gbwt().lf(pos.offset)
+      }
+    }
+    return verdict
+  }
+
+  // Walks back from a per-path sample on one of the window's nodes, through
+  // the bidirectional GBWT, to the first reference node before the window or
+  // the contig's start, and returns that position as a row an anchored walk
+  // can start from; undefined for a sample whose orientation runs against the
+  // reference, since walking on from it would leave the window backwards. A
+  // sample the bound is reached from lies in a private stretch longer than
+  // the bound, so the walk starts at the sample itself: what came before it
+  // shares nothing with the reference in reach.
+  private async entryBefore(
+    read: (handle: number) => Promise<GbzRecord>,
+    sample: HaplotypeSample,
+    refOffsetOf: Map<number, number>,
+    refHandles: Set<number>,
+    windowStart: number,
+    bound: number,
+  ): Promise<HaplotypeSample | undefined> {
+    const sampleLen = (await read(sample.node)).sequenceLen
+    const rowAt = async (
+      pos: Pos,
+      bpBack: number,
+    ): Promise<HaplotypeSample> => {
+      const len = (await read(pos.node)).sequenceLen
+      return {
+        node: pos.node,
+        offset: pos.offset,
+        pathHandle: sample.pathHandle,
+        orientation: sample.orientation,
+        pathOffset:
+          sample.orientation === 'forward'
+            ? sample.pathOffset - bpBack
+            : sample.pathOffset + sampleLen + bpBack - len,
+      }
+    }
+    let pos: Pos = { node: sample.node, offset: sample.offset }
+    let bpBack = 0
+    let entry: HaplotypeSample | undefined
+    let done = !(await this.runsWithReference(
+      read,
+      sample,
+      refOffsetOf,
+      refHandles,
+      bound,
+    ))
+    while (!done) {
+      this.signal?.throwIfAborted()
+      const refOffset = refOffsetOf.get(nodeId(pos.node))
+      if (refOffset !== undefined && refOffset < windowStart) {
+        entry = await rowAt(pos, bpBack)
+        done = true
+      } else if (bpBack > bound) {
+        entry = { ...sample }
+        done = true
+      } else {
+        const flipped = await read(flipNode(pos.node))
+        const predecessor = flipped.gbwt().predecessorAt(pos.offset)
+        if (predecessor === undefined) {
+          entry = await rowAt(pos, bpBack)
+          done = true
+        } else {
+          const record = await read(predecessor)
+          const offset = record.gbwt().offsetTo(pos)
+          if (offset === undefined) {
+            throw new Error(
+              `No offset in ${predecessor} leads to ${pos.node}:${pos.offset}`,
+            )
+          }
+          pos = { node: predecessor, offset }
+          bpBack += record.sequenceLen
+        }
+      }
+    }
+    return entry
+  }
+
+  // Walks the reference from an indexed position at or before the named
+  // anchor to the end of the mapped stretch past the window, without adding
+  // those nodes to the subgraph: what comes back is the anchor node's
+  // position, every mapped node's reference offset and handle, and the
+  // window's steps.
+  private async walkReference(
+    read: (handle: number) => Promise<GbzRecord>,
+    indexed: IndexedPosition,
+    named: HaplotypeAnchor,
+    windowStart: number,
+    windowEnd: number,
+    mappedEnd: number,
+  ) {
+    const refOffsetOf = new Map<number, number>()
+    const refHandles = new Set<number>()
+    const windowSteps: { pos: Pos; refOffset: number }[] = []
+    let anchor: { pos: Pos; offset: number } | undefined
+    let pos: Pos | undefined = indexed.pos
+    let offset = indexed.pathOffset
+    let steps = 0
+    while (pos !== undefined && pos.node !== ENDMARKER && offset < mappedEnd) {
+      this.signal?.throwIfAborted()
+      const record = await read(pos.node)
+      const end = offset + record.sequenceLen
+      if (anchor === undefined && offset === named.pathOffset) {
+        if (pos.node !== named.node) {
+          throw new Error(
+            `The reference walk reaches node ${nodeId(pos.node)} at offset ${offset} where the haplotype index names node ${nodeId(named.node)} as the anchor`,
+          )
+        }
+        anchor = { pos, offset }
+      }
+      if (anchor !== undefined) {
+        steps += 1
+        const id = nodeId(pos.node)
+        if (!refOffsetOf.has(id)) {
+          refOffsetOf.set(id, offset)
+          refHandles.add(pos.node)
+        }
+        if (offset < windowEnd && end > windowStart) {
+          windowSteps.push({ pos, refOffset: offset })
+        }
+      }
+      offset = end
+      pos = record.gbwt().lf(pos.offset)
+    }
+    if (anchor === undefined) {
+      throw new Error(
+        `The reference walk from offset ${indexed.pathOffset} never starts a node at the anchor offset ${named.pathOffset}`,
+      )
+    }
+    return { anchor, refOffsetOf, refHandles, windowSteps, steps }
+  }
+
+  // One path's walk from its anchor row: forward with lf() until it lands on
+  // a reference node inside the window, then every node until it lands on a
+  // reference node at or past the window's end. A private stretch longer
+  // than the context cuts the walk into pieces, as leaving the subgraph does
+  // on the sampled route, and its nodes stay out of the cut; the pieces are
+  // joined again by the alignment where they are monotone. Trailing private
+  // steps are dropped, so a walk off the reference's end carries none.
+  private async walkFromRow(
+    read: (handle: number) => Promise<GbzRecord>,
+    row: HaplotypeSample,
+    name: PathName,
+    refOffsetOf: Map<number, number>,
+    windowStart: number,
+    windowEnd: number,
+    bound: number,
+    context: number,
+  ): Promise<{
+    steps: number
+    end: AnchorWalkEnd
+    infos: PathInfo[]
+  }> {
+    const startLen = (await read(row.node)).sequenceLen
+    const base =
+      row.orientation === 'forward' ? row.pathOffset : row.pathOffset + startLen
+    const pieces: WalkStep[][] = []
+    let piece: WalkStep[] = []
+    let pending: WalkStep[] = []
+    let pendingBp = 0
+    const visited = new Set<string>()
+    let counter = 0
+    let steps = 0
+    let startBp: number | undefined
+    let end: AnchorWalkEnd | undefined
+    let pos: Pos | undefined = { node: row.node, offset: row.offset }
+    while (end === undefined) {
+      this.signal?.throwIfAborted()
+      if (pos === undefined || pos.node === ENDMARKER) {
+        end =
+          startBp === undefined ? 'before the window' : 'ended in the window'
+      } else if (counter > bound) {
+        end = 'bound'
+      } else if (visited.has(posKey(pos))) {
+        end = 'cycle'
+      } else {
+        visited.add(posKey(pos))
+        const refOffset = refOffsetOf.get(nodeId(pos.node))
+        const inWindow = startBp !== undefined
+        if (refOffset !== undefined && refOffset >= windowEnd) {
+          end = inWindow ? 'through the window' : 'past the window'
+        } else {
+          if (
+            !inWindow &&
+            refOffset !== undefined &&
+            refOffset >= windowStart
+          ) {
+            startBp = counter
+          }
+          const record = await read(pos.node)
+          if (startBp !== undefined) {
+            const step = { pos, at: counter, len: record.sequenceLen }
+            if (refOffset === undefined) {
+              pending.push(step)
+              pendingBp += step.len
+            } else {
+              if (pendingBp > context) {
+                pieces.push(piece)
+                piece = []
+              } else {
+                piece.push(...pending)
+              }
+              pending = []
+              pendingBp = 0
+              piece.push(step)
+            }
+          }
+          steps += 1
+          counter += record.sequenceLen
+          pos = record.gbwt().lf(pos.offset)
+        }
+      }
+    }
+    pieces.push(piece)
+    const infos: PathInfo[] = []
+    for (const steps of pieces) {
+      const first = steps[0]
+      const last = steps[steps.length - 1]
+      if (first !== undefined && last !== undefined) {
+        const path: number[] = []
+        const offsets: number[] = []
+        let len = 0
+        for (const step of steps) {
+          await this.ensureNode(nodeId(step.pos.node))
+          path.push(step.pos.node)
+          offsets.push(step.pos.offset)
+          len += step.len
+        }
+        const from = first.at
+        const to = last.at + last.len
+        infos.push({
+          path,
+          offsets,
+          len,
+          weight: undefined,
+          identity:
+            row.orientation === 'forward'
+              ? {
+                  pathHandle: row.pathHandle,
+                  name,
+                  orientation: 'forward',
+                  hapStart: base + from,
+                  hapEnd: base + to,
+                }
+              : {
+                  pathHandle: row.pathHandle,
+                  name,
+                  orientation: 'reverse',
+                  hapStart: base - to,
+                  hapEnd: base - from,
+                },
+        })
+      }
+    }
+    return { steps, end, infos }
+  }
+
+  // A wanted contig that bypassed the anchor node, or starts inside the
+  // window, has no row at the anchor. Its per-path samples on the window's
+  // nodes are how the sampled route finds it, so those are scanned, and the
+  // candidate samples of each wanted path no anchor row walked come back:
+  // those on a reference node in the reference's own direction first, then
+  // those on other nodes, whose direction a probe settles; a sample on the
+  // flipped handle of a reference node runs against it and is left out.
+  private async samplesOfUnwalkedContigs(
+    refPath: number[],
+    refOffsetOf: Map<number, number>,
+    refHandles: Set<number>,
+    wanted: (name: PathName) => boolean,
+    handled: Set<number>,
+    nameOf: (pathHandle: number) => PathName,
+    stats: AnchorWalkStats,
+  ) {
+    const runs = handleRuns([...refPath].sort((a, b) => a - b))
+    stats.scans = runs
+    const unwalked = new Map<number, HaplotypeSample[]>()
+    for (const [first, last] of runs) {
+      const samples = await this.db.haplotypeSamplesInRange(first, last)
+      stats.scanRows += samples.length
+      for (const sample of samples) {
+        const onReference = refOffsetOf.has(nodeId(sample.node))
+        if (
+          !handled.has(sample.pathHandle) &&
+          (!onReference || refHandles.has(sample.node)) &&
+          wanted(nameOf(sample.pathHandle))
+        ) {
+          const candidates = unwalked.get(sample.pathHandle) ?? []
+          if (onReference) {
+            candidates.unshift(sample)
+          } else {
+            candidates.push(sample)
+          }
+          unwalked.set(sample.pathHandle, candidates)
+        }
+      }
+    }
+    return unwalked
   }
 
   async identifyPaths() {

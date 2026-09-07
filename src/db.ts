@@ -3,7 +3,7 @@ import { GbwtRecord, decompressEdges } from './gbwt/record.ts'
 import { decodeSequence, encodedSequenceLength } from './gbwt/sequence.ts'
 import { graphNameFromTags } from './graphName.ts'
 import { formatPathName, pathNameFor, toPathQuery } from './pathName.ts'
-import { subgraphInInterval } from './query.ts'
+import { subgraphForHaplotypes, subgraphInInterval } from './query.ts'
 import { SqliteDatabase } from './sqlite/database.ts'
 
 import type { ByteSource } from './filehandle.ts'
@@ -59,11 +59,21 @@ export class SchemaVersionError extends Error {
   }
 }
 
+export interface IndexedPosition {
+  pathOffset: number
+  pos: Pos
+}
+
 export interface HaplotypeSample {
   node: number
   offset: number
   pathHandle: number
   orientation: 'forward' | 'reverse'
+  pathOffset: number
+}
+
+export interface HaplotypeAnchor {
+  node: number
   pathOffset: number
 }
 
@@ -181,6 +191,7 @@ async function readTags(sqlite: SqliteDatabase) {
 export class GBZBase {
   private tagCache: Promise<Map<string, string>> | undefined
   private pathCache: Promise<GbzPath[]> | undefined
+  private pathMapCache: Promise<Map<number, GbzPath>> | undefined
   private indexTags: Map<string, string> | undefined
 
   readonly sqlite: SqliteDatabase
@@ -278,6 +289,13 @@ export class GBZBase {
   async getPath(handle: number) {
     const row = await this.sqlite.byRowid('Paths', handle)
     return row ? rowToPath(handle, row) : undefined
+  }
+
+  pathsByHandle() {
+    this.pathMapCache ??= this.paths().then(
+      paths => new Map(paths.map(path => [path.handle, path])),
+    )
+    return this.pathMapCache
   }
 
   async findPath(name: PathName) {
@@ -389,19 +407,24 @@ export class GBZBase {
       )
     }
     const { sample, contig, haplotype } = fragment.path.name
-    const subgraph = await subgraphInInterval(
-      this,
-      { sample, contig, haplotype },
-      Math.max(start, fragment.start),
-      Math.min(end, fragment.end),
-      queryOptions,
-    )
+    const query = { sample, contig, haplotype }
+    const from = Math.max(start, fragment.start)
+    const to = Math.min(end, fragment.end)
     const haplotypes = opts.haplotypes ?? 'all'
     const named = haplotypes === 'all' || haplotypes === 'distinct'
-    if (this.hasHaplotypeIndex && named) {
-      await subgraph.identifyPaths()
-      if (keep !== undefined) {
-        subgraph.keepHaplotypes(keep)
+    let subgraph
+    if (keep !== undefined && haplotypes === 'all') {
+      subgraph = await subgraphForHaplotypes(this, query, from, to, {
+        ...queryOptions,
+        keep,
+      })
+    } else {
+      subgraph = await subgraphInInterval(this, query, from, to, queryOptions)
+      if (this.hasHaplotypeIndex && named) {
+        await subgraph.identifyPaths()
+        if (keep !== undefined) {
+          subgraph.keepHaplotypes(keep)
+        }
       }
     }
     return subgraph
@@ -478,6 +501,41 @@ export class GBZBase {
     return value === undefined ? undefined : Number(value)
   }
 
+  async haplotypeAnchorSpacing() {
+    const value =
+      this.hasHaplotypeIndex && this.index.has('HaplotypeAnchors')
+        ? await this.haplotypeIndexTag('haplotype_index_anchor_spacing')
+        : undefined
+    return value === undefined ? undefined : Number(value)
+  }
+
+  async haplotypeAnchor(
+    pathHandle: number,
+    anchorOffset: number,
+  ): Promise<HaplotypeAnchor | undefined> {
+    const key = await this.index.indexSeekLE('HaplotypeAnchors', [
+      pathHandle,
+      anchorOffset,
+    ])
+    const row =
+      key?.[0] === pathHandle && key[1] === anchorOffset
+        ? await this.index.byRowid(
+            'HaplotypeAnchors',
+            num(key[2], 'HaplotypeAnchors rowid'),
+          )
+        : undefined
+    return row
+      ? {
+          node: num(row[2], 'HaplotypeAnchors.node_handle'),
+          pathOffset: num(row[3], 'HaplotypeAnchors.path_offset'),
+        }
+      : undefined
+  }
+
+  haplotypeSamplesAtNode(handle: number) {
+    return this.haplotypeSamplesInRange(handle, handle)
+  }
+
   private sampleFromRow(values: SqlValue[]): HaplotypeSample {
     return {
       node: num(values[0], 'HaplotypeSamples.node_handle'),
@@ -529,21 +587,8 @@ export class GBZBase {
     return row ? num(row[1], 'HaplotypeLengths.length') : undefined
   }
 
-  async indexedPosition(
-    pathHandle: number,
-    pathOffset: number,
-  ): Promise<{ pathOffset: number; pos: Pos } | undefined> {
-    const key = await this.sqlite.indexSeekLE('ReferenceIndex', [
-      pathHandle,
-      pathOffset,
-    ])
-    if (key?.[0] !== pathHandle) {
-      return undefined
-    }
-    const row = await this.sqlite.byRowid(
-      'ReferenceIndex',
-      num(key[2], 'ReferenceIndex rowid'),
-    )
+  private async indexedRow(rowid: number): Promise<IndexedPosition> {
+    const row = await this.sqlite.byRowid('ReferenceIndex', rowid)
     if (!row) {
       throw new Error('ReferenceIndex row referenced by its index is missing')
     }
@@ -554,5 +599,42 @@ export class GBZBase {
         offset: num(row[3], 'ReferenceIndex.node_offset'),
       },
     }
+  }
+
+  private async indexedRowid(pathHandle: number, pathOffset: number) {
+    const key = await this.sqlite.indexSeekLE('ReferenceIndex', [
+      pathHandle,
+      pathOffset,
+    ])
+    return key?.[0] === pathHandle
+      ? num(key[2], 'ReferenceIndex rowid')
+      : undefined
+  }
+
+  async indexedPosition(
+    pathHandle: number,
+    pathOffset: number,
+  ): Promise<IndexedPosition | undefined> {
+    const rowid = await this.indexedRowid(pathHandle, pathOffset)
+    return rowid === undefined ? undefined : this.indexedRow(rowid)
+  }
+
+  async indexedPositionsBetween(
+    pathHandle: number,
+    fromOffset: number,
+    toOffset: number,
+  ) {
+    const [first, last] = await Promise.all([
+      this.indexedRowid(pathHandle, fromOffset),
+      this.indexedRowid(pathHandle, toOffset),
+    ])
+    const positions: IndexedPosition[] = []
+    if (first !== undefined && last !== undefined) {
+      await this.sqlite.prefetchRows('ReferenceIndex', first, last + 1)
+      for (let rowid = first; rowid <= last; rowid++) {
+        positions.push(await this.indexedRow(rowid))
+      }
+    }
+    return positions
   }
 }

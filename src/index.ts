@@ -8,7 +8,9 @@ export {
 export type {
   AlignmentOptions,
   GbzPath,
+  HaplotypeAnchor,
   HaplotypeSample,
+  IndexedPosition,
   OpenOptions,
   PathFragment,
   RangeOptions,
@@ -20,6 +22,9 @@ export type { Pos } from './gbwt/record.ts'
 export { Subgraph, SubgraphLimitError } from './subgraph.ts'
 export type {
   AlignmentSpan,
+  AnchorWalkEnd,
+  AnchorWalkRecord,
+  AnchorWalkStats,
   ChainEnd,
   ChainRecord,
   HaplotypeAlignment,
@@ -38,9 +43,10 @@ export {
   subgraphAroundNodes,
   subgraphAtOffset,
   subgraphBetween,
+  subgraphForHaplotypes,
   subgraphInInterval,
 } from './query.ts'
-export type { QueryOptions } from './query.ts'
+export type { HaplotypeQueryOptions, QueryOptions } from './query.ts'
 export { SqliteDatabase } from './sqlite/database.ts'
 export type { GraphName } from './graphName.ts'
 export { weightedLcs } from './lcs.ts'
