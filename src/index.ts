@@ -19,7 +19,11 @@ export { GENERIC_SAMPLE, formatPathName, parsePathName } from './pathName.ts'
 export type { PathName, PathQuery, PathRef } from './pathName.ts'
 export type { ByteSource } from './filehandle.ts'
 export type { Pos } from './gbwt/record.ts'
-export { Subgraph, SubgraphLimitError } from './subgraph.ts'
+export {
+  Subgraph,
+  SubgraphLimitError,
+  compactSubgraphTransferables,
+} from './subgraph.ts'
 export type {
   AlignmentSpan,
   AnchorWalkEnd,
@@ -27,6 +31,8 @@ export type {
   AnchorWalkStats,
   ChainEnd,
   ChainRecord,
+  CompactPath,
+  CompactSubgraph,
   HaplotypeAlignment,
   HaplotypeOutput,
   IdentificationStats,

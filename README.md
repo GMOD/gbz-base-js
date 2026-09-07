@@ -123,6 +123,15 @@ is the consumer this was written for. Its `GbzBaseSyntenyAdapter` opens a
 `getSubgraphForRange` for the graph view and `getAlignmentsForRange` for the
 haplotype lanes — in an RPC worker, like any other adapter.
 
+Because the worker is where the subgraph is built and the main thread is where
+it is drawn, the shape it crosses in matters more than the shape it is built in.
+`toSubgraphJson` gives upstream's shape, which spends an object and a
+stringified id on each of a human window's ~350,000 steps and costs about 295 ms
+to structured-clone; `toCompactSubgraph` gives the same subgraph as typed arrays
+of GBWT handles, which clones in 1.9 ms and can be transferred instead of
+copied. [docs/api.md](docs/api.md#which-of-the-two-to-take) has both shapes and
+the measurements.
+
 ## Docs
 
 - [docs/api.md](docs/api.md) — every option, query function, output format and

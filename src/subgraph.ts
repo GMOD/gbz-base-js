@@ -89,6 +89,25 @@ export interface SubgraphJson {
   paths: SubgraphPath[]
 }
 
+// A step, and either end of an edge, is a GBWT handle: 2 * nodeId for the
+// forward orientation and 2 * nodeId + 1 for the reverse, which is how the
+// GBWT itself numbers them. nodeId and isReverse read the two halves back.
+export interface CompactPath {
+  name: string
+  weight: number | undefined
+  cigar: string | undefined
+  steps: Int32Array
+}
+
+export interface CompactSubgraph {
+  // Ascending, one entry per node; nodeSequences runs parallel to it.
+  nodeIds: Int32Array
+  nodeSequences: string[]
+  // Handle pairs laid end to end: edges[2i] -> edges[2i + 1].
+  edges: Int32Array
+  paths: CompactPath[]
+}
+
 export interface AlignmentSpan {
   strand: '+' | '-'
   refStart: number
@@ -2417,75 +2436,151 @@ export class Subgraph {
     return `${lines.join('\n')}\n`
   }
 
-  toSubgraphJson(opts: SubgraphOutputOptions = {}): SubgraphJson {
+  // The reference walk first under the interval it covers, then one entry per
+  // haplotype in extraction order. Both outputs read this so a name, a weight
+  // or a CIGAR cannot mean one thing in the upstream JSON and another in the
+  // compact form.
+  private outputPaths(opts: SubgraphOutputOptions) {
     const cigar = opts.cigar ?? false
-    const handles = this.sortedHandles()
-    const nodes = handles
-      .filter(handle => !isReverse(handle))
-      .map(handle => ({
-        id: String(nodeId(handle)),
-        sequence: this.record(handle).sequence,
-      }))
-    const edges: SubgraphJson['edges'] = []
-    for (const handle of handles) {
-      for (const successor of this.record(handle).successors()) {
-        if (this.hasHandle(successor) && edgeIsCanonical(handle, successor)) {
-          edges.push({
-            from: String(nodeId(handle)),
-            from_is_reverse: isReverse(handle),
-            to: String(nodeId(successor)),
-            to_is_reverse: isReverse(successor),
-          })
-        }
-      }
-    }
-    const paths: SubgraphPath[] = []
+    const entries: {
+      info: PathInfo
+      identity: PathIdentity | undefined
+      name: string
+      cigar: string | undefined
+    }[] = []
     const contig = this.refPath?.contig ?? 'unknown'
     if (this.refId !== undefined && this.refPath && this.refInterval) {
-      const info = this.paths[this.refId]!
-      const name = {
+      const start = {
         ...this.refPath,
         fragment: this.refPath.fragment + this.refInterval[0],
       }
-      paths.push(
-        jsonPath(
-          info,
-          undefined,
-          formatPathName(name, this.refPath.fragment + this.refInterval[1]),
-          undefined,
+      entries.push({
+        info: this.paths[this.refId]!,
+        identity: undefined,
+        name: formatPathName(
+          start,
+          this.refPath.fragment + this.refInterval[1],
         ),
-      )
+        cigar: undefined,
+      })
     }
     let haplotype = 1
     this.paths.forEach((info, index) => {
       if (index === this.refId) {
         return
       }
-      const resolved = opts.names === 'resolved' ? info.identity : undefined
-      const name = resolved
-        ? formatPathName(
-            {
-              ...resolved.name,
-              fragment: resolved.name.fragment + resolved.hapStart,
-            },
-            resolved.name.fragment + resolved.hapEnd,
-          )
-        : formatPathName(
-            { sample: 'unknown', contig, haplotype, fragment: 0 },
-            info.len,
-          )
-      paths.push(
-        jsonPath(
-          info,
-          resolved,
-          name,
-          cigar ? this.alignToRef(index) : undefined,
-        ),
-      )
+      const identity = opts.names === 'resolved' ? info.identity : undefined
+      entries.push({
+        info,
+        identity,
+        name: identity
+          ? formatPathName(
+              {
+                ...identity.name,
+                fragment: identity.name.fragment + identity.hapStart,
+              },
+              identity.name.fragment + identity.hapEnd,
+            )
+          : formatPathName(
+              { sample: 'unknown', contig, haplotype, fragment: 0 },
+              info.len,
+            ),
+        cigar: cigar ? this.alignToRef(index) : undefined,
+      })
       haplotype += 1
     })
+    return entries
+  }
+
+  private *outputEdges() {
+    for (const handle of this.sortedHandles()) {
+      for (const successor of this.record(handle).successors()) {
+        if (this.hasHandle(successor) && edgeIsCanonical(handle, successor)) {
+          yield [handle, successor] as const
+        }
+      }
+    }
+  }
+
+  toSubgraphJson(opts: SubgraphOutputOptions = {}): SubgraphJson {
+    const nodes = this.sortedHandles()
+      .filter(handle => !isReverse(handle))
+      .map(handle => ({
+        id: String(nodeId(handle)),
+        sequence: this.record(handle).sequence,
+      }))
+    const edges: SubgraphJson['edges'] = []
+    for (const [from, to] of this.outputEdges()) {
+      edges.push({
+        from: String(nodeId(from)),
+        from_is_reverse: isReverse(from),
+        to: String(nodeId(to)),
+        to_is_reverse: isReverse(to),
+      })
+    }
+    const paths = this.outputPaths(opts).map(entry =>
+      jsonPath(entry.info, entry.identity, entry.name, entry.cigar),
+    )
     return { nodes, edges, paths }
   }
+
+  // The same subgraph as typed arrays of GBWT handles. toSubgraphJson spends
+  // an object and a stringified id on every step of every walk, which a
+  // 200 kb human window has about 350,000 of; this hands back the numbers the
+  // extraction already holds, so it survives a structured clone into a worker
+  // for about the cost of the memcpy rather than of rebuilding the objects.
+  // Measured on HPRC chr20 CHM13#0#chr20 30.0-30.2 Mb, 5,943 nodes and 178
+  // haplotypes: 295 ms to clone the upstream shape against 1.9 ms for this one.
+  //
+  // Packing the other two fields the way bam-js packs NUMERIC_SEQ and
+  // NUMERIC_CIGAR was measured on the same window and rejected, because what
+  // pays there is a long per-record field and both of these are short. Node
+  // sequences average 34 bp: base-6 bytes plus offsets are 2.86x smaller but
+  // cost more to build than to hand over the cached strings (1.07 ms against
+  // 0.95 ms all in), and a consumer drawing the graph wants the strings for
+  // every node anyway. CIGARs average 323 chars over 17,555 total ops: packing
+  // them into one Int32Array per path is 1.7 ms against 2.4 ms to join the
+  // strings, but then clones SLOWER (0.20 ms against 0.09 ms) because 178 small
+  // typed arrays cost more than 178 strings. Steps are the only field here long
+  // enough to be worth it. The CIGAR phase is 103 ms of edit computation and
+  // 2 ms of string building, so neither field is where that time goes.
+  toCompactSubgraph(opts: SubgraphOutputOptions = {}): CompactSubgraph {
+    const forward = this.sortedHandles().filter(handle => !isReverse(handle))
+    const nodeIds = new Int32Array(forward.length)
+    const nodeSequences: string[] = []
+    forward.forEach((handle, i) => {
+      nodeIds[i] = nodeId(handle)
+      nodeSequences.push(this.record(handle).sequence)
+    })
+    const edgeHandles: number[] = []
+    for (const [from, to] of this.outputEdges()) {
+      edgeHandles.push(from, to)
+    }
+    return {
+      nodeIds,
+      nodeSequences,
+      edges: Int32Array.from(edgeHandles),
+      paths: this.outputPaths(opts).map(entry => ({
+        name: entry.name,
+        weight: entry.info.weight,
+        cigar: entry.cigar,
+        steps: Int32Array.from(
+          haplotypeOrderedPath(entry.info, entry.identity),
+        ),
+      })),
+    }
+  }
+}
+
+// The buffers a CompactSubgraph owns outright, for the transfer list of a
+// postMessage that hands it to another thread. Transferring detaches them, so
+// the sending side must not read the subgraph afterwards.
+export function compactSubgraphTransferables(subgraph: CompactSubgraph) {
+  return [
+    subgraph.nodeIds.buffer,
+    subgraph.edges.buffer,
+    ...subgraph.paths.map(path => path.steps.buffer),
+  ]
 }
 
 // A named walk lists its steps in the haplotype's own direction, as the W line

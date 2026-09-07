@@ -57,6 +57,57 @@ Against a 134 MB HPRC chr20 `.gbz.db` served over HTTPS,
 Most of the wall time in the small queries is sequential request latency, not
 decoding.
 
+## Where a window's time goes
+
+A 200 kb window on the 232 MB haplotype-indexed HPRC chr20 build,
+`CHM13#0#chr20`, `context: 100`, warm, from a local file — 5,943 nodes, 178
+haplotypes, 346,993 steps, 852 KB in 9 range requests:
+
+| phase                                   | time      |
+| --------------------------------------- | --------- |
+| `pathPosition`                          | 10 ms     |
+| `aroundInterval` (walk + SQLite decode) | 66–94 ms  |
+| `extractPaths` (GBWT walking)           | 70–109 ms |
+| CIGARs, if asked for                    | 60–150 ms |
+| `toCompactSubgraph`, no CIGARs          | 8 ms      |
+| `toSubgraphJson`, no CIGARs             | 14–28 ms  |
+| `JSON.stringify` of that                | 45–87 ms  |
+
+Nothing dominates: the work is spread across graph walking, SQLite page
+decoding, alignment and output, none above about a third.
+
+The same query with latency added to each read shows what that is worth against
+the network:
+
+| read latency | query  | total   |
+| ------------ | ------ | ------- |
+| 0 ms         | 216 ms | 398 ms  |
+| 30 ms        | 465 ms | 610 ms  |
+| 80 ms        | 897 ms | 1049 ms |
+
+Nine requests, and `(897 − 465) / 50 ≈ 8.6` of them serial. At a realistic RTT
+about two thirds of the query is waiting on the network, so cutting round trips
+is worth more than making the decoding faster — which is what the block size and
+the prefetching are for.
+
+## Why there is no wasm in the decoding path
+
+[why-not-wasm.md](why-not-wasm.md) is about not compiling upstream's Rust.
+Writing a small wasm kernel by hand, the way bgzf-filehandle and bbi-js do for
+inflate, is a separate question, and the measurements say no: there is no kernel
+here big enough to be worth a boundary. The two routines shaped like one, timed
+over the whole subgraph above, are `decodeSequence` at **6.9 ms** for 408,976
+bases and `GbwtRecord.decompressArrays` at **19.9 ms** for 693,986 entries — 27
+ms of a ~400 ms query, across 11,886 separate records. `weightedLcs`, the one
+quadratic routine and the obvious candidate, is never reached on this data:
+`--stats` reports 177 ordered and 0 LCS alignments at every locus tried, because
+`orderedMatches` succeeds. The rest of the time is Map lookups, small-object
+allocation, string building and `JSON.stringify`, which is already native.
+
+This is why the output shape got the attention instead: 295 ms to structured-
+clone the upstream shape against 1.9 ms for the compact one is a bigger win than
+any decoding kernel here could offer, and it needed no new runtime.
+
 ## Measuring your own
 
 `--stats` on the command line reports how many range requests a query made and

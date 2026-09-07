@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
 import { encodeNode } from '../src/gbwt/node.ts'
+import * as nodes from '../src/gbwt/node.ts'
 import {
   subgraphAroundNodes,
   subgraphAtOffset,
@@ -13,7 +14,12 @@ import {
   subgraphInInterval,
 } from '../src/query.ts'
 
-import type { HaplotypeOutput, SnarlOutput } from '../src/subgraph.ts'
+import type {
+  CompactSubgraph,
+  HaplotypeOutput,
+  SnarlOutput,
+  SubgraphJson,
+} from '../src/subgraph.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
 const oracleDir = path.join(dataDir, 'oracle')
@@ -79,7 +85,42 @@ async function runQuery(query: OracleQuery) {
         : await subgraphAroundNodes(db, nodes, opts)
   return {
     json: subgraph.toSubgraphJson({ cigar }),
+    compact: subgraph.toCompactSubgraph({ cigar }),
     gfa: await subgraph.toGFA({ cigar }),
+  }
+}
+
+// The upstream JSON rebuilt from the compact arrays. Holding this against
+// toSubgraphJson on every oracle fixture is what keeps the two outputs from
+// drifting apart once the compact one is the shape consumers depend on.
+function jsonFromCompact(compact: CompactSubgraph): SubgraphJson {
+  const step = (handle: number) => ({
+    id: String(nodes.nodeId(handle)),
+    is_reverse: nodes.isReverse(handle),
+  })
+  const edges: SubgraphJson['edges'] = []
+  for (let i = 0; i < compact.edges.length; i += 2) {
+    const from = step(compact.edges[i]!)
+    const to = step(compact.edges[i + 1]!)
+    edges.push({
+      from: from.id,
+      from_is_reverse: from.is_reverse,
+      to: to.id,
+      to_is_reverse: to.is_reverse,
+    })
+  }
+  return {
+    nodes: [...compact.nodeIds].map((id, i) => ({
+      id: String(id),
+      sequence: compact.nodeSequences[i]!,
+    })),
+    edges,
+    paths: compact.paths.map(path => ({
+      name: path.name,
+      ...(path.weight === undefined ? {} : { weight: path.weight }),
+      ...(path.cigar === undefined ? {} : { cigar: path.cigar }),
+      path: [...path.steps].map(handle => step(handle)),
+    })),
   }
 }
 
@@ -100,9 +141,10 @@ describe('matches upstream gbz-base query output', () => {
         path.join(oracleDir, `${query.name}.gfa`),
         'utf8',
       )
-      const { json, gfa } = await runQuery(query)
+      const { json, compact, gfa } = await runQuery(query)
       expect(json).toEqual(expectedJson)
       expect(gfa).toBe(expectedGfa)
+      expect(jsonFromCompact(compact)).toEqual(expectedJson)
     })
   }
 })

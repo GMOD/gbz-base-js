@@ -111,14 +111,95 @@ means are in [alignments.md](alignments.md).
 ```ts
 const gfa = await subgraph.toGFA({ cigar: true, names: 'resolved' })
 const json = subgraph.toSubgraphJson({ cigar: true, names: 'resolved' })
+const compact = subgraph.toCompactSubgraph({ cigar: true, names: 'resolved' })
 ```
 
-`names: 'resolved'` needs `identifyPaths()` to have run — the range queries run
-it for you when the database has the tables. `keepHaplotypes(predicate)` narrows
-an identified subgraph the way the `keep` option does. A named walk lists its
-steps in the haplotype's own direction, whichever twin of the walk the
-extraction kept, so `start..end` and the steps agree as the W line spec
-requires.
+All three take the same options. `names: 'resolved'` needs `identifyPaths()` to
+have run — the range queries run it for you when the database has the tables.
+`keepHaplotypes(predicate)` narrows an identified subgraph the way the `keep`
+option does. A named walk lists its steps in the haplotype's own direction,
+whichever twin of the walk the extraction kept, so `start..end` and the steps
+agree as the W line spec requires.
+
+### Which of the two to take
+
+`toSubgraphJson` is upstream's shape, field for field —
+`gbz-base query --format json` output, held to it by the
+[oracle tests](internals.md#fidelity-to-upstream). Take it when something
+downstream already parses that format, and do not expect it to change.
+
+`toCompactSubgraph` is this package's own shape and carries the same subgraph as
+typed arrays:
+
+```ts
+interface CompactSubgraph {
+  nodeIds: Int32Array // ascending
+  nodeSequences: string[] // parallel to nodeIds
+  edges: Int32Array // handle pairs, edges[2i] -> edges[2i + 1]
+  paths: {
+    name: string
+    weight: number | undefined
+    cigar: string | undefined
+    steps: Int32Array // handles
+  }[]
+}
+```
+
+A step, and either end of an edge, is a **GBWT handle**: `2 * nodeId` forward,
+`2 * nodeId + 1` reverse. The exported `nodes` helpers read the halves back:
+
+```ts
+import { nodes } from '@gmod/gbz-base'
+
+for (const handle of compact.paths[1].steps) {
+  console.log(nodes.nodeId(handle), nodes.isReverse(handle))
+}
+```
+
+The upstream shape spends an object and a stringified id on every step of every
+walk, and a 200 kb human window has about 350,000 of them. That is affordable to
+build and ruinous to move: sending one across a worker boundary is a structured
+clone of every one of those objects. Measured on HPRC chr20, `CHM13#0#chr20`
+30.0–30.2 Mb, 5,943 nodes and 178 haplotypes, with CIGARs:
+
+|                   | `toSubgraphJson` | `toCompactSubgraph` |
+| ----------------- | ---------------- | ------------------- |
+| build             | 99 ms            | 71 ms               |
+| `structuredClone` | 295 ms           | 1.9 ms              |
+
+Most of the 71 ms both pay is CIGAR generation; drop `cigar` and the compact
+build is about 8 ms. For a `postMessage` the buffers can be transferred rather
+than copied:
+
+```ts
+import { compactSubgraphTransferables } from '@gmod/gbz-base'
+
+port.postMessage(compact, compactSubgraphTransferables(compact))
+```
+
+Transferring detaches the buffers, so the sending side must not read the
+subgraph afterwards.
+
+### Why only the steps are packed
+
+bam-js hands back `NUMERIC_SEQ` and `NUMERIC_CIGAR` — the packed bytes as the
+file holds them — and derives the strings lazily, because a nanopore read is
+long enough that decoding one to compare twenty positions is waste. The same
+trick was measured here on both remaining fields and is not worth it, because
+what makes it pay is a _long_ per-record field and only the step list is long:
+
+| field  | size here                 | packed  | strings | verdict              |
+| ------ | ------------------------- | ------- | ------- | -------------------- |
+| steps  | 346,993 per window        | 1.9 ms  | 295 ms  | packed, 155x         |
+| CIGARs | 323 chars avg, 17,555 ops | 0.20 ms | 0.09 ms | strings clone faster |
+| seqs   | 34 bp avg, 5,943 nodes    | 1.07 ms | 0.95 ms | about even           |
+
+Node sequences pack 2.86x smaller, but a consumer drawing the graph wants the
+string for every node anyway, and CIGARs packed into one `Int32Array` per path
+clone _slower_ than the strings — 178 small typed arrays cost more than 178
+strings. So `nodeSequences` and `cigar` stay strings, and the CIGAR phase is 103
+ms of computing edits against 2 ms of building the string, which is not a
+representation problem at all.
 
 ## Lower-level queries
 
