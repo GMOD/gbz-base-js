@@ -48,7 +48,8 @@ It reads only the SQLite pages a query touches, so a multi-gigabyte database on
 an HTTP server is queried through range requests without downloading it. Any
 `generic-filehandle2` source works — `LocalFile`, `RemoteFile`, `BlobFile` — and
 there is a `gbz-base-query` command line that mirrors the upstream tool. Every
-option, method and query function: [docs/api.md](docs/api.md).
+option, method and query function: [docs/api.md](docs/api.md); what a query does
+between the call and the records, drawn: [docs/dataflow.md](docs/dataflow.md).
 
 ## What comes back
 
@@ -114,10 +115,20 @@ has no wasm64 libc. A TypeScript reader has neither problem, and gets HTTP range
 access and a JBrowse RPC worker for free:
 [docs/why-not-wasm.md](docs/why-not-wasm.md).
 
+## In JBrowse
+
+[jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer)
+is the consumer this was written for. Its `GbzBaseSyntenyAdapter` opens a
+`.gbz.db` and its companion through JBrowse's own file access layer, and calls
+`getSubgraphForRange` for the graph view and `getAlignmentsForRange` for the
+haplotype lanes — in an RPC worker, like any other adapter.
+
 ## Docs
 
 - [docs/api.md](docs/api.md) — every option, query function, output format and
   command line flag
+- [docs/dataflow.md](docs/dataflow.md) — how a query flows, and where the two
+  identification routes branch
 - [docs/alignments.md](docs/alignments.md) — what an alignment record is, and
   how walk fragments are joined into one
 - [docs/haplotype-index.md](docs/haplotype-index.md) — building the haplotype

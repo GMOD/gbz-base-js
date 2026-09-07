@@ -12,6 +12,18 @@ Use `pnpm version patch/minor/major` to release — it runs lint, format, types,
 tests and build, regenerates CHANGELOG.md with git-cliff, then pushes the
 version tag which triggers the publish workflow.
 
+`docs/img/dataflow.svg` is generated from `docs/img/dataflow.dot` and committed,
+since GitHub does not render DOT. If you edit the `.dot`, re-render it in the
+same commit:
+
+```sh
+dot -Tsvg docs/img/dataflow.dot -o docs/img/dataflow.svg
+```
+
+Nothing checks this — graphviz is not a dependency and different versions emit
+different SVG bytes, so a staleness check would fail on toolchain drift rather
+than on a stale diagram.
+
 ## Test data
 
 `test/data/*.gbz.db` are real gbz-base databases built by the upstream Rust
@@ -33,6 +45,16 @@ and `quay.io/vgteam/vg` is the easiest `vg` on a Mac.
 `tools/haplotype-index/` is the Rust helper that writes the haplotype index some
 of those databases carry. It is shipped in the npm tarball as source only —
 nothing here builds it.
+
+## Measuring
+
+`scripts/measure-windows.mjs` times a set of windows against a database and
+reports requests, bytes and the route each query took; `scripts/time-phases.mjs`
+splits one query into its phases. The tables in
+[docs/performance.md](docs/performance.md) come from them, and `--stats` on
+`gbz-base-query` reports the same counters for a single query.
+`scripts/chains-dump.mjs` and `scripts/verify-chr20.ts` are debugging aids for
+identification.
 
 ## Publishing
 

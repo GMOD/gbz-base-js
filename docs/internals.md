@@ -13,6 +13,8 @@ the same way gbwt-rs does. Databases are produced by unmodified upstream
 Pages are read through a pager that fetches fixed blocks (64 KiB by default) and
 caches them, so the b-tree descents and index seeks of one query share a handful
 of range requests rather than paying a round trip per page.
+[dataflow.md](dataflow.md) draws the whole path, from the call down to the range
+request.
 
 ## Fidelity to upstream
 

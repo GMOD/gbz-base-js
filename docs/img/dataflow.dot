@@ -1,0 +1,93 @@
+// Source for docs/img/dataflow.svg, which docs/dataflow.md embeds.
+// Regenerate with: dot -Tsvg docs/img/dataflow.dot -o docs/img/dataflow.svg
+//
+// Deliberately the MAIN PATH only — the node and --between queries, snarl
+// extension and the fragment joining are described in dataflow.md instead. A
+// diagram that shows every branch stops being the thing you look at first.
+// The two identification routes ARE in, because which one a query takes is
+// the difference between reading a set of haplotypes and reading the graph.
+//
+// SYNC: ~/src/gmod/bam-js/docs/img/dataflow.dot — same palette, legend and
+// spine, and tabix-js, cram-js and hic share them too. The orange "wasm" and
+// purple "off the main thread" entries of that legend are absent here rather
+// than restyled: nothing in this reader is wasm (docs/why-not-wasm.md is why)
+// and it puts nothing on a thread of its own — JBrowse runs the whole thing
+// in an RPC worker instead.
+digraph gbzbasejs {
+  rankdir=TB
+  bgcolor="white"
+  nodesep=0.3
+  ranksep=0.36
+  node [shape=box style="filled,rounded" fillcolor="#f6f8fa" color="#57606a"
+        fontname="Helvetica" fontsize=10 margin="0.14,0.07"]
+  edge [color="#57606a" fontname="Helvetica" fontsize=9]
+
+  query    [label="getAlignmentsForRange(path, start, end)" fillcolor="#ddf4ff" color="#0969da"]
+  frags    [label="pathFragmentsForRange" fillcolor="#dafbe1" color="#1a7f37"]
+  pos      [label="pathPosition\nPaths + ReferenceIndex" fillcolor="#dafbe1" color="#1a7f37"]
+  prefetch [label="prefetch the reference walk\none request per run of node ids" fillcolor="#dafbe1" color="#1a7f37"]
+  walk     [label="aroundInterval\nwalk the reference, insert context" fillcolor="#fff8c5" color="#9a6700"]
+  snarls   [label="extractSnarls"]
+  extract  [label="extractPaths\ndecode the GBWT records"]
+  anchored [label="walkHaplotypesFromAnchor\nHaplotypeAnchors, then lf() per wanted path" fillcolor="#dafbe1" color="#1a7f37"]
+  sampled  [label="identifyPaths\nHaplotypeSamples scans, chain the fragments" fillcolor="#dafbe1" color="#1a7f37"]
+  align    [label="alignments()\nearliest occurrence, weighted LCS where it fails"]
+  out      [label="HaplotypeAlignment[]" fillcolor="#ddf4ff" color="#0969da"]
+  gfa      [label="Subgraph.toGFA / toSubgraphJson" fillcolor="#ddf4ff" color="#0969da"]
+
+  query -> frags
+  frags -> pos [label=" per fragment "]
+  pos -> prefetch
+  prefetch -> walk
+  walk -> snarls [style=dashed label=" snarls "]
+  walk -> extract
+  snarls -> extract
+  extract -> anchored [style=dashed label=" keep + anchors " weight=6]
+  extract -> sampled [style=dashed label=" otherwise " weight=6]
+  anchored -> align
+  sampled -> align
+  anchored -> sampled [style=dashed label=" walk cut short "]
+  align -> out [weight=10]
+  extract -> gfa [style=dashed label=" getSubgraphForRange " weight=0]
+
+  subgraph cluster_store {
+    label="every row above, per database (graph and companion)"
+    labelloc="t"
+    fontname="Helvetica"
+    fontsize=10
+    fontcolor="#57606a"
+    color="#d0d7de"
+    style="rounded"
+    margin=10
+    btree [label="b-tree: byRowid / indexSeekLE / scan"]
+    pager [label="pager: 64 KiB blocks, cached" fillcolor="#fff8c5" color="#9a6700"]
+    source [label="ByteSource.read(length, position)" fillcolor="#dafbe1" color="#1a7f37"]
+    btree -> pager -> source
+  }
+
+  out -> btree [style=invis weight=10]
+
+  edge [style=dotted color="#8c959f" constraint=false]
+  pos -> btree
+  prefetch -> btree
+  walk -> btree
+  extract -> btree
+  anchored -> btree
+  sampled -> btree
+
+  subgraph cluster_legend {
+    label="Legend"
+    labelloc="t"
+    fontname="Helvetica"
+    fontsize=10
+    fontcolor="#57606a"
+    color="#d0d7de"
+    style="rounded"
+    margin=10
+    node [shape=box style="filled,rounded" fontsize=9 margin="0.1,0.04"]
+    l1 [label="reads bytes" fillcolor="#dafbe1" color="#1a7f37"]
+    l2 [label="cached / shared" fillcolor="#fff8c5" color="#9a6700"]
+    l3 [label="dashed: optional" fillcolor="#f6f8fa" color="#57606a"]
+    l1 -> l2 -> l3 [style=invis constraint=true]
+  }
+}
