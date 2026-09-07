@@ -1,3 +1,9 @@
+## [2.6.0](https://github.com/GMOD/gbz-base-js/compare/v2.5.0...v2.6.0) (2026-09-07)
+
+### Other Changes
+
+- The companion carries reference anchors, and a chosen set of haplotypes is walked from the anchor before the window ([81a1570](https://github.com/GMOD/gbz-base-js/commit/81a1570d33ae411f7e9abddbfebb122df9ab4c3d))
+
 ## [2.5.0](https://github.com/GMOD/gbz-base-js/compare/v2.4.0...v2.5.0) (2026-09-06)
 
 ### Other Changes
