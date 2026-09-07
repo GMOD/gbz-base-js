@@ -1,3 +1,12 @@
+## [2.6.1](https://github.com/GMOD/gbz-base-js/compare/v2.6.0...v2.6.1) (2026-09-07)
+
+### Other Changes
+
+- The README is an index, and the details live in docs/ ([b8c9d50](https://github.com/GMOD/gbz-base-js/commit/b8c9d503267849c30963781e6263e0bd3ec2e196))
+- A query is drawn, from the call down to the range request ([d8e0880](https://github.com/GMOD/gbz-base-js/commit/d8e0880d8bdc7af937510c799eb88e67c8154a90))
+- The errors a caller can catch, and all four haplotype outputs ([aeb6039](https://github.com/GMOD/gbz-base-js/commit/aeb6039e72e61dd2d208772a22dd4d01ebfc6a53))
+- A subgraph comes back as typed arrays, and the upstream JSON keeps its shape ([2ad555e](https://github.com/GMOD/gbz-base-js/commit/2ad555e1abc19afa0cf8c24ce961a501705441bd))
+
 ## [2.6.0](https://github.com/GMOD/gbz-base-js/compare/v2.5.0...v2.6.0) (2026-09-07)
 
 ### Other Changes
