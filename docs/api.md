@@ -38,18 +38,24 @@ The path is a PanSN `sample#haplotype#contig` string, or a bare contig for a
 graph whose reference paths have no sample. `{ sample, haplotype, contig }`
 works too, and `parsePathName` is the parser if you want it separately.
 
-| option       | description                                                           |
-| ------------ | --------------------------------------------------------------------- |
-| `context`    | bp of graph context past the window, 100 by default                   |
-| `haplotypes` | `all` or `distinct` for alignments; the subgraph takes upstream's set |
-| `keep`       | predicate over each walk's `PathName`, needs the haplotype index      |
-| `limit`      | cap the subgraph at this many nodes, per fragment                     |
-| `snarls`     | `contained` or `overlapping`, `getSubgraphForRange` only              |
-| `signal`     | `AbortSignal`, checked between range requests                         |
+| option       | description                                                      |
+| ------------ | ---------------------------------------------------------------- |
+| `context`    | bp of graph context past the window, 100 by default              |
+| `haplotypes` | which walks to extract, `all` by default (see below)             |
+| `keep`       | predicate over each walk's `PathName`, needs the haplotype index |
+| `limit`      | cap the subgraph at this many nodes, per fragment                |
+| `snarls`     | `contained` or `overlapping`, `getSubgraphForRange` only         |
+| `signal`     | `AbortSignal`, checked between range requests                    |
 
-Both resolve haplotype names when the database can. For alignments `haplotypes`
-is `all` or `distinct`, the two outputs that leave something to align against
-the reference.
+Both resolve haplotype names when the database can.
+
+`haplotypes` is upstream's set of four. `all` keeps every walk crossing the
+window and `distinct` merges the identical ones into one record carrying their
+`weight` — those two are the ones `getAlignmentsForRange` accepts, since they
+are the outputs that leave something to align against the reference.
+`reference-only` drops every walk but the reference (it throws where there is no
+reference to keep, as in a node query) and `none` extracts no walks at all,
+leaving a subgraph of nodes and edges; both are subgraph outputs.
 
 `keep` narrows the window to the reference walk, the walks it accepts and the
 nodes those walks visit, so a query for a chosen set draws that set's private
@@ -165,7 +171,41 @@ gbz-base-query https://host/graph.gbz.db --contig chrM --offset 1000 --context 5
 | `--format` / `--block-size`             | output format / bytes per page block             |
 | `--stats`                               | report requests, bytes and the route taken       |
 
+## Reading the stats
+
 `--stats` reports how many range requests a query made and how many bytes they
 carried, and with `--resolve` or `--alignments` how identification went: index
 scans, chains per haplotype, why each chain ended, companion seeks against graph
 record lookups, and fragment lengths against the walk bound.
+
+## Errors
+
+Three error classes are exported, for the conditions worth catching by type
+rather than by message:
+
+| class                   | thrown by      | means                                                |
+| ----------------------- | -------------- | ---------------------------------------------------- |
+| `SchemaVersionError`    | `GBZBase.open` | not a gbz-base database, or not this reader's schema |
+| `ForwardOnlyIndexError` | `GBZBase.open` | the companion was built with `--forward-only`        |
+| `SubgraphLimitError`    | any query      | `limit` was reached before the window was covered    |
+
+`SchemaVersionError.found` is the version string the database carried, or
+`undefined` when its `Tags` table had none — the difference between a database
+built by a different gbz-base and a file that is not one at all.
+`SCHEMA_VERSION` is the string this reader understands, exported beside it.
+
+`ForwardOnlyIndexError` is refused at open rather than at query time, because a
+forward-only index cannot name the walks stored against their reference — about
+half of them in a graph like HPRC's — and a half-named result should never reach
+a caller. Rebuild the companion without `--forward-only`.
+
+`SubgraphLimitError` carries the `limit` it hit, and for an interval query the
+`windowBp` asked for against the `walkedBp` covered before it stopped, so a
+caller can tell a limit that was slightly too low from one that stopped in the
+first percent of a window inside a huge snarl. Raising `limit`, or narrowing
+`snarls: 'overlapping'`, is the fix.
+
+Everything else throws a plain `Error` with a message: a path name that matches
+nothing, a path that exists but was never indexed for random access, `keep`
+without a haplotype index, a companion whose path or node counts disagree with
+the graph's, and a database missing a table a query needs.

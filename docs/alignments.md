@@ -42,9 +42,13 @@ whichever of the two is the reference.
 the pieces concatenated, with the private stretch between them absent, so it is
 not a contiguous walk through the graph.
 
-`weight` is how many identical haplotypes it stands for, and `start` is the
-first piece's GBWT position, which is a property of the graph and so is stable
-across refetches of the same window.
+`weight` is how many identical haplotypes the record stands for, and is
+`undefined` unless the query asked for `haplotypes: 'distinct'` — that is the
+mode that merges identical walks, and in it a walk nothing matched has a weight
+of 1.
+
+`start` is the first piece's GBWT position, which is a property of the graph and
+so is stable across refetches of the same window.
 
 ## `resolved` is a union, not optional fields
 
