@@ -1,3 +1,12 @@
+## [2.6.2](https://github.com/GMOD/gbz-base-js/compare/v2.6.1...v2.6.2) (2026-09-08)
+
+### Other Changes
+
+- Walk a window's steps through flat arrays, and match one without allocating ([d42e8ec](https://github.com/GMOD/gbz-base-js/commit/d42e8ec0926e5fd56cb921a519a3be7cf94d0ed1))
+- Correct the speedup, the keep ratio, and the network claim ([e58306e](https://github.com/GMOD/gbz-base-js/commit/e58306ecccc9e342b64cddc050b6d88472d0faf7))
+- A small window is not a cheap one, and a handoff for the session that measured it ([5142b1b](https://github.com/GMOD/gbz-base-js/commit/5142b1ba86e64bedb738fbd3f26cd90c33cb189f))
+- The lane-selection fix landed, so the handoff records it rather than proposing it ([33cb912](https://github.com/GMOD/gbz-base-js/commit/33cb9129c6b9ad12681018bd7e940e2ba721a9dc))
+
 ## [2.6.1](https://github.com/GMOD/gbz-base-js/compare/v2.6.0...v2.6.1) (2026-09-07)
 
 ### Other Changes
