@@ -135,6 +135,40 @@ than 9.86 million. That ratio was 6.9x before the change below, which halved the
 this section said 9.5x, which came from a run with snarls left at their default
 rather than `contained` and should not have been compared against this table.
 
+## Why a small window is not a cheap one
+
+A 90 kb window is not the expensive end of the range. Warm, same locus, all 464
+haplotypes, `context: 1000`, contained snarls:
+
+| window | fragments | identify | walked steps | companion seeks / misses | median fragment |
+| ------ | --------- | -------- | ------------ | ------------------------ | --------------- |
+| 2 kb   | 687       | 7.14 s   | 570,850      | 481,353 / 480,915        | 3.5 kb          |
+| 5 kb   | 687       | 3.90 s   | 506,919      | 480,420 / 479,982        | 5.4 kb          |
+| 10 kb  | 1,125     | 4.85 s   | 629,369      | 433,998 / 433,674        | 6.5 kb          |
+| 20 kb  | 1,130     | 4.21 s   | 468,658      | 433,998 / 433,674        | 4.5 kb          |
+| 45 kb  | 464       | 0.48 s   | 0            | 0 / 0                    | 76 kb           |
+| 90 kb  | 464       | 0.10 s   | 0            | 0 / 0                    | 95 kb           |
+| 180 kb | 464       | 0.55 s   | 0            | 0 / 0                    | 166 kb          |
+
+Below about 45 kb the walks arrive in pieces — 1,130 fragments rather than 464 —
+and a piece is then _shorter than the companion's sampling interval_ (16,384),
+so it holds no recorded position and identification falls back to scanning and
+walking to one. Above it the pieces are joined, the median fragment is 76 kb,
+and every one contains a sample: no seek, no walked step, `identifyPaths` an
+order of magnitude cheaper.
+
+Two things follow that are easy to get wrong. The threshold is on the
+**fragment** and not on the window — a 20 kb window is over the interval and its
+median fragment is 4.5 kb, which is why it is still slow. And the fragment count
+and the fragment length are the same event seen twice, so neither one causes the
+other: what the window crossing 45 kb changes is that it comes to contain the
+snarl the pieces were escaping.
+
+The scan itself is where that time goes, and it is nearly all waste: **480,915
+misses out of 481,353 seeks, a 99.91% miss rate.** A fragment known to be
+shorter than the interval could skip the scan and walk directly, which is a
+change to this reader rather than to any file.
+
 ## What the step loops cost
 
 Two data shapes were most of the rest of it, and both were about how a step is
