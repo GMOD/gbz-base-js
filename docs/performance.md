@@ -110,10 +110,30 @@ same query run twice in one process, so the second makes no request at all:
 | total                   | 13.18 s | 5.49 s           |
 
 `extractPaths` and `alignments` are 87% of the warm query and neither touches
-the network, so every window after the first pays them in full. Both are O(walks
-× steps), which is why a selection is worth more than any amount of tuning
-underneath it: `keep` for eight haplotypes of the 464 is 9.5x faster warm,
-because it is 170,000 steps rather than 9.86 million.
+the network, so a window is never cheaper than they are.
+
+That is not the same as saying the network stopped mattering, and the warm row
+above is the least representative case there is — it re-runs the _identical_
+window. A window the session has not visited still fetches:
+
+| MHC class II, 90 kb, all 464 | time   | requests | bytes   |
+| ---------------------------- | ------ | -------- | ------- |
+| first open                   | 9.97 s | 31       | 6.36 MB |
+| the same window again        | 4.75 s | 0        | 0.00 MB |
+| the adjacent 90 kb, first    | 5.36 s | 7        | 1.64 MB |
+| that window again            | 3.69 s | 0        | 0.00 MB |
+
+So panning is roughly a third network and two thirds CPU, and the first window
+of a session about half each. What changes past the small-window regime is that
+the CPU half stops being negligible, not that the network does.
+
+The CPU half is O(walks × steps), which is why a selection is worth more than
+any amount of tuning underneath it: `keep` for eight haplotypes of the 464 is
+**4.6x** faster warm (4.13 s against 0.90 s), because it is 170,000 steps rather
+than 9.86 million. That ratio was 6.9x before the change below, which halved the
+464-haplotype side and left the eight-haplotype side alone; an earlier draft of
+this section said 9.5x, which came from a run with snarls left at their default
+rather than `contained` and should not have been compared against this table.
 
 ## What the step loops cost
 
@@ -129,16 +149,25 @@ and it scanned each reference node's occurrence list from the front, which a
 repeat locus makes long.
 
 Measured warm on the five tutorial loci, both files hosted, `context: 1000`,
-contained snarls, median of three. The alignment records and the GFA cut hash
-identically before and after at every locus:
+contained snarls. Both builds are opened in ONE process and alternated, median
+of five each, because measuring the two in separate runs credited the change
+with machine load: that method reported 1.4-2.1x, and CFH's 2.12x does not
+reproduce. Absolute times here are higher than a single-build run because two
+databases share the process's page cache; the ratio is what the interleaving
+buys.
 
-| Window       | Nodes  | Walks | Steps | Before  | After   |
-| ------------ | ------ | ----- | ----- | ------- | ------- |
-| C4           | 1,173  | 464   | 0.20M | 0.092 s | 0.065 s |
-| CFH cluster  | 16,372 | 466   | 4.47M | 3.152 s | 1.490 s |
-| KIV-2        | 27,438 | 465   | 6.15M | 2.880 s | 2.050 s |
-| MHC class II | 43,540 | 464   | 9.86M | 6.230 s | 4.177 s |
-| AMY1         | 12,240 | 1,913 | 4.59M | 2.854 s | 2.061 s |
+| Window       | Nodes  | Walks | Steps | Before   | After   | Ratio |
+| ------------ | ------ | ----- | ----- | -------- | ------- | ----- |
+| C4           | 1,173  | 464   | 0.20M | 0.085 s  | 0.059 s | 1.44x |
+| CFH cluster  | 16,372 | 466   | 4.47M | 4.841 s  | 3.273 s | 1.48x |
+| KIV-2        | 27,438 | 465   | 6.15M | 5.480 s  | 3.903 s | 1.40x |
+| MHC class II | 43,540 | 464   | 9.86M | 10.516 s | 5.928 s | 1.77x |
+| AMY1         | 12,240 | 1,913 | 4.59M | 2.819 s  | 2.236 s | 1.26x |
+
+So 1.3-1.8x, best where the steps are most concentrated and worst at AMY1 —
+which is the locus with the most walks, so the per-walk allocation savings are
+not what is paying. The alignment records and the GFA cut hash identically
+before and after at every locus, over outputs from 2 MB to 101 MB.
 
 The tables above this section were measured before that change and are the
 conservative numbers.
