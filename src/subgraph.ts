@@ -219,6 +219,43 @@ class SideQueue {
   }
 }
 
+// Which step of a walk matches which step of the reference, as two parallel
+// arrays rather than a list of pairs: there is one entry per step of every
+// walk being aligned, and a window at HPRC scale has millions of them.
+interface Matches {
+  pathAt: Int32Array
+  refAt: Int32Array
+  count: number
+}
+
+function asMatches(pairs: [number, number][]): Matches {
+  const pathAt = new Int32Array(pairs.length)
+  const refAt = new Int32Array(pairs.length)
+  pairs.forEach(([a, b], i) => {
+    pathAt[i] = a
+    refAt[i] = b
+  })
+  return { pathAt, refAt, count: pairs.length }
+}
+
+// The first entry above `bound` of an ascending list, or undefined. Called
+// once per step of every walk being aligned, which is where `Array.find` hurt:
+// it allocated a closure over the bound each time, and scanned from the front
+// of a reference node's occurrence list, which a repeat locus makes long.
+function firstAbove(ascending: number[], bound: number) {
+  let lo = 0
+  let hi = ascending.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (ascending[mid]! > bound) {
+      hi = mid
+    } else {
+      lo = mid + 1
+    }
+  }
+  return ascending[lo]
+}
+
 function posKey(pos: Pos) {
   return `${pos.node}:${pos.offset}`
 }
@@ -953,29 +990,38 @@ export class Subgraph {
     const count = handles.length
     const indexOf = new Map<number, number>()
     handles.forEach((handle, i) => indexOf.set(handle, i))
-    const nextIndex: Int32Array[] = []
-    const nextOffset: Int32Array[] = []
-    const hasPredecessor: Uint8Array[] = []
+    // One flat pair for the whole subgraph, indexed by rowStart[node] + offset,
+    // rather than an Int32Array per node. walk() reads a successor on every one
+    // of a window's steps — 9.9M of them at MHC class II — and through an array
+    // of forty thousand small buffers each of those is a pointer chase into
+    // scattered memory. The per-node arrays die before the walking starts.
+    const rowStart = new Int32Array(count + 1)
     const seqLen = new Int32Array(count)
+    const rows: { nodes: Int32Array; offsets: Int32Array }[] = []
     for (let i = 0; i < count; i++) {
       const record = this.record(handles[i]!)
-      const { nodes, offsets } = record.gbwt().decompressArrays()
+      const row = record.gbwt().decompressArrays()
       seqLen[i] = record.sequenceLen
-      nextIndex.push(nodes)
-      nextOffset.push(offsets)
-      hasPredecessor.push(new Uint8Array(nodes.length))
+      rows.push(row)
+      rowStart[i + 1] = rowStart[i]! + row.nodes.length
     }
+    const positions = rowStart[count]!
+    const nextIndex = new Int32Array(positions)
+    const nextOffset = new Int32Array(positions)
+    const hasPredecessor = new Uint8Array(positions)
     for (let i = 0; i < count; i++) {
-      const nodes = nextIndex[i]!
-      const offsets = nextOffset[i]!
-      for (let k = 0; k < nodes.length; k++) {
-        const j = indexOf.get(nodes[k]!)
-        if (j === undefined) {
-          nodes[k] = -1
-        } else {
-          nodes[k] = j
-          hasPredecessor[j]![offsets[k]!] = 1
-        }
+      const row = rows[i]!
+      nextIndex.set(row.nodes, rowStart[i])
+      nextOffset.set(row.offsets, rowStart[i])
+    }
+    rows.length = 0
+    for (let k = 0; k < positions; k++) {
+      const j = indexOf.get(nextIndex[k]!)
+      if (j === undefined) {
+        nextIndex[k] = -1
+      } else {
+        nextIndex[k] = j
+        hasPredecessor[rowStart[j]! + nextOffset[k]!] = 1
       }
     }
     const refIndex =
@@ -999,11 +1045,12 @@ export class Subgraph {
         }
         steps += 1
         len += seqLen[cur]!
-        const next = nextIndex[cur]![off]!
+        const at = rowStart[cur]! + off
+        const next = nextIndex[at]!
         if (next < 0) {
           break
         }
-        off = nextOffset[cur]![off]!
+        off = nextOffset[at]!
         cur = next
       }
       return { offsets, len, refAt, last: cur }
@@ -1032,9 +1079,10 @@ export class Subgraph {
     for (let i = 0; i < count; i++) {
       const first = handles[i]!
       if (!isReverse(first)) {
-        const starts = hasPredecessor[i]!
-        for (let offset = 0; offset < starts.length; offset++) {
-          if (starts[offset] === 0) {
+        const from = rowStart[i]!
+        const degree = rowStart[i + 1]! - from
+        for (let offset = 0; offset < degree; offset++) {
+          if (hasPredecessor[from + offset] === 0) {
             const path: number[] = []
             const { offsets, len, refAt, last } = walk(i, offset, path)
             const lastHandle = handles[last]!
@@ -1054,16 +1102,17 @@ export class Subgraph {
     for (let i = 0; i < count; i++) {
       const first = handles[i]!
       if (isReverse(first)) {
-        const starts = hasPredecessor[i]!
+        const from = rowStart[i]!
+        const degree = rowStart[i + 1]! - from
         let startCount = 0
-        for (const flag of starts) {
-          if (flag === 0) {
+        for (let offset = 0; offset < degree; offset++) {
+          if (hasPredecessor[from + offset] === 0) {
             startCount += 1
           }
         }
         const allTwins = !refMayStartReversed && startCount === twinsExpected[i]
-        for (let offset = 0; offset < starts.length; offset++) {
-          if (starts[offset] === 0) {
+        for (let offset = 0; offset < degree; offset++) {
+          if (hasPredecessor[from + offset] === 0) {
             const bare = allTwins ? undefined : walk(i, offset, undefined)
             if (
               bare &&
@@ -2045,25 +2094,26 @@ export class Subgraph {
     return this.refPrefixCache
   }
 
-  private orderedMatches(
-    path: number[],
-    ref: number[],
-  ): [number, number][] | undefined {
+  private orderedMatches(path: number[], ref: number[]): Matches | undefined {
     const index = this.refIndex(ref)
-    const pairs: [number, number][] = []
+    const pathAt = new Int32Array(path.length)
+    const refAt = new Int32Array(path.length)
+    let count = 0
     let last = -1
     for (let i = 0; i < path.length; i++) {
       const occurrences = index.get(path[i]!)
       if (occurrences) {
-        const j = occurrences.find(x => x > last)
+        const j = firstAbove(occurrences, last)
         if (j === undefined) {
           return undefined
         }
-        pairs.push([i, j])
+        pathAt[count] = i
+        refAt[count] = j
+        count += 1
         last = j
       }
     }
-    return pairs
+    return { pathAt, refAt, count }
   }
 
   private pathLen(path: number[]) {
@@ -2168,7 +2218,9 @@ export class Subgraph {
     }
     const lcs =
       ordered ??
-      weightedLcs(path, ref, handle => this.record(handle).sequenceLen)[0]
+      asMatches(
+        weightedLcs(path, ref, handle => this.record(handle).sequenceLen)[0],
+      )
     const edits: Edit[] = []
     const refPrefix = this.refPrefix(ref)
     const alignGap = (
@@ -2192,8 +2244,15 @@ export class Subgraph {
     let matched = 0
     let pathOffset = 0
     let refOffset = 0
-    for (const [nextPath, nextRef] of lcs) {
-      alignGap(pathOffset, nextPath, refOffset, nextRef)
+    for (let m = 0; m < lcs.count; m++) {
+      const nextPath = lcs.pathAt[m]!
+      const nextRef = lcs.refAt[m]!
+      // Adjacent matches are the overwhelming majority of a walk's steps, and
+      // for those alignGap has nothing to append; only the gaps are worth a
+      // call.
+      if (pathOffset !== nextPath || refOffset !== nextRef) {
+        alignGap(pathOffset, nextPath, refOffset, nextRef)
+      }
       const nodeLen = this.record(path[nextPath]!).sequenceLen
       appendEdit(edits, 'M', nodeLen)
       matched += nodeLen
@@ -2210,29 +2269,37 @@ export class Subgraph {
       return undefined
     }
     const ref = this.paths[this.refId]!.path
-    const flippedPath = pathIsCanonical(ref)
-      ? []
-      : info.path.map(handle => flipNode(handle)).reverse()
-    const forwardBound = this.sharedWeight(info.path, ref)
-    const flippedBound = this.sharedWeight(flippedPath, ref)
     let result: { edits: Edit[]; flipped: boolean }
-    if (flippedBound === 0) {
+    if (pathIsCanonical(ref)) {
+      // A walk against a canonical reference has nothing to gain from being
+      // flipped, so neither bound is worth the pass over its steps that
+      // measuring one costs.
       result = {
         edits: this.editsAgainst(info.path, ref).edits,
         flipped: false,
       }
-    } else if (forwardBound === 0) {
-      result = {
-        edits: this.editsAgainst(flippedPath, ref).edits,
-        flipped: true,
-      }
     } else {
-      const forward = this.editsAgainst(info.path, ref)
-      const flipped = this.editsAgainst(flippedPath, ref)
-      result =
-        flipped.matched > forward.matched
-          ? { edits: flipped.edits, flipped: true }
-          : { edits: forward.edits, flipped: false }
+      const flippedPath = info.path.map(handle => flipNode(handle)).reverse()
+      const forwardBound = this.sharedWeight(info.path, ref)
+      const flippedBound = this.sharedWeight(flippedPath, ref)
+      if (flippedBound === 0) {
+        result = {
+          edits: this.editsAgainst(info.path, ref).edits,
+          flipped: false,
+        }
+      } else if (forwardBound === 0) {
+        result = {
+          edits: this.editsAgainst(flippedPath, ref).edits,
+          flipped: true,
+        }
+      } else {
+        const forward = this.editsAgainst(info.path, ref)
+        const flipped = this.editsAgainst(flippedPath, ref)
+        result =
+          flipped.matched > forward.matched
+            ? { edits: flipped.edits, flipped: true }
+            : { edits: forward.edits, flipped: false }
+      }
     }
     return result
   }

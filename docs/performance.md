@@ -90,6 +90,63 @@ about two thirds of the query is waiting on the network, so cutting round trips
 is worth more than making the decoding faster — which is what the block size and
 the prefetching are for.
 
+## Where that inverts
+
+The window above is 5,943 nodes and 178 haplotypes. A window at cohort scale is
+a different query, and the conclusion above does not carry to it. MHC class II
+on the hosted HPRC v2.1 pair is 43,540 nodes, 464 walks and **9.86 million
+steps**, and what it spends its time on is walking and aligning those steps. The
+same query run twice in one process, so the second makes no request at all:
+
+| phase                   | cold    | warm, 0 requests |
+| ----------------------- | ------- | ---------------- |
+| `pathPosition`          | 3.19 s  | 0.00 s           |
+| `prefetchReferenceWalk` | 0.30 s  | 0.00 s           |
+| `aroundInterval`        | 2.95 s  | 0.54 s           |
+| `extractSnarls`         | 0.36 s  | 0.09 s           |
+| `extractPaths`          | 2.92 s  | 2.62 s           |
+| `identifyPaths`         | 1.00 s  | 0.10 s           |
+| `alignments`            | 2.45 s  | 2.14 s           |
+| total                   | 13.18 s | 5.49 s           |
+
+`extractPaths` and `alignments` are 87% of the warm query and neither touches
+the network, so every window after the first pays them in full. Both are O(walks
+× steps), which is why a selection is worth more than any amount of tuning
+underneath it: `keep` for eight haplotypes of the 464 is 9.5x faster warm,
+because it is 170,000 steps rather than 9.86 million.
+
+## What the step loops cost
+
+Two data shapes were most of the rest of it, and both were about how a step is
+reached rather than what is done with it.
+
+`extractPaths` reads a successor on every step. Held as an `Int32Array` per node
+— forty thousand separate buffers for a window like this — each of those reads
+is a pointer chase into scattered memory; held as one flat pair indexed by
+`rowStart[node] + offset` it is an add and a load. `orderedMatches` allocated a
+closure per step for `Array.find` and returned a two-element array per match,
+and it scanned each reference node's occurrence list from the front, which a
+repeat locus makes long.
+
+Measured warm on the five tutorial loci, both files hosted, `context: 1000`,
+contained snarls, median of three. The alignment records and the GFA cut hash
+identically before and after at every locus:
+
+| Window       | Nodes  | Walks | Steps | Before  | After   |
+| ------------ | ------ | ----- | ----- | ------- | ------- |
+| C4           | 1,173  | 464   | 0.20M | 0.092 s | 0.065 s |
+| CFH cluster  | 16,372 | 466   | 4.47M | 3.152 s | 1.490 s |
+| KIV-2        | 27,438 | 465   | 6.15M | 2.880 s | 2.050 s |
+| MHC class II | 43,540 | 464   | 9.86M | 6.230 s | 4.177 s |
+| AMY1         | 12,240 | 1,913 | 4.59M | 2.854 s | 2.061 s |
+
+The tables above this section were measured before that change and are the
+conservative numbers.
+
+Decoding the BWT bytecode once instead of twice in `decompressArrays` was tried
+on the same window and is not here: it measured no better than the two-pass it
+replaced, so the second pass is not what that function spends its time on.
+
 ## Why there is no wasm in the decoding path
 
 [why-not-wasm.md](why-not-wasm.md) is about not compiling upstream's Rust.
