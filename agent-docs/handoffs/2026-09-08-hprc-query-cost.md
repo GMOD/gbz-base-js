@@ -61,22 +61,34 @@ The two findings worth carrying forward:
   threshold is on the fragment, not the window: a 20 kb window's median fragment
   is 4.5 kb. A fragment known to be shorter than the interval could skip the
   scan and walk directly. That is an unclaimed optimization in this reader.
-- **Selection is the only lever that moves the floor.** 4.6x for eight of 464,
-  and everything needed for it exists except one line — see below.
+- **Selection is the only lever that moves the floor.** 4.6x for eight of 464.
+  Everything needed for it already existed except the argument that carried it;
+  see below.
 
-## The highest-value change is not in this repo
+## The highest-value change was not in this repo — done 2026-09-08
 
-`GbzBaseSyntenyAdapter.getFeatures` already accepts `opts.haplotypes` and builds
-a `keep` predicate; the reader already has the anchored walk route. But
-`MultiWaySyntenyDisplay`'s main fetch (jbrowse-components,
-`plugins/linear-comparative-view/src/MultiWaySyntenyDisplay/afterAttach.ts`, the
-`opts` object around line 72) sends `mateShape`/`lodMode`/`clipToRegion`/
-`splitAtGapBp` and nothing else, while `self.laneSelection` sits in `model.ts`
-around line 793. Passing it needs `laneSelection` in the fetch key too, so the
-picker re-issues. `pangenome_hprc_part3.md` documents the gap as a limitation
-("the display's `lanes` chooses what is drawn rather than what is fetched").
+`GbzBaseSyntenyAdapter.getFeatures` had always accepted `opts.haplotypes` and
+built a `keep` predicate, and the reader had the anchored walk route behind it.
+`MultiWaySyntenyDisplay` held `laneSelection` and never passed it, so a track
+opened on eight lanes fetched all 464 and `rowAssemblies` discarded 456.
 
-Not done here because that checkout had a dozen files dirty from other agents.
+Fixed in jbrowse-components `d3593f5440` (committed, NOT pushed — that repo's
+pre-push hook runs whole-tree fixers that would rewrite other agents'
+uncommitted work, and others were active). Worth **4.6x**: 4.13 s for all 464
+against 0.90 s for eight, warm, at MHC class II.
+
+Two things worth knowing before touching that area again:
+
+- The term rides in `rpcProps()`, which the display did not have at all, so
+  `rpcPropsCacheKey` was `''` and no selection could invalidate held data.
+  `KeyedFetchMixin` documents that as the sanctioned axis and warns specifically
+  against folding a settings term into `viewSignature` by hand.
+- It is gated on `adapterDeclaresLanes`. `GbzBaseSyntenyAdapter` is the only
+  adapter anywhere that declares `headerLanes`, so every PIF and MAF multiway
+  track is untouched and is not made to refetch for a filter it ignores.
+
+`pangenome_hprc_part3.md` said the opposite in as many words and was corrected
+in the same commit.
 
 ## The format proposal, and why it was wrong
 
@@ -126,8 +138,7 @@ not a format.
 
 ## Open, in rough order of value
 
-- Wire `laneSelection` into the multiway fetch (above). 4.6x for the common
-  case.
+- Push jbrowse-components `d3593f5440` once that checkout is quiet.
 - Skip the companion scan for a fragment shorter than the sampling interval.
   99.91% of those seeks miss.
 - `extractPaths` holds the per-node arrays and the flat pair at once before
