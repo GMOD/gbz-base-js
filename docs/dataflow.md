@@ -7,8 +7,7 @@
 
 The spine is `getAlignmentsForRange`. `getSubgraphForRange` is the same path up
 to `extractPaths` and then hands the `Subgraph` back rather than aligning it —
-the dashed branch on the right. The green boxes are the ones that read bytes,
-and every one of them goes through the storage layer at the bottom.
+the dashed branch on the right. The green boxes are the ones that read bytes.
 
 ## Down the spine
 

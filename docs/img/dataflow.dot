@@ -6,6 +6,11 @@
 // diagram that shows every branch stops being the thing you look at first.
 // The two identification routes ARE in, because which one a query takes is
 // the difference between reading a set of haplotypes and reading the graph.
+// Step labels stay to one or two words past the function name for the same
+// reason; dataflow.md carries the rest.
+//
+// The storage cluster hangs off nothing on purpose. Every green box reads
+// through it, and drawing those six edges buried the spine they cross.
 //
 // SYNC: ~/src/gmod/bam-js/docs/img/dataflow.dot — same palette, legend and
 // spine, and tabix-js, cram-js and hic share them too. The orange "wasm" and
@@ -24,14 +29,14 @@ digraph gbzbasejs {
 
   query    [label="getAlignmentsForRange(path, start, end)" fillcolor="#ddf4ff" color="#0969da"]
   frags    [label="pathFragmentsForRange" fillcolor="#dafbe1" color="#1a7f37"]
-  pos      [label="pathPosition\nPaths + ReferenceIndex" fillcolor="#dafbe1" color="#1a7f37"]
-  prefetch [label="prefetch the reference walk\none request per run of node ids" fillcolor="#dafbe1" color="#1a7f37"]
-  walk     [label="aroundInterval\nwalk the reference, insert context" fillcolor="#fff8c5" color="#9a6700"]
+  pos      [label="pathPosition\nReferenceIndex" fillcolor="#dafbe1" color="#1a7f37"]
+  prefetch [label="prefetch the reference walk" fillcolor="#dafbe1" color="#1a7f37"]
+  walk     [label="aroundInterval\nreference walk + context" fillcolor="#fff8c5" color="#9a6700"]
   snarls   [label="extractSnarls"]
-  extract  [label="extractPaths\ndecode the GBWT records"]
-  anchored [label="walkHaplotypesFromAnchor\nHaplotypeAnchors, then lf() per wanted path" fillcolor="#dafbe1" color="#1a7f37"]
-  sampled  [label="identifyPaths\nHaplotypeSamples scans, chain the fragments" fillcolor="#dafbe1" color="#1a7f37"]
-  align    [label="alignments()\nearliest occurrence, weighted LCS where it fails"]
+  extract  [label="extractPaths\ndecode GBWT records"]
+  anchored [label="walkHaplotypesFromAnchor\nHaplotypeAnchors" fillcolor="#dafbe1" color="#1a7f37"]
+  sampled  [label="identifyPaths\nHaplotypeSamples" fillcolor="#dafbe1" color="#1a7f37"]
+  align    [label="alignments()"]
   out      [label="HaplotypeAlignment[]" fillcolor="#ddf4ff" color="#0969da"]
   gfa      [label="Subgraph.toGFA / toSubgraphJson" fillcolor="#ddf4ff" color="#0969da"]
 
@@ -51,7 +56,7 @@ digraph gbzbasejs {
   extract -> gfa [style=dashed label=" getSubgraphForRange " weight=0]
 
   subgraph cluster_store {
-    label="every row above, per database (graph and companion)"
+    label="every green box reads through here, per database"
     labelloc="t"
     fontname="Helvetica"
     fontsize=10
@@ -66,14 +71,6 @@ digraph gbzbasejs {
   }
 
   out -> btree [style=invis weight=10]
-
-  edge [style=dotted color="#8c959f" constraint=false]
-  pos -> btree
-  prefetch -> btree
-  walk -> btree
-  extract -> btree
-  anchored -> btree
-  sampled -> btree
 
   subgraph cluster_legend {
     label="Legend"
