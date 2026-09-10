@@ -7,14 +7,13 @@
 
 The spine is `getAlignmentsForRange`. `getSubgraphForRange`, the second entry at
 the top, runs the same path down to `extractPaths` and then hands the `Subgraph`
-back rather than aligning it. The green boxes are the ones that read bytes.
+back rather than aligning it.
 
 ## Down the spine
 
 **`pathFragmentsForRange`** turns the path name into the fragments of it that
 overlap the window, since a contig can be stored as several path fragments with
-gaps between them. `getAlignmentsForRange` runs the rest once per fragment and
-concatenates; `getSubgraphForRange` takes the first.
+gaps between them. `getAlignmentsForRange` concatenates what each one returns.
 
 **`pathPosition`** finds the path row and seeks `ReferenceIndex` for the GBWT
 position at the window's start, which is where the walk begins. A path that
@@ -30,9 +29,8 @@ length, then inserts `context` bp of graph around it, breadth-first from both
 sides of every node. This is the step `context` and `limit` bound, and the node
 records it reads are cached on the `Subgraph` for everything after it.
 
-**`extractSnarls`** is the optional step: with `snarls`, the top-level chain
-links already in the database pull in whole snarls rather than a bp radius.
-[snarls.md](snarls.md).
+**`extractSnarls`** — with `snarls`, the top-level chain links already in the
+database pull in whole snarls rather than a bp radius. [snarls.md](snarls.md).
 
 **`extractPaths`** decodes the GBWT records of the nodes in hand and enumerates
 every walk crossing them. At this point the walks are anonymous — this is all
@@ -63,14 +61,12 @@ back. Both routes, in detail:
 
 ## The storage layer
 
-Every row any of those steps reads is a b-tree descent — a rowid lookup, an
-index seek, a scan — over pages the pager fetches in 64 KiB blocks and keeps.
-Below the pager is a `ByteSource.read(length, position)`, which over HTTP is one
-range request. Nothing above the pager knows whether the database is a local
-file or 10 GB on a server.
+Every row any of those steps reads is a b-tree descent over pages the pager
+keeps, and each `ByteSource.read` under it is one HTTP range request. Nothing
+above the pager knows whether the database is a local file or 10 GB on a server.
 
-The graph database and the haplotype companion each get their own b-tree, pager
-and source, which is why `--stats` reports their requests and bytes separately.
+The graph database and the haplotype companion each get their own stack, which
+is why `--stats` reports their requests and bytes separately.
 
 A query is a few hundred KB of pages out of a multi-gigabyte database, so its
 wall clock is mostly sequential request latency — the reason the prefetch step
