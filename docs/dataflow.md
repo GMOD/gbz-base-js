@@ -5,9 +5,9 @@
 [dataflow.dot](img/dataflow.dot) is the source; see
 [CONTRIBUTING.md](../CONTRIBUTING.md) for how to re-render it.
 
-The spine is `getAlignmentsForRange`. `getSubgraphForRange` is the same path up
-to `extractPaths` and then hands the `Subgraph` back rather than aligning it —
-the dashed branch on the right. The green boxes are the ones that read bytes.
+The spine is `getAlignmentsForRange`. `getSubgraphForRange`, the second entry at
+the top, runs the same path down to `extractPaths` and then hands the `Subgraph`
+back rather than aligning it. The green boxes are the ones that read bytes.
 
 ## Down the spine
 

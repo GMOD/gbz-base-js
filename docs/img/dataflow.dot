@@ -9,6 +9,12 @@
 // Step labels stay to one or two words past the function name for the same
 // reason; dataflow.md carries the rest.
 //
+// Both entry points are drawn at the top. getSubgraphForRange used to be an
+// edge label between extractPaths and the GFA box, which put the name of a
+// caller at the wrong end of the arrow — it reads as something extractPaths
+// calls. It enters where it really enters, and the arrow out of extractPaths
+// is labelled with what it hands back.
+//
 // The storage cluster hangs off nothing on purpose. Every green box reads
 // through it, and drawing those six edges buried the spine they cross.
 //
@@ -17,7 +23,9 @@
 // purple "off the main thread" entries of that legend are absent here rather
 // than restyled: nothing in this reader is wasm (docs/why-not-wasm.md is why)
 // and it puts nothing on a thread of its own — JBrowse runs the whole thing
-// in an RPC worker instead.
+// in an RPC worker instead. The blue "entry / result" entry is this diagram's
+// own addition: the siblings have one entry point and can leave the mark to
+// position, and this one has two.
 digraph gbzbasejs {
   rankdir=TB
   bgcolor="white"
@@ -38,9 +46,11 @@ digraph gbzbasejs {
   sampled  [label="identifyPaths\nHaplotypeSamples" fillcolor="#dafbe1" color="#1a7f37"]
   align    [label="alignments()"]
   out      [label="HaplotypeAlignment[]" fillcolor="#ddf4ff" color="#0969da"]
+  sub      [label="getSubgraphForRange(path, start, end)" fillcolor="#ddf4ff" color="#0969da"]
   gfa      [label="Subgraph.toGFA / toSubgraphJson" fillcolor="#ddf4ff" color="#0969da"]
 
   query -> frags
+  sub -> frags [style=dashed label=" first fragment only "]
   frags -> pos [label=" per fragment "]
   pos -> prefetch
   prefetch -> walk
@@ -53,7 +63,7 @@ digraph gbzbasejs {
   sampled -> align
   anchored -> sampled [style=dashed label=" walk cut short "]
   align -> out [weight=10]
-  extract -> gfa [style=dashed label=" getSubgraphForRange " weight=0]
+  extract -> gfa [style=dashed label=" Subgraph " weight=0]
 
   subgraph cluster_store {
     label="every green box reads through here, per database"
@@ -85,6 +95,7 @@ digraph gbzbasejs {
     l1 [label="reads bytes" fillcolor="#dafbe1" color="#1a7f37"]
     l2 [label="cached / shared" fillcolor="#fff8c5" color="#9a6700"]
     l3 [label="dashed: optional" fillcolor="#f6f8fa" color="#57606a"]
-    l1 -> l2 -> l3 [style=invis constraint=true]
+    l4 [label="entry / result" fillcolor="#ddf4ff" color="#0969da"]
+    l1 -> l2 -> l3 -> l4 [style=invis constraint=true]
   }
 }
