@@ -31,9 +31,17 @@ Not ported: GAF-base.
 
 CIGARs are computed by matching each shared node to its earliest usable
 occurrence on the reference walk, which is weight-optimal whenever every shared
-node can be placed in order; the Myers-based weighted LCS from gbwt-rs runs only
-for the fragments where that fails (inversions, repeats). The two can pick
-different equal-weight alignments only when the reference walk repeats a node.
+node can be placed in order. The fragments where that fails — a walk looping
+through a copy-number expansion, a rearrangement, a repeat — fall back to a
+node-length-weighted LCS, and there the two readers part ways. Upstream runs
+gbwt-rs's Myers-based search, whose state grows with the edit distance in bases:
+at AMY1 on the HPRC graph, a walk of 13,303 steps and 230,857 bp against a
+7,585-step reference exhausted a 3 GB heap in this reader's port of it. This
+reader chains only the step pairs that share a node, as a heaviest increasing
+subsequence, and splits the problem Hirschberg-style once those pairs outnumber
+the steps, so memory stays linear in the two walks; the same fragment aligns in
+8 ms. Both are weight-optimal, but they can pick different equal-weight
+alignments.
 
 One deliberate departure: where a reference walk is stored against node
 orientation (upstream prints "the reference path is not in canonical

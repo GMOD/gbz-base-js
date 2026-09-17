@@ -39,8 +39,13 @@ contig is stored as two path fragments with a gap between them. Its database is
 `gbz-base construct split-contig.gbz -o split-contig.gbz.db`, and its companion
 is
 `gbz-haplotype-index --interval 200 --output split-contig.haplotype-index.db split-contig.gbz split-contig.gbz.db`.
-Upstream builds with `cargo install --git https://github.com/jltsiren/gbz-base`,
-and `quay.io/vgteam/vg` is the easiest `vg` on a Mac.
+
+`test/data/looping-walk.gfa` is the source of the fixture whose haplotype walks
+loop through or reorder a reference segment, so their CIGARs come from the
+weighted LCS rather than from ordered matching. Its database is built with the
+same two commands, and it has no companion. Upstream builds with
+`cargo install --git https://github.com/jltsiren/gbz-base`, and
+`quay.io/vgteam/vg` is the easiest `vg` on a Mac.
 
 `tools/haplotype-index/` is the Rust helper that writes the haplotype index some
 of those databases carry. It is shipped in the npm tarball as source only —

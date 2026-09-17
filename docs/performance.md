@@ -218,11 +218,11 @@ inflate, is a separate question, and the measurements say no: there is no kernel
 here big enough to be worth a boundary. The two routines shaped like one, timed
 over the whole subgraph above, are `decodeSequence` at **6.9 ms** for 408,976
 bases and `GbwtRecord.decompressArrays` at **19.9 ms** for 693,986 entries — 27
-ms of a ~400 ms query, across 11,886 separate records. `weightedLcs`, the one
-quadratic routine and the obvious candidate, is never reached on this data:
-`--stats` reports 177 ordered and 0 LCS alignments at every locus tried, because
-`orderedMatches` succeeds. The rest of the time is Map lookups, small-object
-allocation, string building and `JSON.stringify`, which is already native.
+ms of a ~400 ms query, across 11,886 separate records. `weightedLcs`, the
+obvious candidate, is never reached on this data: `--stats` reports 177 ordered
+and 0 LCS alignments at every locus tried, because `orderedMatches` succeeds.
+The rest of the time is Map lookups, small-object allocation, string building
+and `JSON.stringify`, which is already native.
 
 This is why the output shape got the attention instead: 295 ms to structured-
 clone the upstream shape against 1.9 ms for the compact one is a bigger win than

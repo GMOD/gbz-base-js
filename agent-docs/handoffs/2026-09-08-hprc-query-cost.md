@@ -148,10 +148,10 @@ not a format.
 - A corrupt GBWT record now writes into a neighbour's row rather than being
   ignored, because the flat index is unchecked where the per-node one was
   implicitly bounded. Well-formed data cannot reach it.
-- `asMatches` and the non-canonical-reference branch of `alignment()` are not
-  exercised by any test — `--stats` reports 0 LCS alignments at every locus
-  tried, and the canonical branch covers all five loci. Their equivalence was
-  argued and hand-verified, not tested.
+- The non-canonical-reference branch of `alignment()` is not exercised by any
+  test — the canonical branch covers all five loci. Its equivalence was argued
+  and hand-verified, not tested. (`asMatches` is, since the `looping-walk`
+  oracle fixture.)
 
 ## Reproducing any of this
 
