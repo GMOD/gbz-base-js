@@ -1,3 +1,11 @@
+## [2.6.4](https://github.com/GMOD/gbz-base-js/compare/v2.6.3...v2.6.4) (2026-09-17)
+
+### Other Changes
+
+- Trim the shared ends of every split in the weighted LCS ([2cf29a0](https://github.com/GMOD/gbz-base-js/commit/2cf29a099bfd5f9faadfa2ea12d679a98f4bd6f0))
+- Drop the visited set from the anchored walk ([8f88fd6](https://github.com/GMOD/gbz-base-js/commit/8f88fd62876b0e8adfca23394d1d8a28dde924aa))
+- Write down why the alignment and the anchored walk look the way they do ([6b274ca](https://github.com/GMOD/gbz-base-js/commit/6b274ca8f73f791cd55c359fb67443de0e464ef4))
+
 ## [2.6.3](https://github.com/GMOD/gbz-base-js/compare/v2.6.2...v2.6.3) (2026-09-17)
 
 ### Other Changes
