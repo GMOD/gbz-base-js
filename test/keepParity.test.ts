@@ -96,7 +96,9 @@ describe.skipIf(!available(anchoredCompanion))('the anchored walk', () => {
     })
     const names = anchored
       .alignments()
-      .flatMap(a => (a.resolved ? [`${a.name.sample}#${a.name.haplotype}`] : []))
+      .flatMap(a =>
+        a.resolved ? [`${a.name.sample}#${a.name.haplotype}`] : [],
+      )
       .sort()
     expect(names).toEqual(broken)
     expect(anchored.stats.anchorWalk!.fallback).toMatch(/HG04199#2/)
