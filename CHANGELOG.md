@@ -1,3 +1,10 @@
+## [2.6.6](https://github.com/GMOD/gbz-base-js/compare/v2.6.5...v2.6.6) (2026-09-17)
+
+### Other Changes
+
+- Fall back rather than dropping a haplotype the anchor cannot reach ([edc27cf](https://github.com/GMOD/gbz-base-js/commit/edc27cfbbd2eaa2866c8d0ee6c99066e801ab509))
+- Format ([d95779b](https://github.com/GMOD/gbz-base-js/commit/d95779b6aa6d206f887111d61007e584f0f0aadf))
+
 ## [2.6.5](https://github.com/GMOD/gbz-base-js/compare/v2.6.4...v2.6.5) (2026-09-17)
 
 ### Documentation
