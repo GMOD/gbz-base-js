@@ -1470,8 +1470,13 @@ export class Subgraph {
       end: walked.end,
     })
     let reason: string | undefined
-    if (walked.end === 'bound') {
-      reason = `${formatPathName(name, row.pathOffset)} walked ${walked.steps} steps from its ${from} without reaching the window's end (${walked.end})`
+    // A walk that wrote nothing is as unusable as one that ran to the bound,
+    // and it is the same silence: its contig ends between the anchor and the
+    // window, so walking forward never reaches the window and the sampled scan
+    // looks only at the reference's own nodes. Either way the caller falls back
+    // to the route that reads the window's nodes directly.
+    if (walked.end === 'bound' || walked.infos.length === 0) {
+      reason = `${formatPathName(name, row.pathOffset)} walked ${walked.steps} steps from its ${from} without writing a walk through the window (${walked.end})`
     } else {
       handled.add(row.pathHandle)
       this.paths.push(...walked.infos)

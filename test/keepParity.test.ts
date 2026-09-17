@@ -76,4 +76,29 @@ describe.skipIf(!available(anchoredCompanion))('the anchored walk', () => {
     await interval.identifyPaths()
     expect(await walkSpans(interval)).toEqual(alignmentSpans(interval))
   }, 300000)
+
+  // HG04199#2's contig ends between the anchor and the window, so walking
+  // forward from the anchor writes nothing for it, and the scan that recovers
+  // an unwalked contig reads the reference's own nodes, which this haplotype
+  // reaches the window without touching. It used to be missing from the cut
+  // with nothing said.
+  it('falls back rather than dropping a haplotype its anchor cannot reach', async () => {
+    const db = await GBZBase.open(new RemoteFile(graphUrl), {
+      haplotypeIndex: isRemote(anchoredCompanion)
+        ? new RemoteFile(anchoredCompanion)
+        : new LocalFile(anchoredCompanion),
+    })
+    const broken = ['HG04199#1', 'HG04199#2']
+    const anchored = await subgraphForHaplotypes(db, query, start, end, {
+      ...opts,
+      keep: (name: PathName) =>
+        broken.includes(`${name.sample}#${name.haplotype}`),
+    })
+    const names = anchored
+      .alignments()
+      .flatMap(a => (a.resolved ? [`${a.name.sample}#${a.name.haplotype}`] : []))
+      .sort()
+    expect(names).toEqual(broken)
+    expect(anchored.stats.anchorWalk!.fallback).toMatch(/HG04199#2/)
+  }, 300000)
 })
