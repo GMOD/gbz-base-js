@@ -423,7 +423,6 @@ export type AnchorWalkEnd =
   | 'past the window'
   | 'ended in the window'
   | 'bound'
-  | 'cycle'
 
 export interface AnchorWalkRecord {
   pathHandle: number
@@ -1471,7 +1470,7 @@ export class Subgraph {
       end: walked.end,
     })
     let reason: string | undefined
-    if (walked.end === 'bound' || walked.end === 'cycle') {
+    if (walked.end === 'bound') {
       reason = `${formatPathName(name, row.pathOffset)} walked ${walked.steps} steps from its ${from} without reaching the window's end (${walked.end})`
     } else {
       handled.add(row.pathHandle)
@@ -1697,7 +1696,6 @@ export class Subgraph {
     let piece: WalkStep[] = []
     let pending: WalkStep[] = []
     let pendingBp = 0
-    const visited = new Set<string>()
     let counter = 0
     let steps = 0
     let startBp: number | undefined
@@ -1710,10 +1708,7 @@ export class Subgraph {
           startBp === undefined ? 'before the window' : 'ended in the window'
       } else if (counter > bound) {
         end = 'bound'
-      } else if (visited.has(posKey(pos))) {
-        end = 'cycle'
       } else {
-        visited.add(posKey(pos))
         const refOffset = refOffsetOf.get(nodeId(pos.node))
         const inWindow = startBp !== undefined
         if (refOffset !== undefined && refOffset >= windowEnd) {

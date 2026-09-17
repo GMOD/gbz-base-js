@@ -257,7 +257,6 @@ const ANCHOR_WALK_ENDS: AnchorWalkEnd[] = [
   'past the window',
   'ended in the window',
   'bound',
-  'cycle',
 ]
 
 function anchorWalkReport(stats: AnchorWalkStats) {
