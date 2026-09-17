@@ -1,3 +1,12 @@
+## [2.6.3](https://github.com/GMOD/gbz-base-js/compare/v2.6.2...v2.6.3) (2026-09-17)
+
+### Other Changes
+
+- Let the storage cluster stand alone, and cut the labels back to the names ([1c78480](https://github.com/GMOD/gbz-base-js/commit/1c7848076be98043fc1777083eefaa424ac318a6))
+- Draw getSubgraphForRange where it enters ([18293be](https://github.com/GMOD/gbz-base-js/commit/18293bee31191a1896d331a3cbd28d63312fb8ec))
+- Stop the prose repeating what the diagram now shows ([9a82b34](https://github.com/GMOD/gbz-base-js/commit/9a82b343dc38ddf432fccc71a5b9c358b9645cbc))
+- Align a looping walk in memory linear in the two walks ([54d815d](https://github.com/GMOD/gbz-base-js/commit/54d815deebe954ea9425c012707ec4f2c96c3f58))
+
 ## [2.6.2](https://github.com/GMOD/gbz-base-js/compare/v2.6.1...v2.6.2) (2026-09-08)
 
 ### Other Changes
