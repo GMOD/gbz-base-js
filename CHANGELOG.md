@@ -1,3 +1,17 @@
+## [2.6.5](https://github.com/GMOD/gbz-base-js/compare/v2.6.4...v2.6.5) (2026-09-17)
+
+### Documentation
+
+- What a database answers, beside an rGFA ([16e63ed](https://github.com/GMOD/gbz-base-js/commit/16e63ed04914f8c96fb49456830d944abbba1a13))
+- Rename what-it-answers to contents-and-limitations, plain prose ([4562c7f](https://github.com/GMOD/gbz-base-js/commit/4562c7f22f825975328ad990498065789db79e17))
+- Fix anti-AI prose tropes (pronoun openings, clefts, "Both"/"So" fragments) ([4c63eee](https://github.com/GMOD/gbz-base-js/commit/4c63eee259dfc9e46bbd3c5f3495c98c1f17fd3b))
+- Fix inanimate-subject agency and figures of speech, and correct three changed claims ([ea952d7](https://github.com/GMOD/gbz-base-js/commit/ea952d70180c2e5d178ea70c6980599256649aa5))
+- Name the contig-orientation rule and the cache's coverage exactly ([d93bbc0](https://github.com/GMOD/gbz-base-js/commit/d93bbc09f82be8fef940a80e223613dd9a7c4074))
+
+### Other Changes
+
+- Keep a walk's private run however long it is ([fa3fe29](https://github.com/GMOD/gbz-base-js/commit/fa3fe2966023a0dfb6e76a98fe359572e5509591))
+
 ## [2.6.4](https://github.com/GMOD/gbz-base-js/compare/v2.6.3...v2.6.4) (2026-09-17)
 
 ### Other Changes
