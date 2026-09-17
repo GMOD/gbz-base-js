@@ -1,7 +1,7 @@
 # Optimizations
 
 Why the alignment and the anchored walk look the way they do.
-[dataflow.md](dataflow.md) draws the query path, and
+[dataflow.md](dataflow.md) has the query path as a diagram, and
 [performance.md](performance.md) has the measured windows.
 
 The measurements below ran over HTTPS against the HPRC v2.1 graph and the hosted
@@ -46,13 +46,12 @@ gives it.
 
 ### Shared ends are trimmed at every split
 
-The chaining search pays in time where Myers paid in memory, because its cost
-follows the number of shared step pairs, and two walks looping the same node
-thousands of times make millions of them. `solve` therefore matches the shared
-prefix and suffix outright before chaining or splitting, at every level of the
-recursion. Once a split lands inside a shared loop, both halves begin or end
-with the same run, and the trim removes it. Synthetic walks, without and with
-the trim:
+The chaining search costs time where Myers cost memory, because its cost follows
+the number of shared step pairs, and two walks looping the same node thousands
+of times make millions of them. `solve` therefore matches the shared prefix and
+suffix outright before chaining or splitting, at every level of the recursion.
+Once a split lands inside a shared loop, both halves begin or end with the same
+run, and the trim removes it. Synthetic walks, without and with the trim:
 
 | Input                                        | Untrimmed | Trimmed |
 | -------------------------------------------- | --------- | ------- |
@@ -62,10 +61,10 @@ the trim:
 | The 3,200/3,000 loop with its flanks swapped | 680 ms    | 400 ms  |
 | AMY1-like: 8 variant copies against 3        | 9 ms      | 6 ms    |
 
-The swapped-flank row is the shape the trim cannot reach: no split lands where
-both halves share an end until the pairs are already paid for. No HPRC locus we
-queried has that shape, and in the all-samples AMY1 profile the LCS is 121 ms of
-18 s of CPU.
+The swapped-flank row is the pattern the trim cannot reach: no split lands where
+both halves share an end until the chaining has already processed those pairs.
+No HPRC locus we queried has that pattern, and in the all-samples AMY1 profile
+the LCS is 121 ms of 18 s of CPU.
 
 Two changes to the chaining measured within run-to-run noise and are not here:
 
@@ -92,7 +91,7 @@ s, and CPU from 9.2 to 8.4 s, averaged over three alternating runs.
   successors held as one flat pair of arrays rather than a buffer per node, and
   `orderedMatches` without a closure or tuple per match.
 - [Why there is no wasm in the decoding path](performance.md#why-there-is-no-wasm-in-the-decoding-path),
-  and why the compact output shape mattered more than any kernel.
+  and why the compact output format mattered more than any kernel.
 - [Why a small window is not a cheap one](performance.md#why-a-small-window-is-not-a-cheap-one):
   the fragment length against the companion's sampling interval.
 

@@ -63,9 +63,9 @@ sequence and nothing else's. It needs the haplotype index and throws without
 one; what it costs, and the anchored route it takes on a companion carrying
 anchors, is in [haplotype-index.md](haplotype-index.md#the-anchored-walk).
 
-`context` does not decide how many records come back, since the pieces of a walk
-that leaves the subgraph are joined again; it trades nodes read against pieces
-to identify and join. [performance.md](performance.md#context) has the
+`context` does not determine how many records come back, since the pieces of a
+walk that leaves the subgraph are joined again; it trades nodes read against
+pieces to identify and join. [performance.md](performance.md#context) has the
 measurements for picking it.
 
 `signal` is checked between range requests, so an abort stops the next fetch
@@ -123,13 +123,13 @@ agree as the W line spec requires.
 
 ### Which of the two to take
 
-`toSubgraphJson` is upstream's shape, field for field —
+`toSubgraphJson` is upstream's format, field for field —
 `gbz-base query --format json` output, held to it by the
 [oracle tests](internals.md#fidelity-to-upstream). Take it when something
 downstream already parses that format, and do not expect it to change.
 
-`toCompactSubgraph` is this package's own shape and carries the same subgraph as
-typed arrays:
+`toCompactSubgraph` is this package's own format and carries the same subgraph
+as typed arrays:
 
 ```ts
 interface CompactSubgraph {
@@ -156,7 +156,7 @@ for (const handle of compact.paths[1].steps) {
 }
 ```
 
-The upstream shape spends an object and a stringified id on every step of every
+The upstream format uses an object and a stringified id for every step of every
 walk, and a 200 kb human window has about 350,000 of them. That is affordable to
 build and ruinous to move: sending one across a worker boundary is a structured
 clone of every one of those objects. Measured on HPRC chr20, `CHM13#0#chr20`
@@ -167,7 +167,7 @@ clone of every one of those objects. Measured on HPRC chr20, `CHM13#0#chr20`
 | build             | 99 ms            | 71 ms               |
 | `structuredClone` | 295 ms           | 1.9 ms              |
 
-Most of the 71 ms both pay is CIGAR generation; drop `cigar` and the compact
+Most of the 71 ms each takes is CIGAR generation; drop `cigar` and the compact
 build is about 8 ms. For a `postMessage` the buffers can be transferred rather
 than copied:
 
@@ -185,8 +185,8 @@ subgraph afterwards.
 bam-js hands back `NUMERIC_SEQ` and `NUMERIC_CIGAR` — the packed bytes as the
 file holds them — and derives the strings lazily, because a nanopore read is
 long enough that decoding one to compare twenty positions is waste. The same
-trick was measured here on both remaining fields and is not worth it, because
-what makes it pay is a _long_ per-record field and only the step list is long:
+trick was measured here on both remaining fields and is not worth it, because it
+only helps a _long_ per-record field, and only the step list is long:
 
 | field  | size here                 | packed  | strings | verdict              |
 | ------ | ------------------------- | ------- | ------- | -------------------- |
@@ -276,9 +276,10 @@ built by a different gbz-base and a file that is not one at all.
 `SCHEMA_VERSION` is the string this reader understands, exported beside it.
 
 `ForwardOnlyIndexError` is refused at open rather than at query time, because a
-forward-only index cannot name the walks stored against their reference — about
-half of them in a graph like HPRC's — and a half-named result should never reach
-a caller. Rebuild the companion without `--forward-only`.
+forward-only index has no sample for about half the walks in a graph like HPRC's
+— the ones stored against their reference — so `GBZBase.open` refuses rather
+than return a half-named result to a caller. Rebuild the companion without
+`--forward-only`.
 
 `SubgraphLimitError` carries the `limit` it hit, and for an interval query the
 `windowBp` asked for against the `walkedBp` covered before it stopped, so a

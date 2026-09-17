@@ -33,9 +33,9 @@ two routes are described in
 ## Context
 
 `context` is the graph context in bp to extend past the window, 100 by default.
-It does not decide how many records come back, since the pieces of a walk that
-leaves the subgraph are joined again, so it trades nodes read against pieces to
-identify and join.
+It does not determine how many records come back, since the pieces of a walk
+that leaves the subgraph are joined again, so it trades nodes read against
+pieces to identify and join.
 
 A window inside a snarl much larger than itself (MHC class II on the HPRC graph)
 is 1.1M pieces at `context: 0` and 464 walks at 1000, three times faster; a
@@ -95,8 +95,8 @@ prefetching cut round trips.
 The window above is 5,943 nodes and 178 haplotypes. A window at cohort scale is
 a different query, and the conclusion above does not carry to it. MHC class II
 on the hosted HPRC v2.1 pair is 43,540 nodes, 464 walks and **9.86 million
-steps**, and what it spends its time on is walking and aligning those steps. The
-same query run twice in one process, so the second makes no request at all:
+steps**; walking and aligning those steps is where the time goes. The same query
+run twice in one process, so the second makes no request at all:
 
 | phase                   | cold    | warm, 0 requests |
 | ----------------------- | ------- | ---------------- |
@@ -172,8 +172,8 @@ change to this reader rather than to any file.
 
 ## What the step loops cost
 
-Two data shapes were most of the rest of it, and both were about how a step is
-reached rather than what is done with it.
+Two data representations were most of the rest of it, and both were about how a
+step is reached rather than what is done with it.
 
 `extractPaths` reads a successor on every step. Held as an `Int32Array` per node
 — forty thousand separate buffers for a window like this — each of those reads
@@ -188,8 +188,8 @@ contained snarls. Both builds are opened in ONE process and alternated, median
 of five each, because measuring the two in separate runs credited the change
 with machine load: that method reported 1.4-2.1x, and CFH's 2.12x does not
 reproduce. Absolute times here are higher than a single-build run because two
-databases share the process's page cache; the ratio is what the interleaving
-buys.
+databases share the process's page cache; interleaving keeps the ratio
+meaningful despite that.
 
 | Window       | Nodes  | Walks | Steps | Before   | After   | Ratio |
 | ------------ | ------ | ----- | ----- | -------- | ------- | ----- |
@@ -200,8 +200,8 @@ buys.
 | AMY1         | 12,240 | 1,913 | 4.59M | 2.819 s  | 2.236 s | 1.26x |
 
 The ratio ranges from 1.3x to 1.8x, best where the steps are most concentrated.
-AMY1, the locus with the most walks, is the worst case, so the per-walk
-allocation savings are not its main cost. The alignment records and the GFA cut
+AMY1, the locus with the most walks, is the worst case, so the speedup does not
+come from the per-walk allocation savings. The alignment records and the GFA cut
 hash identically before and after at every locus, over outputs from 2 MB to 101
 MB.
 
@@ -216,19 +216,20 @@ replaced, so the second pass is not what that function spends its time on.
 
 [why-not-wasm.md](why-not-wasm.md) is about not compiling upstream's Rust.
 Writing a small wasm kernel by hand, the way bgzf-filehandle and bbi-js do for
-inflate, is a separate question, and the measurements say no: there is no kernel
-here big enough to be worth a boundary. The two routines shaped like one, timed
-over the whole subgraph above, are `decodeSequence` at **6.9 ms** for 408,976
-bases and `GbwtRecord.decompressArrays` at **19.9 ms** for 693,986 entries — 27
-ms of a ~400 ms query, across 11,886 separate records. `weightedLcs`, the
-obvious candidate, is never reached on this data: `--stats` reports 177 ordered
-and 0 LCS alignments at every locus tried, because `orderedMatches` succeeds.
-The rest of the time is Map lookups, small-object allocation, string building
-and `JSON.stringify`, which is already native.
+inflate, is a separate question, and the benchmarks rule it out: there is no
+kernel here big enough to be worth a boundary. The two routines shaped like one,
+timed over the whole subgraph above, are `decodeSequence` at **6.9 ms** for
+408,976 bases and `GbwtRecord.decompressArrays` at **19.9 ms** for 693,986
+entries — 27 ms of a ~400 ms query, across 11,886 separate records.
+`weightedLcs`, the obvious candidate, is never reached on this data: `--stats`
+reports 177 ordered and 0 LCS alignments at every locus tried, because
+`orderedMatches` succeeds. The rest of the time is Map lookups, small-object
+allocation, string building and `JSON.stringify`, which is already native.
 
-The output shape got the attention instead, because 295 ms to structured-clone
-the upstream shape against 1.9 ms for the compact one is a bigger win than any
-decoding kernel here could offer, and it needed no new runtime.
+Optimizing the output format mattered more here, because 295 ms to
+structured-clone the upstream format against 1.9 ms for the compact one is a
+bigger win than any decoding kernel here could offer, and it needed no new
+runtime.
 
 ## Measuring your own
 

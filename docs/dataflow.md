@@ -32,9 +32,9 @@ records it reads are cached on the `Subgraph` for everything after it.
 **`extractSnarls`** — with `snarls`, the top-level chain links already in the
 database pull in whole snarls rather than a bp radius. [snarls.md](snarls.md).
 
-**`extractPaths`** decodes the GBWT records of the nodes in hand and enumerates
-every walk crossing them. At this point the walks are anonymous — this is all
-upstream can do, and it is why upstream prints `unknown#N`.
+**`extractPaths`** decodes the GBWT records of the nodes already read and
+enumerates every walk crossing them. At this point the walks are anonymous —
+this is all upstream can do, and it is why upstream prints `unknown#N`.
 
 **`alignments()`** aligns each walk to the reference walk and joins the pieces
 of one haplotype back into a record. [alignments.md](alignments.md).
@@ -46,15 +46,15 @@ the difference between reading a set of haplotypes and reading the graph:
 
 - **sampled** — `identifyPaths` scans `HaplotypeSamples` for the window's nodes,
   one scan per run of consecutive node ids, and chains each haplotype's
-  fragments together. Every walk in the window is named. This is what a query
-  without `keep` gets.
+  fragments together, naming every walk in the window. A query without `keep`
+  takes this route.
 - **anchored** — with `keep` and a companion carrying anchors,
   `walkHaplotypesFromAnchor` reads the rows at one anchor node before the window
   and walks only the wanted paths forward through it. Nothing else is extracted
-  or named, so the query costs the set rather than the graph.
+  or named, so the query's cost scales with the set rather than the graph.
 
 The anchored route falls back to the sampled one for the whole window when a
-walk cannot be completed, and `--stats` says which route ran and why it fell
+walk cannot be completed, and `--stats` reports which route ran and why it fell
 back. Both routes, in detail:
 [haplotype-index.md](haplotype-index.md#the-sampled-walk). What they cost:
 [performance.md](performance.md#keeping-a-set-of-haplotypes).
@@ -62,8 +62,8 @@ back. Both routes, in detail:
 ## The storage layer
 
 Every row any of those steps reads is a b-tree descent over pages the pager
-keeps, and each `ByteSource.read` under it is one HTTP range request. Nothing
-above the pager knows whether the database is a local file or 10 GB on a server.
+keeps, and each `ByteSource.read` under it is one HTTP range request. No layer
+above the pager distinguishes a local file from 10 GB on a server.
 
 The graph database and the haplotype companion each get their own stack, which
 is why `--stats` reports their requests and bytes separately.

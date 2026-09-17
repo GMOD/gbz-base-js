@@ -1,4 +1,4 @@
-# Reading SQLite without SQLite
+# Internals
 
 This reader answers the same subgraph queries as `gbz-base query`, reading only
 the SQLite pages a query touches, so it queries a multi-gigabyte database on an
@@ -43,7 +43,7 @@ the steps, so memory stays linear in the two walks; the same fragment aligns in
 8 ms. Both are weight-optimal, but they can pick different equal-weight
 alignments.
 
-The chaining search pays in time where the Myers search paid in memory: its cost
+The chaining search costs time where the Myers search cost memory: its cost
 follows the number of step pairs that share a node, so two walks looping the
 same node thousands of times make millions of pairs. The search matches a shared
 prefix and suffix outright at every level of the split, which absorbs a loop

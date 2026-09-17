@@ -13,7 +13,7 @@ sits on [simple-sds](https://github.com/jltsiren/simple-sds). Both write header
 and payload fields as `usize`. On the 64-bit hosts every one of these files was
 written on, `usize` is 8 bytes; on `wasm32` it is 4. So a wasm build reads the
 first header field out of half the bytes it occupies, and every field after it
-comes from the wrong offset — which surfaces as a spurious "SDSL format is not
+comes from the wrong offset — which shows up as a spurious "SDSL format is not
 supported", not as a length mismatch you could catch.
 
 [jltsiren/gbwt-rs#14](https://github.com/jltsiren/gbwt-rs/pull/14) proposed the
@@ -35,9 +35,9 @@ Nothing here holds a whole graph in memory, but a port whose offsets are all
 `wasm64` (memory64) makes `usize` 8 bytes again, which removes the mismatch
 outright — for gbwt-rs. It does not carry gbz-base: gbz-base stores its graph in
 SQLite through bundled C, and there is no wasm64 libc to compile that C against.
-So the target that fixes the serialization cannot build the half of the stack
-that opens the database, and the target that builds the database half misreads
-every file.
+So building for wasm64 fixes the serialization but cannot compile the half of
+the stack that opens the database, and building for wasm32 compiles that half
+but misreads every file.
 
 Substituting a wasm SQLite (sql.js, wa-sqlite) does not close the gap either. It
 handles the SQL, but the GBWT node records inside the blobs are still decoded by
@@ -48,11 +48,12 @@ virtual filesystem to feed byte ranges to.
 
 A reader written directly against the two formats has neither problem — it reads
 8-byte fields because the format has 8-byte fields, and JS numbers cover the
-values these files hold. Beyond dodging the blocker, it buys:
+values these files hold. Beyond avoiding the blocker, it also provides:
 
-- **Range requests for free.** Queries go through `generic-filehandle2`, so a 10
-  GB database on an HTTP server is read as the few hundred KB of pages the query
-  touches. A wasm port would need a VFS shim doing the same thing anyway.
+- **Range requests need no extra code.** Queries go through
+  `generic-filehandle2`, so a 10 GB database on an HTTP server is read as the
+  few hundred KB of pages the query touches. A wasm port would need a VFS shim
+  doing the same thing anyway.
 - **The host's file access.** It runs in a JBrowse RPC worker on the file access
   layer JBrowse already has, including auth and its own caches, rather than
   needing those threaded through a wasm boundary.
@@ -66,4 +67,4 @@ values these files hold. Beyond dodging the blocker, it buys:
   a fork.
 
 The cost is that this is a reimplementation, and format changes have to be
-followed by hand. The oracle tests exist to make that a loud failure.
+followed by hand. The oracle tests turn a missed one into a loud failure.

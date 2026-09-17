@@ -77,10 +77,10 @@ fragments do not merge into one graph.
 
 ## Naming haplotypes
 
-Upstream gbz-base cannot say which haplotype a subgraph path belongs to, so it
-emits `unknown#N`. This package adds that with two side tables that a small Rust
-tool (`tools/haplotype-index/`) writes into an existing database, or into a
-standalone companion beside a database someone else hosts:
+Upstream gbz-base cannot determine which haplotype a subgraph path belongs to,
+so it emits `unknown#N`. This package adds that with two side tables that a
+small Rust tool (`tools/haplotype-index/`) writes into an existing database, or
+into a standalone companion beside a database someone else hosts:
 
 ```ts
 const db = await GBZBase.open(new RemoteFile(graphUrl), {
@@ -92,10 +92,10 @@ With names in hand, `keep` cuts a window to a chosen set of haplotypes — the
 reference walk, the walks the predicate accepts and the nodes those walks visit,
 so the drawing shows that set's private sequence and nothing else's. On a
 companion carrying anchors those haplotypes are walked from an anchor before the
-window, and nothing else is extracted or named, so the query costs the set
-rather than the graph: the eight haplotypes of the MHC class II tutorial window
-come back in 0.97 s against 9.16 s for all 464, both warm.
-[docs/haplotype-index.md](docs/haplotype-index.md) builds the index and explains
+window, and nothing else is extracted or named, so the query's cost scales with
+the set rather than the graph: the eight haplotypes of the MHC class II tutorial
+window come back in 0.97 s against 9.16 s for all 464, both warm.
+[docs/haplotype-index.md](docs/haplotype-index.md) covers building the index and
 the two routes; [docs/performance.md](docs/performance.md) has the measurements.
 
 ## Snarls
@@ -112,9 +112,9 @@ misreads every file written on a 64-bit host, and
 [the PR to fix that](https://github.com/jltsiren/gbwt-rs/pull/14) was closed
 unmerged — reasonably, since the same hazard sits on every other `usize` in the
 crate. `wasm64` fixes the width but cannot carry gbz-base, whose bundled SQLite
-has no wasm64 libc. A TypeScript reader has neither problem, and gets HTTP range
-access and a JBrowse RPC worker for free:
-[docs/why-not-wasm.md](docs/why-not-wasm.md).
+has no wasm64 libc. A TypeScript reader has neither problem, and it supports
+HTTP range access and runs in a JBrowse RPC worker without extra code for
+either: [docs/why-not-wasm.md](docs/why-not-wasm.md).
 
 ## In JBrowse
 
@@ -125,13 +125,14 @@ is the consumer this was written for. Its `GbzBaseSyntenyAdapter` opens a
 haplotype lanes — in an RPC worker, like any other adapter.
 
 Because the worker is where the subgraph is built and the main thread is where
-it is drawn, the shape it crosses in matters more than the shape it is built in.
-`toSubgraphJson` gives upstream's shape, which spends an object and a
-stringified id on each of a human window's ~350,000 steps and costs about 295 ms
-to structured-clone; `toCompactSubgraph` gives the same subgraph as typed arrays
-of GBWT handles, which clones in 1.9 ms and can be transferred instead of
-copied. [docs/api.md](docs/api.md#which-of-the-two-to-take) has both shapes and
-the measurements.
+it is drawn, the representation it crosses in matters more than the
+representation it is built in. `toSubgraphJson` returns upstream's format, which
+uses an object and a stringified id for each of a human window's ~350,000 steps
+and costs about 295 ms to structured-clone; `toCompactSubgraph` returns the same
+subgraph as typed arrays of GBWT handles, which clones in 1.9 ms and can be
+transferred instead of copied.
+[docs/api.md](docs/api.md#which-of-the-two-to-take) has both formats and the
+measurements.
 
 ## Docs
 
