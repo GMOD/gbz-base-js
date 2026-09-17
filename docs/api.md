@@ -276,10 +276,10 @@ built by a different gbz-base and a file that is not one at all.
 `SCHEMA_VERSION` is the string this reader understands, exported beside it.
 
 `ForwardOnlyIndexError` is refused at open rather than at query time, because a
-forward-only index has no sample for about half the walks in a graph like HPRC's
-— the ones stored against their reference — so `GBZBase.open` refuses rather
-than return a half-named result to a caller. Rebuild the companion without
-`--forward-only`.
+forward-only index has no sample for a walk on a contig stored against its
+reference, which is about half the contigs in a graph like HPRC's, so
+`GBZBase.open` refuses rather than return a half-named result to a caller.
+Rebuild the companion without `--forward-only`.
 
 `SubgraphLimitError` carries the `limit` it hit, and for an interval query the
 `windowBp` asked for against the `walkedBp` covered before it stopped, so a
