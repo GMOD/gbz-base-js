@@ -1728,7 +1728,13 @@ export class Subgraph {
               pending.push(step)
               pendingBp += step.len
             } else {
-              if (pendingBp > context) {
+              // A run of steps the reference does not carry is the walk's own
+              // sequence, so it is kept however long it runs: a repeat
+              // expansion is nothing else. A run that rejoins the reference
+              // BEFORE the window went somewhere else and came back, and a
+              // long one of those starts a new piece rather than drawing the
+              // detour.
+              if (pendingBp > context && refOffset < windowStart) {
                 pieces.push(piece)
                 piece = []
               } else {
