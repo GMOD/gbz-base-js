@@ -134,6 +134,8 @@ the measurements.
 
 ## Docs
 
+- [docs/what-it-answers.md](docs/what-it-answers.md) — what a database is,
+  beside an rGFA, and what it does not answer directly
 - [docs/api.md](docs/api.md) — every option, query function, output format and
   command line flag
 - [docs/dataflow.md](docs/dataflow.md) — how a query flows, and where the two
