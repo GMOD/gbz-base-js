@@ -73,11 +73,11 @@ haplotypes, 346,993 steps, 852 KB in 9 range requests:
 | `toSubgraphJson`, no CIGARs             | 14–28 ms  |
 | `JSON.stringify` of that                | 45–87 ms  |
 
-Nothing dominates: the work is spread across graph walking, SQLite page
+No phase dominates: the work is spread across graph walking, SQLite page
 decoding, alignment and output, none above about a third.
 
-The same query with latency added to each read shows what that is worth against
-the network:
+The 200 kb window above, run again with latency added to each read, shows what
+that split is worth against the network:
 
 | read latency | query  | total   |
 | ------------ | ------ | ------- |
@@ -87,8 +87,8 @@ the network:
 
 Nine requests, and `(897 − 465) / 50 ≈ 8.6` of them serial. At a realistic RTT
 about two thirds of the query is waiting on the network, so cutting round trips
-is worth more than making the decoding faster — which is what the block size and
-the prefetching are for.
+is worth more than making the decoding faster. The block size and the
+prefetching cut round trips.
 
 ## Where that inverts
 
@@ -112,9 +112,10 @@ same query run twice in one process, so the second makes no request at all:
 `extractPaths` and `alignments` are 87% of the warm query and neither touches
 the network, so a window is never cheaper than they are.
 
-That is not the same as saying the network stopped mattering, and the warm row
-above is the least representative case there is — it re-runs the _identical_
-window. A window the session has not visited still fetches:
+The dominance of `extractPaths` and `alignments` does not mean the network
+stopped mattering. The warm row above is the least representative case there is
+— it re-runs the _identical_ window. A window the session has not visited still
+fetches:
 
 | MHC class II, 90 kb, all 464 | time   | requests | bytes   |
 | ---------------------------- | ------ | -------- | ------- |
@@ -123,9 +124,9 @@ window. A window the session has not visited still fetches:
 | the adjacent 90 kb, first    | 5.36 s | 7        | 1.64 MB |
 | that window again            | 3.69 s | 0        | 0.00 MB |
 
-So panning is roughly a third network and two thirds CPU, and the first window
-of a session about half each. What changes past the small-window regime is that
-the CPU half stops being negligible, not that the network does.
+Panning is roughly a third network and two thirds CPU, and the first window of a
+session about half each. Past the small-window regime, the CPU half stops being
+negligible; the network share does not.
 
 The CPU half is O(walks × steps), which is why a selection is worth more than
 any amount of tuning underneath it: `keep` for eight haplotypes of the 464 is
@@ -198,10 +199,11 @@ buys.
 | MHC class II | 43,540 | 464   | 9.86M | 10.516 s | 5.928 s | 1.77x |
 | AMY1         | 12,240 | 1,913 | 4.59M | 2.819 s  | 2.236 s | 1.26x |
 
-So 1.3-1.8x, best where the steps are most concentrated and worst at AMY1 —
-which is the locus with the most walks, so the per-walk allocation savings are
-not what is paying. The alignment records and the GFA cut hash identically
-before and after at every locus, over outputs from 2 MB to 101 MB.
+The ratio ranges from 1.3x to 1.8x, best where the steps are most concentrated.
+AMY1, the locus with the most walks, is the worst case, so the per-walk
+allocation savings are not its main cost. The alignment records and the GFA cut
+hash identically before and after at every locus, over outputs from 2 MB to 101
+MB.
 
 The tables above this section were measured before that change and are the
 conservative numbers.
@@ -224,9 +226,9 @@ and 0 LCS alignments at every locus tried, because `orderedMatches` succeeds.
 The rest of the time is Map lookups, small-object allocation, string building
 and `JSON.stringify`, which is already native.
 
-This is why the output shape got the attention instead: 295 ms to structured-
-clone the upstream shape against 1.9 ms for the compact one is a bigger win than
-any decoding kernel here could offer, and it needed no new runtime.
+The output shape got the attention instead, because 295 ms to structured-clone
+the upstream shape against 1.9 ms for the compact one is a bigger win than any
+decoding kernel here could offer, and it needed no new runtime.
 
 ## Measuring your own
 

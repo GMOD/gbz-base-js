@@ -44,14 +44,15 @@ Coordinates are 0-based half-open, and are offsets along the path you named, so
 `sample#haplotype#contig` string, or a bare contig for a graph whose reference
 paths have no sample.
 
-It reads only the SQLite pages a query touches, so a multi-gigabyte database on
-an HTTP server is queried through range requests without downloading it. Any
-`generic-filehandle2` source works — `LocalFile`, `RemoteFile`, `BlobFile` — and
-there is a `gbz-base-query` command line that mirrors the upstream tool. Every
-option, method and query function: [docs/api.md](docs/api.md); what a query does
-between the call and the records, drawn: [docs/dataflow.md](docs/dataflow.md).
+GBZBase reads only the SQLite pages a query touches, so it queries a
+multi-gigabyte database on an HTTP server through range requests without
+downloading it. Any `generic-filehandle2` source works — `LocalFile`,
+`RemoteFile`, `BlobFile` — and there is a `gbz-base-query` command line that
+mirrors the upstream tool. Every option, method and query function:
+[docs/api.md](docs/api.md); what a query does between the call and the records,
+drawn: [docs/dataflow.md](docs/dataflow.md).
 
-## What comes back
+## Alignment records
 
 ```ts
 for (const alignment of alignments) {

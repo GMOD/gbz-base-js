@@ -1,9 +1,9 @@
-# How it works
+# Reading SQLite without SQLite
 
-It answers the same subgraph queries as `gbz-base query`, reading only the
-SQLite pages a query touches, so a multi-gigabyte database on an HTTP server is
-queried through range requests without downloading it or compiling anything to
-WebAssembly ([why-not-wasm.md](why-not-wasm.md) is that second half).
+This reader answers the same subgraph queries as `gbz-base query`, reading only
+the SQLite pages a query touches, so it queries a multi-gigabyte database on an
+HTTP server through range requests without downloading it or compiling anything
+to WebAssembly ([why-not-wasm.md](why-not-wasm.md) is that second half).
 
 No SQLite library is involved. The reader walks the SQLite b-trees directly
 (rowid lookups, index seeks, overflow chains) and decodes the GBWT node records

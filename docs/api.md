@@ -47,7 +47,7 @@ works too, and `parsePathName` is the parser if you want it separately.
 | `snarls`     | `contained` or `overlapping`, `getSubgraphForRange` only         |
 | `signal`     | `AbortSignal`, checked between range requests                    |
 
-Both resolve haplotype names when the database can.
+The two range queries resolve haplotype names when the database can.
 
 `haplotypes` is upstream's set of four. `all` keeps every walk crossing the
 window and `distinct` merges the identical ones into one record carrying their
