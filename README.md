@@ -145,6 +145,8 @@ the measurements.
 - [docs/snarls.md](docs/snarls.md) — the snarl options and `--between`
 - [docs/performance.md](docs/performance.md) — measured windows, and picking
   `context`
+- [docs/optimizations.md](docs/optimizations.md) — why the alignment and the
+  anchored walk look the way they do
 - [docs/internals.md](docs/internals.md) — reading SQLite without SQLite, and
   where this reader's CIGARs differ from upstream's
 - [docs/why-not-wasm.md](docs/why-not-wasm.md) — why the Rust was not compiled
