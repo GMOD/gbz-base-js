@@ -43,6 +43,14 @@ the steps, so memory stays linear in the two walks; the same fragment aligns in
 8 ms. Both are weight-optimal, but they can pick different equal-weight
 alignments.
 
+The chaining search pays in time where the Myers search paid in memory: its cost
+follows the number of step pairs that share a node, so two walks looping the
+same node thousands of times make millions of pairs. The search matches a shared
+prefix and suffix outright at every level of the split, which absorbs a loop
+both walks enter from the same flank — 3,200 passes against 3,000 align in 4 ms
+rather than 740. Loops the trim cannot reach still cost: with the flanking nodes
+swapped, the same pair takes 400 ms.
+
 One deliberate departure: where a reference walk is stored against node
 orientation (upstream prints "the reference path is not in canonical
 orientation" there), every other walk comes out in the opposite orientation, and

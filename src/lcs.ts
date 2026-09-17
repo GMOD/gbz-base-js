@@ -60,11 +60,13 @@ class SparseLcs {
   readonly pairs: [number, number][] = []
   total = 0
   private readonly a: number[]
+  private readonly b: number[]
   private readonly weight: Weight
   private readonly occurrences = new Map<number, number[]>()
 
   constructor(a: number[], b: number[], weight: Weight) {
     this.a = a
+    this.b = b
     this.weight = weight
     b.forEach((x, j) => {
       const list = this.occurrences.get(x)
@@ -77,6 +79,35 @@ class SparseLcs {
   }
 
   solve(a0: number, a1: number, b0: number, b1: number) {
+    let prefix = 0
+    while (
+      a0 + prefix < a1 &&
+      b0 + prefix < b1 &&
+      this.a[a0 + prefix] === this.b[b0 + prefix]
+    ) {
+      this.match(a0 + prefix, b0 + prefix)
+      prefix += 1
+    }
+    let suffix = 0
+    while (
+      a1 - suffix > a0 + prefix &&
+      b1 - suffix > b0 + prefix &&
+      this.a[a1 - suffix - 1] === this.b[b1 - suffix - 1]
+    ) {
+      suffix += 1
+    }
+    this.solveMiddle(a0 + prefix, a1 - suffix, b0 + prefix, b1 - suffix)
+    for (let k = suffix; k > 0; k--) {
+      this.match(a1 - k, b1 - k)
+    }
+  }
+
+  private match(i: number, j: number) {
+    this.pairs.push([i, j])
+    this.total += this.weight(this.a[i]!)
+  }
+
+  private solveMiddle(a0: number, a1: number, b0: number, b1: number) {
     if (a0 === a1 || b0 === b1) {
       return
     }

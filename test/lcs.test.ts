@@ -136,6 +136,19 @@ describe('weighted lcs', () => {
     ])
   })
 
+  it('trims a shared loop rather than chaining every pair in it', () => {
+    const ref = [1, 2, ...new Array<number>(3000).fill(7), 3, 4]
+    const path = [1, 2, ...new Array<number>(3200).fill(7), 3, 4]
+    const start = performance.now()
+    const [pairs, total] = weightedLcs(path, ref, nodeLength)
+    expect(performance.now() - start).toBeLessThan(100)
+    expect(total).toBe(ref.reduce((sum, x) => sum + nodeLength(x), 0))
+    expect(runStarts(pairs)).toEqual([
+      [0, 0],
+      [3202, 3002],
+    ])
+  })
+
   it('reaches the naive weight when both sequences loop the same nodes', () => {
     const segment = Array.from({ length: 10 }, (_, i) => 100 + i)
     const repeat = (passes: number, head: number[], tail: number[]) => [
