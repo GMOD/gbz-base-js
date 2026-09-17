@@ -134,8 +134,8 @@ the measurements.
 
 ## Docs
 
-- [docs/what-it-answers.md](docs/what-it-answers.md) — what a database is,
-  beside an rGFA, and what it does not answer directly
+- [docs/contents-and-limitations.md](docs/contents-and-limitations.md) — how a
+  GBZ differs from an rGFA, and the limits of a query
 - [docs/api.md](docs/api.md) — every option, query function, output format and
   command line flag
 - [docs/dataflow.md](docs/dataflow.md) — how a query flows, and where the two
