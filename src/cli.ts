@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
 import { GBZBase } from './db.ts'
@@ -18,6 +20,7 @@ import type {
   HaplotypeAlignment,
   HaplotypeOutput,
   IdentificationStats,
+  PairAlignment,
   SnarlOutput,
 } from './subgraph.ts'
 
@@ -40,6 +43,10 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --resolve            name haplotypes from the HaplotypeSamples table
   --keep NAME          keep only the walks of this sample or sample#haplotype (may repeat; implies --resolve)
   --alignments         print one alignment record per haplotype instead of the subgraph
+  --against NAME       print PAF of every other named walk against this sample#haplotype, bases compared
+  --stack A,B,C        print PAF of each sample#haplotype against the next one in the list, bases compared
+  --max-gap INT        private bp a PAF record may skip on either walk between two shared nodes (default: 10000)
+  --contig-lengths F   chrom.sizes or .fai giving PAF columns 2 and 7, keyed by contig or sample#haplotype#contig
   --haplotype-index F  companion database written by gbz-haplotype-index --output
   --block-size INT     bytes fetched per range request (default: 65536)
   --stats              print fetch statistics to stderr
@@ -63,6 +70,10 @@ interface Args {
   resolve: boolean
   keep: string[]
   alignments: boolean
+  against?: string
+  stack?: string[]
+  maxGap?: number
+  contigLengths?: string
   blockSize: number
   haplotypeIndex?: string
   stats: boolean
@@ -181,6 +192,20 @@ function parseArgs(argv: string[]): Args {
         args.alignments = true
         args.resolve = true
         break
+      case '--against':
+        args.against = next(i++)
+        args.resolve = true
+        break
+      case '--stack':
+        args.stack = next(i++).split(',')
+        args.resolve = true
+        break
+      case '--contig-lengths':
+        args.contigLengths = next(i++)
+        break
+      case '--max-gap':
+        args.maxGap = Number(next(i++))
+        break
       case '--block-size':
         args.blockSize = Number(next(i++))
         break
@@ -286,6 +311,50 @@ function keepPredicate(keep: string[]) {
     )
 }
 
+function haplotypeRef(text: string) {
+  const [sample, haplotype] = text.split('#')
+  if (!sample || !/^\d+$/.test(haplotype ?? '')) {
+    throw new Error(`Expected sample#haplotype, got ${text}`)
+  }
+  return { sample, haplotype: Number(haplotype) }
+}
+
+function contigLengths(text: string) {
+  return new Map(
+    text
+      .split('\n')
+      .map(line => line.split(/\s+/))
+      .filter(fields => fields.length >= 2)
+      .map(fields => [fields[0]!, Number(fields[1])] as const),
+  )
+}
+
+// A window holds no contig lengths. Without --contig-lengths columns 2 and 7
+// are the record's own end, the least the contig can be.
+function pafLines(alignments: PairAlignment[], lengths: Map<string, number>) {
+  const named = (name: PathName, end: number) => {
+    const full = `${name.sample}#${name.haplotype}#${name.contig}`
+    return [full, lengths.get(full) ?? lengths.get(name.contig) ?? end]
+  }
+  return alignments
+    .map(a =>
+      [
+        ...named(a.query, a.queryEnd),
+        a.queryStart,
+        a.queryEnd,
+        a.strand,
+        ...named(a.target, a.targetEnd),
+        a.targetStart,
+        a.targetEnd,
+        a.matches,
+        a.columns,
+        255,
+        `cg:Z:${a.cigar}\n`,
+      ].join('\t'),
+    )
+    .join('')
+}
+
 function alignmentRecord(alignment: HaplotypeAlignment) {
   const { start, ...rest } = alignment
   return rest.resolved ? { ...rest, name: rest.label, label: undefined } : rest
@@ -312,7 +381,16 @@ export async function main(argv: string[]) {
     haplotype: args.haplotype,
     ...(args.sample === undefined ? {} : { sample: args.sample }),
   }
-  const keep = args.keep.length > 0 ? keepPredicate(args.keep) : undefined
+  if (args.against !== undefined && args.stack !== undefined) {
+    throw new Error('--against and --stack are two shapes of one output')
+  }
+  const kept = args.stack ?? [
+    ...args.keep,
+    ...(args.against === undefined || args.keep.length === 0
+      ? []
+      : [args.against]),
+  ]
+  const keep = kept.length > 0 ? keepPredicate(kept) : undefined
   const anchoredQuery = keep !== undefined && args.interval !== undefined
   const subgraph = args.between
     ? await subgraphBetween(db, args.between[0], args.between[1], opts)
@@ -349,14 +427,40 @@ export async function main(argv: string[]) {
     subgraph.keepHaplotypes(keep)
   }
   const names = args.resolve ? 'resolved' : 'anonymous'
-  const output = args.alignments
-    ? subgraph.alignments().map(alignmentRecord)
-    : subgraph.toSubgraphJson({ cigar: args.cigar, names })
-  process.stdout.write(
-    args.format === 'gfa' && !args.alignments
-      ? await subgraph.toGFA({ cigar: args.cigar, names })
-      : `${JSON.stringify(output)}\n`,
-  )
+  const pairs = args.stack
+    ? args.stack.slice(1).map((target, i) => ({
+        query: haplotypeRef(args.stack![i]!),
+        target: haplotypeRef(target),
+      }))
+    : args.against === undefined
+      ? undefined
+      : [{ target: haplotypeRef(args.against) }]
+  if (pairs === undefined) {
+    const output = args.alignments
+      ? subgraph.alignments().map(alignmentRecord)
+      : subgraph.toSubgraphJson({ cigar: args.cigar, names })
+    process.stdout.write(
+      args.format === 'gfa' && !args.alignments
+        ? await subgraph.toGFA({ cigar: args.cigar, names })
+        : `${JSON.stringify(output)}\n`,
+    )
+  } else {
+    const lengths =
+      args.contigLengths === undefined
+        ? new Map<string, number>()
+        : contigLengths(await readFile(args.contigLengths, 'utf8'))
+    process.stdout.write(
+      pafLines(
+        pairs.flatMap(pair =>
+          subgraph.pairAlignments({
+            ...pair,
+            ...(args.maxGap === undefined ? {} : { maxGap: args.maxGap }),
+          }),
+        ),
+        lengths,
+      ),
+    )
+  }
   if (args.stats) {
     const { fetches, bytesFetched } = db.sqlite.pager
     const index =

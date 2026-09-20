@@ -16,6 +16,7 @@ import {
 } from './gbwt/node.ts'
 import { gfaHeaderLines, sha256Hex, subgraphName } from './graphName.ts'
 import { weightedLcs } from './lcs.ts'
+import { pairAlignments, pairCigar } from './pairAlignment.ts'
 import { formatPathName } from './pathName.ts'
 
 import type {
@@ -130,6 +131,30 @@ export type HaplotypeAlignment = AlignmentSpan &
       }
     | { resolved: false }
   )
+
+export interface HaplotypeRef {
+  sample: string
+  haplotype: number
+}
+
+export interface PairAlignmentOptions {
+  target: HaplotypeRef
+  query?: HaplotypeRef
+  maxGap?: number
+}
+
+export interface PairAlignment {
+  query: PathName
+  queryStart: number
+  queryEnd: number
+  strand: '+' | '-'
+  target: PathName
+  targetStart: number
+  targetEnd: number
+  cigar: string
+  matches: number
+  columns: number
+}
 
 export interface SubgraphOutputOptions {
   cigar?: boolean | undefined
@@ -2383,6 +2408,60 @@ export class Subgraph {
           }
         : { ...span, resolved: false }
     })
+  }
+
+  // One haplotype's walks aligned to another's, on both haplotypes' own
+  // coordinates, with the bases between two shared nodes compared. The
+  // reference path is a named walk like any other, on either side. With no
+  // query, every other named walk in the window is one.
+  pairAlignments(opts: PairAlignmentOptions): PairAlignment[] {
+    const { target, query, maxGap } = opts
+    const walks = this.paths.flatMap(info => {
+      const { identity } = info
+      return identity
+        ? [
+            {
+              name: identity.name,
+              start: identity.name.fragment + identity.hapStart,
+              steps: haplotypeOrderedPath(info, identity),
+            },
+          ]
+        : []
+    })
+    const names = (haplotype: HaplotypeRef) => (name: PathName) =>
+      name.sample === haplotype.sample && name.haplotype === haplotype.haplotype
+    const isTarget = names(target)
+    const isQuery = query ? names(query) : (name: PathName) => !isTarget(name)
+    const sequenceOf = (id: number) =>
+      this.record(encodeNode(id, 'forward')).sequence
+    return walks
+      .filter(walk => isTarget(walk.name))
+      .flatMap(targetWalk =>
+        walks
+          .filter(walk => isQuery(walk.name))
+          .flatMap(queryWalk =>
+            pairAlignments(
+              queryWalk.steps,
+              targetWalk.steps,
+              sequenceOf,
+              maxGap === undefined ? {} : { maxGap },
+            ).map(chain => ({
+              query: queryWalk.name,
+              queryStart: queryWalk.start + chain.queryStart,
+              queryEnd: queryWalk.start + chain.queryEnd,
+              strand: chain.strand,
+              target: targetWalk.name,
+              targetStart: targetWalk.start + chain.targetStart,
+              targetEnd: targetWalk.start + chain.targetEnd,
+              cigar: pairCigar(chain.edits),
+              matches: chain.edits.reduce(
+                (sum, [op, len]) => sum + (op === '=' ? len : 0),
+                0,
+              ),
+              columns: chain.edits.reduce((sum, [, len]) => sum + len, 0),
+            })),
+          ),
+      )
   }
 
   private canonicalEdges(id: number) {

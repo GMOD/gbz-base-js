@@ -64,3 +64,60 @@ haplotype's own coordinates.
 A haplotype whose walk shares no node with the reference has
 `refEnd <= refStart` and an all-insertion CIGAR; those come back like any other,
 to drop or keep as you like.
+
+## One haplotype against another
+
+`cigar` above aligns a haplotype to the reference path and compares no bases:
+the stretch between two shared nodes is an `M` sized by vg's scoring. Two
+haplotypes that share sequence the reference lacks have no record of it there.
+
+`subgraph.pairAlignments({ target, query })` aligns one haplotype's walks to
+another's instead. The reference path is a walk like any other, on either side,
+and with no `query` every other named walk in the window is one:
+
+```ts
+const subgraph = await subgraphForHaplotypes(db, query, start, end, { keep })
+const target = { sample: 'HG02004', haplotype: 2 }
+for (const r of subgraph.pairAlignments({ target })) {
+  console.log(
+    r.query,
+    r.queryStart,
+    r.queryEnd,
+    r.strand,
+    r.targetStart,
+    r.cigar,
+  )
+}
+```
+
+A node both walks visit is a run of `=`. The bases between two shared nodes get
+the highest-scoring global alignment under vg's parameters (match 1, mismatch
+-4, gap -6 and -1 per further base), written as `=`, `X`, `I` and `D`. The
+scoring defines the CIGAR, so two stretches with nothing in common come out as
+one insertion and one deletion with no threshold deciding it. A pair whose
+lengths multiply past 4,000,000 is not aligned and is written the same way.
+
+A record is a run of shared nodes whose order on the target moves one way, and
+`maxGap` (10,000 by default) is the most private bp it skips on either walk, so
+raise it to keep a large insertion inside one record. `queryStart`/`queryEnd`
+and `targetStart`/`targetEnd` are each haplotype's own coordinates, and a `-`
+record's CIGAR reads along the target, the way minimap2 writes one. A haplotype
+the window holds as several walks gives records per walk, and none spans two.
+
+Every walk has to be named, so this needs the
+[haplotype index](haplotype-index.md). `pairAlignments` in `pairAlignment.ts` is
+the same thing over two bare walks of node handles.
+
+On the command line `--against` takes the target and `--stack` takes a list,
+aligning each entry to the next, which is the set of pairs a stacked synteny
+view draws. Both print PAF from one fetch of the window:
+
+```
+gbz-base-query graph.gbz.db --haplotype-index index.db --sample GRCh38 --contig chr6 \
+  --interval 31940000..32090000 --context 0 --max-gap 200000 \
+  --stack 'HG01978#2,HG02004#2,GRCh38#0,HG02818#1,HG00146#1' --contig-lengths lengths.tsv
+```
+
+A window holds no contig lengths. `--contig-lengths` reads PAF columns 2 and 7
+from a chrom.sizes or `.fai`, keyed by contig or by `sample#haplotype#contig`;
+without it they are each record's own end.

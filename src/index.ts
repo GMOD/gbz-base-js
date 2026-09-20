@@ -35,7 +35,10 @@ export type {
   CompactSubgraph,
   HaplotypeAlignment,
   HaplotypeOutput,
+  HaplotypeRef,
   IdentificationStats,
+  PairAlignment,
+  PairAlignmentOptions,
   PathIdentity,
   PathPosition,
   ReferencePath,
@@ -56,4 +59,11 @@ export type { HaplotypeQueryOptions, QueryOptions } from './query.ts'
 export { SqliteDatabase } from './sqlite/database.ts'
 export type { GraphName } from './graphName.ts'
 export { weightedLcs } from './lcs.ts'
+export { pairAlignments, pairCigar } from './pairAlignment.ts'
+export type {
+  PairChain,
+  PairEdit,
+  PairOp,
+  PairOptions,
+} from './pairAlignment.ts'
 export * as nodes from './gbwt/node.ts'

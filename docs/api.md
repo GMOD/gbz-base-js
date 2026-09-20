@@ -106,6 +106,10 @@ for (const alignment of alignments) {
 The fields, how pieces of one walk are joined into a record, and what `resolved`
 means are in [alignments.md](alignments.md).
 
+`subgraph.pairAlignments(target)` aligns the window's other walks to a haplotype
+instead of to the reference, with the bases compared:
+[alignments.md](alignments.md#one-haplotype-against-another).
+
 ## Subgraph output
 
 ```ts
@@ -248,6 +252,8 @@ gbz-base-query https://host/graph.gbz.db --contig chrM --offset 1000 --context 5
 | `--resolve` / `--alignments`            | name the walks / emit alignment records          |
 | `--keep SAMPLE[#HAP]`                   | restrict to these haplotypes, repeatable         |
 | `--cigar`                               | include CIGAR strings in the output              |
+| `--against SAMPLE#HAP` / `--stack A,B`  | PAF against one haplotype / of each against next |
+| `--max-gap` / `--contig-lengths`        | private bp a PAF record skips / PAF cols 2 and 7 |
 | `--haplotypes` / `--limit`              | the walk set / the node cap                      |
 | `--format` / `--block-size`             | output format / bytes per page block             |
 | `--stats`                               | report requests, bytes and the route taken       |
