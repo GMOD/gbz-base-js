@@ -220,6 +220,39 @@ describe('pairAlignments inside a large private stretch', () => {
     )
     expect(rs.filter(r => r.strand === '-')).toHaveLength(1)
   })
+
+  it('aligns a base in one record only, the one scoring higher over the stretch two records share', () => {
+    // the target holds the query's copy inverted base for base, and forward
+    // with every tenth base changed, which no k-mer seeds and only the exact
+    // alignment of the forward record's gap reaches
+    const unit = randomSequence(1000, 21)
+    const diverged = unit.replace(/./g, (base, i: number) =>
+      i % 10 === 5 ? (base === 'A' ? 'C' : 'A') : base,
+    )
+    const left = randomSequence(1000, 22)
+    const right = randomSequence(1000, 23)
+    const rs = records(
+      left + unit + right,
+      left + reverseComplement(unit) + diverged + right,
+    )
+    const alignedTimes = new Uint8Array(300 + 3000 + 300)
+    for (const r of rs) {
+      let qi = 0
+      for (const [op, len] of r.edits) {
+        for (let k = 0; k < len && op !== 'D'; k++) {
+          if (op === '=' || op === 'X') {
+            alignedTimes[
+              r.strand === '-' ? r.queryEnd - 1 - qi - k : r.queryStart + qi + k
+            ]! += 1
+          }
+        }
+        qi += op === 'D' ? 0 : len
+      }
+    }
+    expect(Math.max(...alignedTimes)).toBe(1)
+    const inversion = rs.find(r => r.strand === '-')!
+    expect(count(inversion.edits, '=')).toBeGreaterThanOrEqual(990)
+  })
 })
 
 describe('Subgraph.pairAlignments', () => {

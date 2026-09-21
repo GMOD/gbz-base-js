@@ -555,6 +555,236 @@ function alignPrivate(
   return inversions
 }
 
+interface Claimed extends PairChain {
+  // query stretches on nodes both walks visit
+  shared: Interval[]
+}
+
+type Side = 'query' | 'target'
+
+// Each edit of a record with the query and target position it sits at. A `-`
+// record's edits read along the target, so its query runs down from queryEnd.
+function forEachEdit(
+  r: PairChain,
+  visit: (op: PairOp, len: number, query: number, target: number) => void,
+) {
+  const flipped = r.strand === '-'
+  let qi = 0
+  let ti = 0
+  for (const [op, len] of r.edits) {
+    visit(
+      op,
+      len,
+      flipped ? r.queryEnd - 1 - qi : r.queryStart + qi,
+      r.targetStart + ti,
+    )
+    if (op !== 'D') {
+      qi += len
+    }
+    if (op !== 'I') {
+      ti += len
+    }
+  }
+}
+
+// A record's score under vg's model over [lo, hi) on one side: a column counts
+// where its base on that side does, and a gap where it opens on that side.
+function scoreOver(r: PairChain, side: Side, lo: number, hi: number) {
+  const step = side === 'query' && r.strand === '-' ? -1 : 1
+  let score = 0
+  forEachEdit(r, (op, len, query, target) => {
+    const from = side === 'query' ? query : target
+    const inside = (k: number) => {
+      const at = from + step * k
+      return at >= lo && at < hi
+    }
+    if (op === '=' || op === 'X') {
+      for (let k = 0; k < len; k++) {
+        if (inside(k)) {
+          score += op === '=' ? MATCH : MISMATCH
+        }
+      }
+    } else if ((op === 'I') === (side === 'query')) {
+      for (let k = 0; k < len; k++) {
+        if (inside(k)) {
+          score += k === 0 ? GAP_OPEN : GAP_EXTEND
+        }
+      }
+    } else if (inside(0)) {
+      score += GAP_OPEN + (len - 1) * GAP_EXTEND
+    }
+  })
+  return score
+}
+
+function spanOf(r: PairChain, side: Side): Interval {
+  return side === 'query'
+    ? [r.queryStart, r.queryEnd]
+    : [r.targetStart, r.targetEnd]
+}
+
+// A record's edits with the aligned columns `lost` marks turned into an
+// insertion and a deletion, and its ends trimmed to the columns it keeps.
+function withoutColumns(r: Claimed, lost: Uint8Array): Claimed | undefined {
+  const flipped = r.strand === '-'
+  const edits: PairEdit[] = []
+  let pendingQuery = 0
+  let pendingTarget = 0
+  let column = 0
+  let sharedLost = 0
+  const sharedMask = new Uint8Array(r.queryEnd - r.queryStart)
+  for (const [s, e] of r.shared) {
+    sharedMask.fill(1, s - r.queryStart, e - r.queryStart)
+  }
+  const inShared = (at: number) => sharedMask[at - r.queryStart] === 1
+  const flush = () => {
+    appendEdit(edits, 'I', pendingQuery)
+    appendEdit(edits, 'D', pendingTarget)
+    pendingQuery = 0
+    pendingTarget = 0
+  }
+  forEachEdit(r, (op, len, query) => {
+    if (op === 'I') {
+      pendingQuery += len
+    } else if (op === 'D') {
+      pendingTarget += len
+    } else {
+      for (let k = 0; k < len; k++) {
+        if (lost[column + k]) {
+          pendingQuery += 1
+          pendingTarget += 1
+          if (inShared(flipped ? query - k : query + k)) {
+            sharedLost += 1
+          }
+        } else {
+          if (pendingQuery > 0 || pendingTarget > 0) {
+            flush()
+          }
+          appendEdit(edits, op, 1)
+        }
+      }
+      column += len
+    }
+  })
+  flush()
+  const lead = { I: 0, D: 0 }
+  while (edits[0]?.[0] === 'I' || edits[0]?.[0] === 'D') {
+    const [op, len] = edits.shift()!
+    lead[op as 'I' | 'D'] += len
+  }
+  const tail = { I: 0, D: 0 }
+  while (edits.at(-1)?.[0] === 'I' || edits.at(-1)?.[0] === 'D') {
+    const [op, len] = edits.pop()!
+    tail[op as 'I' | 'D'] += len
+  }
+  return edits.length === 0
+    ? undefined
+    : {
+        ...r,
+        queryStart: r.queryStart + (flipped ? tail.I : lead.I),
+        queryEnd: r.queryEnd - (flipped ? lead.I : tail.I),
+        targetStart: r.targetStart + lead.D,
+        targetEnd: r.targetEnd - tail.D,
+        edits,
+        sharedBases: r.sharedBases - sharedLost,
+      }
+}
+
+// A base aligns in one record at most. Where two records align the same bases
+// on either walk, the one scoring higher over the stretch their spans share
+// keeps them, and the other gives them up as an insertion and a deletion. In a
+// tandem array whose copies run both ways, one query copy aligns forward to one
+// target copy and inverted to another, and both are homology; the scoring
+// decides which one the pair's picture shows.
+function claimOnce(
+  records: Claimed[],
+  queryLength: number,
+  targetLength: number,
+  minMatch: number,
+) {
+  const claims = {
+    query: new Uint8Array(queryLength),
+    target: new Uint8Array(targetLength),
+  }
+  const columnsOf = records.map(r => {
+    const columns: [number, number][] = []
+    forEachEdit(r, (op, len, query, target) => {
+      if (op === '=' || op === 'X') {
+        for (let k = 0; k < len; k++) {
+          columns.push([r.strand === '-' ? query - k : query + k, target + k])
+        }
+      }
+    })
+    for (const [query, target] of columns) {
+      claims.query[query] = Math.min(255, claims.query[query]! + 1)
+      claims.target[target] = Math.min(255, claims.target[target]! + 1)
+    }
+    return columns
+  })
+  const holders = {
+    query: new Map<number, number[]>(),
+    target: new Map<number, number[]>(),
+  }
+  columnsOf.forEach((columns, i) => {
+    for (const [query, target] of columns) {
+      for (const [side, at] of [
+        ['query', query],
+        ['target', target],
+      ] as const) {
+        if (claims[side][at]! > 1) {
+          const held = holders[side].get(at)
+          if (!held) {
+            holders[side].set(at, [i])
+          } else if (held.at(-1) !== i) {
+            held.push(i)
+          }
+        }
+      }
+    }
+  })
+  const beaten = new Map<string, boolean>()
+  const losesTo = (i: number, j: number, side: Side) => {
+    const key = `${side}:${i}:${j}`
+    let loses = beaten.get(key)
+    if (loses === undefined) {
+      const [si, ei] = spanOf(records[i]!, side)
+      const [sj, ej] = spanOf(records[j]!, side)
+      const lo = Math.max(si, sj)
+      const hi = Math.min(ei, ej)
+      loses =
+        scoreOver(records[i]!, side, lo, hi) <
+        scoreOver(records[j]!, side, lo, hi)
+      beaten.set(key, loses)
+    }
+    return loses
+  }
+  return records.flatMap((r, i) => {
+    const columns = columnsOf[i]!
+    const lost = new Uint8Array(columns.length)
+    columns.forEach(([query, target], c) => {
+      for (const [side, at] of [
+        ['query', query],
+        ['target', target],
+      ] as const) {
+        if (
+          !lost[c] &&
+          holders[side].get(at)?.some(j => j !== i && losesTo(i, j, side))
+        ) {
+          lost[c] = 1
+        }
+      }
+    })
+    if (!lost.includes(1)) {
+      return [r]
+    }
+    const kept = withoutColumns(r, lost)
+    const matched =
+      kept?.edits.reduce((sum, [op, len]) => sum + (op === '=' ? len : 0), 0) ??
+      0
+    return kept && matched >= minMatch ? [kept] : []
+  })
+}
+
 function walkSequence(walk: number[], sequenceOf: (id: number) => string) {
   return walk
     .map(handle => {
@@ -685,7 +915,7 @@ export function pairAlignments(
     walkOffsets(target, sequenceOf),
   )
   const minMatch = opts.minMatch ?? DEFAULT_MIN_MATCH
-  const records: PairChain[] = []
+  const records: Claimed[] = []
   for (const chain of chainRuns(
     runs,
     opts.maxGap ?? Infinity,
@@ -711,6 +941,7 @@ export function pairAlignments(
             : targetFrom + inversion.targetEnd,
           strand: flipped ? '+' : '-',
           edits: flipped ? inversion.edits.reverse() : inversion.edits,
+          shared: [],
         })
       }
     })
@@ -725,9 +956,12 @@ export function pairAlignments(
         (sum, { run, trim }) => sum + run.qe - run.qs - trim,
         0,
       ),
+      shared: chain.map(({ run, trim }) => [run.qs + trim, run.qe]),
     })
   }
-  return records.sort((x, y) => x.queryStart - y.queryStart)
+  return claimOnce(records, a.length, b.length, minMatch)
+    .map(({ shared: _, ...record }) => record)
+    .sort((x, y) => x.queryStart - y.queryStart)
 }
 
 export function pairCigar(edits: PairEdit[]) {
