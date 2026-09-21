@@ -155,6 +155,73 @@ describe('pairAlignments past the exact alignment', () => {
   })
 })
 
+describe('pairAlignments inside a large private stretch', () => {
+  const count = (edits: [string, number][], op: string) =>
+    edits.reduce((sum, [o, len]) => sum + (o === op ? len : 0), 0)
+  // anchors long enough to chain across the stretch between them
+  const records = (query: string, target: string) => {
+    const sequences: Record<number, string> = {
+      1: randomSequence(300, 11),
+      2: randomSequence(300, 12),
+      3: query,
+      4: target,
+    }
+    return pairAlignments(
+      forward(1, 3, 2),
+      forward(1, 4, 2),
+      id => sequences[id]!,
+    )
+  }
+
+  it('aligns the gap between two chained k-mer runs by seeding it again', () => {
+    // the target repeats the unit 66 times, past the 64 occurrences a k-mer may
+    // seed from, so only the flanks chain; the gap between them holds one copy
+    const unit = randomSequence(2100, 13)
+    const left = randomSequence(1000, 14)
+    const right = randomSequence(1000, 15)
+    const [record, ...rest] = records(
+      left + unit + right,
+      unit.repeat(65) + left + unit + right,
+    )
+    expect(rest).toEqual([])
+    expect(count(record!.edits, 'I')).toBe(0)
+    expect(count(record!.edits, '=')).toBe(300 + 1000 + 2100 + 1000 + 300)
+  })
+
+  it('keeps an inversion nested in the gap of the forward chain over the same stretch', () => {
+    const left = randomSequence(1000, 14)
+    const inverted = randomSequence(1000, 15)
+    const right = randomSequence(1000, 16)
+    const rs = records(
+      left + inverted + right,
+      left + reverseComplement(inverted) + right,
+    )
+    // each flank may run a base into the inversion by chance, which costs the
+    // inversion that base and no more
+    expect(rs.map(r => r.strand)).toEqual(['+', '-'])
+    const inversion = rs[1]!
+    expect(inversion.queryStart).toBeGreaterThanOrEqual(1300)
+    expect(inversion.queryEnd).toBeLessThanOrEqual(2300)
+    expect(inversion.edits.every(([op]) => op === '=')).toBe(true)
+    expect(count(inversion.edits, '=')).toBeGreaterThanOrEqual(990)
+  })
+
+  it('lets no later chain re-claim, on a paralog, what an earlier record of its orientation spans', () => {
+    // flipped against the target, left-gap-right chains as one record, and the
+    // gap's own copy sits past it in the target, where only a nested chain
+    // could reach it
+    const left = randomSequence(1000, 14)
+    const gap = randomSequence(1000, 15)
+    const other = randomSequence(1000, 16)
+    const right = randomSequence(1000, 17)
+    const rs = records(
+      left + gap + right,
+      reverseComplement(left + other + right + gap),
+    )
+    expect(rs.filter(r => r.strand === '-')).toHaveLength(1)
+  })
+})
+
 describe('Subgraph.pairAlignments', () => {
   it('matches the bases of both walks in every column, haplotype against haplotype', async () => {
     const db = await GBZBase.open(

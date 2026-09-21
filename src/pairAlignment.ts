@@ -35,6 +35,8 @@ const MAX_ALIGNED_CELLS = 4_000_000
 const CHAIN_LOOKBACK = 5000
 const KMER = 15
 const MAX_KMER_OCCURRENCES = 64
+// each level's gaps lie strictly inside the last, so this only bounds the work
+const MAX_FILL_DEPTH = 8
 
 // vg's scoring, the model the reference CIGARs in subgraph.ts are scored by
 const MATCH = 1
@@ -183,8 +185,56 @@ interface Link {
   trim: number
 }
 
-function overlaps(intervals: [number, number][], start: number, end: number) {
-  return intervals.some(([s, e]) => start < e && s < end)
+type Interval = [number, number]
+
+// The stretch of a run from offset `from` to `to` along it
+function sliceRun(run: Run, from: number, to: number): Run {
+  return {
+    qs: run.qs + from,
+    qe: run.qs + to,
+    ts: run.flipped ? run.te - to : run.ts + from,
+    te: run.flipped ? run.te - from : run.ts + to,
+    flipped: run.flipped,
+  }
+}
+
+// What is left of a run once taken bases are cut out of it, as the pieces a
+// k-mer long or more. An exact match divides at any base, so a flank that runs
+// one base into an inversion by chance costs the inversion one base, not all
+// of it.
+function untakenPieces(run: Run, query: Interval[], target: Interval[]) {
+  const len = run.qe - run.qs
+  const blocked: Interval[] = []
+  for (const [s, e] of query) {
+    const lo = Math.max(0, s - run.qs)
+    const hi = Math.min(len, e - run.qs)
+    if (lo < hi) {
+      blocked.push([lo, hi])
+    }
+  }
+  for (const [s, e] of target) {
+    const lo = Math.max(0, run.flipped ? run.te - e : s - run.ts)
+    const hi = Math.min(len, run.flipped ? run.te - s : e - run.ts)
+    if (lo < hi) {
+      blocked.push([lo, hi])
+    }
+  }
+  if (blocked.length === 0) {
+    return [run]
+  }
+  blocked.sort((x, y) => x[0] - y[0])
+  const pieces: Run[] = []
+  let from = 0
+  for (const [lo, hi] of blocked) {
+    if (lo - from >= KMER) {
+      pieces.push(sliceRun(run, from, lo))
+    }
+    from = Math.max(from, hi)
+  }
+  if (len - from >= KMER) {
+    pieces.push(sliceRun(run, from, len))
+  }
+  return pieces
 }
 
 // The best-scoring collinear chain of runs, then the best over the runs that
@@ -199,8 +249,11 @@ function chainRuns(
   jumpCost: JumpCost,
 ) {
   const chains: Link[][] = []
-  const queryTaken: [number, number][] = []
-  const targetTaken: [number, number][] = []
+  const basesTaken = { query: [] as Interval[], target: [] as Interval[] }
+  const spanTaken = {
+    forward: { query: [] as Interval[], target: [] as Interval[] },
+    flipped: { query: [] as Interval[], target: [] as Interval[] },
+  }
   let pool = [...runs].sort((a, b) => a.qs - b.qs || a.ts - b.ts)
   while (pool.length > 0) {
     const score = pool.map(run => run.qe - run.qs)
@@ -253,17 +306,37 @@ function chainRuns(
       break
     }
     chains.push(chain)
+    // A record's CIGAR accounts for every base between its ends in its own
+    // orientation, so a later chain of that orientation may not nest in its
+    // gaps: taking only the runs let one re-claim an earlier record's bases on
+    // a paralog. An inversion is what a forward CIGAR cannot account for, so
+    // across orientations only the bases themselves are taken.
+    const first = chain[0]!
+    const last = chain.at(-1)!
+    const { flipped } = first.run
+    const spans = flipped ? spanTaken.flipped : spanTaken.forward
+    spans.query.push([first.run.qs + first.trim, last.run.qe])
+    spans.target.push(
+      flipped
+        ? [last.run.ts, first.run.te - first.trim]
+        : [first.run.ts + first.trim, last.run.te],
+    )
     for (const { run, trim } of chain) {
-      queryTaken.push([run.qs + trim, run.qe])
-      targetTaken.push(
+      basesTaken.query.push([run.qs + trim, run.qe])
+      basesTaken.target.push(
         run.flipped ? [run.ts, run.te - trim] : [run.ts + trim, run.te],
       )
     }
-    pool = pool.filter(
-      run =>
-        !overlaps(queryTaken, run.qs, run.qe) &&
-        !overlaps(targetTaken, run.ts, run.te),
-    )
+    pool = pool
+      .flatMap(run => {
+        const same = run.flipped ? spanTaken.flipped : spanTaken.forward
+        return untakenPieces(
+          run,
+          [...basesTaken.query, ...same.query],
+          [...basesTaken.target, ...same.target],
+        )
+      })
+      .sort((x, y) => x.qs - y.qs || x.ts - y.ts)
   }
   return chains
 }
@@ -357,7 +430,9 @@ function chainEdits(
   }
 }
 
-function alignSmall(a: string, b: string, edits: PairEdit[]) {
+// Aligned exactly within the cell budget; past it an insertion and a deletion,
+// which claims no homology.
+function alignExact(a: string, b: string, edits: PairEdit[]) {
   if (a.length * b.length <= MAX_ALIGNED_CELLS) {
     affineAlignment(a, b, edits)
   } else {
@@ -366,10 +441,37 @@ function alignSmall(a: string, b: string, edits: PairEdit[]) {
   }
 }
 
+// The private bases between two runs of one chain, whose orientation the chain
+// has already fixed. Past the cell budget they are seeded on forward k-mers and
+// chained again, recursing into the gaps that chain leaves. It finds no
+// inversions, since the stretch has an orientation already.
+function fillGap(a: string, b: string, edits: PairEdit[], depth = 0) {
+  const [chain] =
+    a.length * b.length > MAX_ALIGNED_CELLS && depth < MAX_FILL_DEPTH
+      ? chainRuns(forwardKmerRuns(a, b), Infinity, KMER, kmerJumpCost)
+      : []
+  if (!chain) {
+    alignExact(a, b, edits)
+    return
+  }
+  const deeper = (qa: string, tb: string, into: PairEdit[]) => {
+    fillGap(qa, tb, into, depth + 1)
+  }
+  const first = chain[0]!.run
+  const last = chain.at(-1)!.run
+  deeper(a.slice(0, first.qs), b.slice(0, first.ts), edits)
+  chainEdits(chain, a, b, edits, deeper)
+  deeper(a.slice(last.qe), b.slice(last.te), edits)
+}
+
+function fill(a: string, b: string, edits: PairEdit[]) {
+  fillGap(a, b, edits)
+}
+
 // A chain as a record in the coordinates of the two strings it was made on
 function recordOf(chain: Link[], a: string, b: string): PairChain {
   const edits: PairEdit[] = []
-  chainEdits(chain, a, b, edits, alignSmall)
+  chainEdits(chain, a, b, edits, fill)
   const first = chain[0]!
   const last = chain.at(-1)!
   const { flipped } = first.run
@@ -412,11 +514,35 @@ function alignPrivate(
       .filter(chain => chain[0]!.run.flipped)
       .map(chain => recordOf(chain, a, b))
     if (forward) {
+      // The forward record holds no inversion, so an inversion's bases stay
+      // unaligned in it. A gap that hides one is not seeded again: at a tandem
+      // array that finds only a neighbouring copy, matched forward over bases
+      // the inversion's own record already claims.
+      const forwardFill = (
+        qa: string,
+        tb: string,
+        into: PairEdit[],
+        queryFrom: number,
+        targetFrom: number,
+      ) => {
+        const hidesInversion = inversions.some(
+          inversion =>
+            (queryFrom < inversion.queryEnd &&
+              inversion.queryStart < queryFrom + qa.length) ||
+            (targetFrom < inversion.targetEnd &&
+              inversion.targetStart < targetFrom + tb.length),
+        )
+        if (hidesInversion) {
+          alignExact(qa, tb, into)
+        } else {
+          fillGap(qa, tb, into)
+        }
+      }
       const first = forward[0]!.run
       const last = forward.at(-1)!.run
-      alignSmall(a.slice(0, first.qs), b.slice(0, first.ts), edits)
-      chainEdits(forward, a, b, edits, alignSmall)
-      alignSmall(a.slice(last.qe), b.slice(last.te), edits)
+      forwardFill(a.slice(0, first.qs), b.slice(0, first.ts), edits, 0, 0)
+      chainEdits(forward, a, b, edits, forwardFill)
+      forwardFill(a.slice(last.qe), b.slice(last.te), edits, last.qe, last.te)
     } else {
       appendEdit(edits, 'I', a.length)
       appendEdit(edits, 'D', b.length)
