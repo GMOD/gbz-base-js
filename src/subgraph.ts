@@ -154,6 +154,7 @@ export interface PairAlignment {
   cigar: string
   matches: number
   columns: number
+  sharedBases: number
 }
 
 export interface SubgraphOutputOptions {
@@ -2459,6 +2460,7 @@ export class Subgraph {
                 0,
               ),
               columns: chain.edits.reduce((sum, [, len]) => sum + len, 0),
+              sharedBases: chain.sharedBases,
             })),
           ),
       )

@@ -21,6 +21,8 @@ const SEQUENCES: Record<number, string> = {
   4: 'ACGTTGCA',
   5: 'T'.repeat(24),
   6: 'CA'.repeat(15),
+  7: 'GATTACAGAT'.repeat(4),
+  8: 'TTGACCAGTA'.repeat(4),
 }
 const sequenceOf = (id: number) => SEQUENCES[id]!
 const forward = (...ids: number[]) => ids.map(id => encodeNode(id, 'forward'))
@@ -32,6 +34,7 @@ describe('pairAlignments', () => {
       forward(1, 4, 3),
       forward(1, 2, 3),
       sequenceOf,
+      { minMatch: 1 },
     )
     expect(chain).toMatchObject({
       queryStart: 0,
@@ -48,6 +51,7 @@ describe('pairAlignments', () => {
       flipped(3, 4, 1),
       forward(1, 2, 3),
       sequenceOf,
+      { minMatch: 1 },
     )
     expect(chain).toMatchObject({
       queryStart: 0,
@@ -61,22 +65,93 @@ describe('pairAlignments', () => {
 
   it('writes two unrelated stretches as an insertion and a deletion', () => {
     const [chain] = pairAlignments(
-      forward(1, 5, 3),
-      forward(1, 6, 3),
+      forward(7, 5, 8),
+      forward(7, 6, 8),
       sequenceOf,
+      { minMatch: 1 },
     )
-    expect(pairCigar(chain!.edits)).toBe('10=24I30D10=')
+    expect(pairCigar(chain!.edits)).toBe('40=24I30D40=')
+    expect(chain!.sharedBases).toBe(80)
   })
 
   it('breaks a record at a private run longer than maxGap', () => {
     const chains = pairAlignments(
-      forward(1, 5, 3),
-      forward(1, 6, 3),
+      forward(7, 5, 8),
+      forward(7, 6, 8),
       sequenceOf,
-      { maxGap: 25 },
+      { maxGap: 25, minMatch: 1 },
     )
-    expect(chains.map(chain => pairCigar(chain.edits))).toEqual(['10=', '10='])
-    expect(chains.map(chain => chain.targetStart)).toEqual([0, 40])
+    expect(chains.map(chain => pairCigar(chain.edits))).toEqual(['40=', '40='])
+    expect(
+      chains.map(chain => chain.targetStart).sort((a, b) => a - b),
+    ).toEqual([0, 70])
+  })
+})
+
+// An LCG's low bits are its worst, and 'ACGT'[state % 4] off one writes poly-A
+function randomSequence(length: number, seed: number) {
+  let state = seed
+  return Array.from({ length }, () => {
+    state = (state + 0x6d2b79f5) | 0
+    let t = Math.imul(state ^ (state >>> 15), 1 | state)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return 'ACGT'[((t ^ (t >>> 14)) >>> 0) % 4]!
+  }).join('')
+}
+
+describe('pairAlignments past the exact alignment', () => {
+  // long enough to be worth chaining across a 3 kb indel, as a real anchor is
+  const FLANK = 200
+  const unit = randomSequence(3000, 3)
+  const sequences: Record<number, string> = {
+    1: randomSequence(FLANK, 1),
+    2: randomSequence(FLANK, 2),
+    3: unit,
+    4: reverseComplement(unit),
+    5: randomSequence(60, 5),
+    6: randomSequence(60, 6),
+  }
+  const lookup = (id: number) => sequences[id]!
+  const count = (edits: [string, number][], op: string) =>
+    edits.reduce((sum, [o, len]) => sum + (o === op ? len : 0), 0)
+
+  it('reports an inversion the graph holds as two unrelated nodes as a - record', () => {
+    const records = pairAlignments(forward(1, 3, 2), forward(1, 4, 2), lookup)
+    expect(
+      records.map(r => [
+        r.strand,
+        r.queryStart,
+        r.queryEnd,
+        pairCigar(r.edits),
+      ]),
+    ).toEqual([
+      ['+', 0, 3400, '200=3000I3000D200='],
+      ['-', 200, 3200, '3000='],
+    ])
+    expect(records[1]).toMatchObject({ targetStart: 200, targetEnd: 3200 })
+  })
+
+  it('aligns a tandem copy by its bases where a walk revisits the node', () => {
+    const [record, ...rest] = pairAlignments(
+      forward(1, 3, 3, 2),
+      forward(1, 3, 2),
+      lookup,
+    )
+    expect(rest).toEqual([])
+    expect(count(record!.edits, '=')).toBe(3400)
+    expect(count(record!.edits, 'I')).toBe(3000)
+    expect(count(record!.edits, 'D') + count(record!.edits, 'X')).toBe(0)
+    expect(record!.sharedBases).toBe(2 * FLANK)
+  })
+
+  it('leaves anchors worth fewer bases than the gap between them costs apart', () => {
+    const records = pairAlignments(
+      forward(5, 3, 3, 6),
+      forward(5, 3, 6),
+      lookup,
+      { minMatch: 1 },
+    )
+    expect(records.map(r => pairCigar(r.edits))).toEqual(['60=', '60='])
   })
 })
 
@@ -224,6 +299,7 @@ describe('gbz-base-query --stack', () => {
     ])
     expect(rows[0]![1]).toBe('20000000')
     expect(rows[1]![1]).toBe(rows[1]![3])
-    expect(rows.every(f => /^cg:Z:(\d+[=XID])+$/.test(f[12]!))).toBe(true)
+    expect(rows.every(f => /^ns:i:\d+$/.test(f[12]!))).toBe(true)
+    expect(rows.every(f => /^cg:Z:(\d+[=XID])+$/.test(f[13]!))).toBe(true)
   })
 })

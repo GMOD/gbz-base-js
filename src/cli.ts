@@ -45,7 +45,7 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --alignments         print one alignment record per haplotype instead of the subgraph
   --against NAME       print PAF of every other named walk against this sample#haplotype, bases compared
   --stack A,B,C        print PAF of each sample#haplotype against the next one in the list, bases compared
-  --max-gap INT        private bp a PAF record may skip on either walk between two shared nodes (default: 10000)
+  --max-gap INT        cap the private bp a PAF record skips on either walk between two shared nodes (default: none)
   --contig-lengths F   chrom.sizes or .fai giving PAF columns 2 and 7, keyed by contig or sample#haplotype#contig
   --haplotype-index F  companion database written by gbz-haplotype-index --output
   --block-size INT     bytes fetched per range request (default: 65536)
@@ -349,6 +349,7 @@ function pafLines(alignments: PairAlignment[], lengths: Map<string, number>) {
         a.matches,
         a.columns,
         255,
+        `ns:i:${a.sharedBases}`,
         `cg:Z:${a.cigar}\n`,
       ].join('\t'),
     )

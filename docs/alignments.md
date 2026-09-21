@@ -90,19 +90,41 @@ for (const r of subgraph.pairAlignments({ target })) {
 }
 ```
 
-A node both walks visit is a run of `=`. The bases between two shared nodes get
-the highest-scoring global alignment under vg's parameters (match 1, mismatch
--4, gap -6 and -1 per further base), written as `=`, `X`, `I` and `D`. The
-scoring defines the CIGAR, so two stretches with nothing in common come out as
-one insertion and one deletion with no threshold deciding it. A pair whose
-lengths multiply past 4,000,000 is not aligned and is written the same way.
+A stretch of nodes both walks visit is a run of `=`, and a record is the
+best-scoring collinear chain of those stretches, found the way minimap2 chains
+its seeds. The next record is the best chain over what no accepted record uses
+on either haplotype, so a second copy of a repeat finds its target taken and an
+inversion finds its target free.
 
-A record is a run of shared nodes whose order on the target moves one way, and
-`maxGap` (10,000 by default) is the most private bp it skips on either walk, so
-raise it to keep a large insertion inside one record. `queryStart`/`queryEnd`
-and `targetStart`/`targetEnd` are each haplotype's own coordinates, and a `-`
-record's CIGAR reads along the target, the way minimap2 writes one. A haplotype
-the window holds as several walks gives records per walk, and none spans two.
+The bases between two stretches get the highest-scoring global alignment under
+vg's parameters (match 1, mismatch -4, gap -6 and -1 per further base), written
+as `=`, `X`, `I` and `D`. The scoring defines the CIGAR, so two stretches with
+nothing in common come out as one insertion and one deletion with no threshold
+deciding it. A pair whose lengths multiply past 4,000,000 is seeded on shared
+15-mers in both orientations instead and chained the same way, with the exact
+alignment between the matches. That aligns two long copies of one sequence the
+graph left on separate nodes, and a chain on the opposite strand there is an
+inversion, reported as a record of its own since no CIGAR holds one.
+
+Between a walk's first and last visit to a node it visits more than once, no
+node anchors anything. A graph folds the copies of a tandem repeat onto shared
+nodes, which says nothing about which copy of one haplotype pairs with which
+copy of the other, so the bases decide there, through the 15-mer chain. Taking
+the graph's pairing instead covers the same query bases across the five
+haplotypes of the HPRC amylase window, but draws 594 kb of them under two or
+more records rather than 459 kb, and pairs a 169 kb insertion with a 169 kb
+deletion inside one record where the copies line up one array apart.
+
+`sharedBases` counts the `=` that came off shared nodes, so `matches` less
+`sharedBases` is what comparing bases found, and the CLI writes it as the PAF
+tag `ns:i:`. A chain pays for the gap it spans out of the bases it matches, so
+by default nothing bounds how far a record reaches but the window; `maxGap` caps
+the private bp a record skips on either walk, which bounds the work on a wide
+one. A record matching fewer than `minMatch` bases (100) is dropped.
+`queryStart`/`queryEnd` and `targetStart`/`targetEnd` are each haplotype's own
+coordinates, and a `-` record's CIGAR reads along the target, the way minimap2
+writes one. A haplotype the window holds as several walks gives records per
+walk, and none spans two.
 
 Every walk has to be named, so this needs the
 [haplotype index](haplotype-index.md). `pairAlignments` in `pairAlignment.ts` is

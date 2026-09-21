@@ -11,19 +11,30 @@ export interface PairChain {
   targetEnd: number
   strand: '+' | '-'
   edits: PairEdit[]
+  // bases on nodes both walks visit; the other `=` came from comparing bases
+  sharedBases: number
 }
 
 export interface PairOptions {
   maxGap?: number
+  minMatch?: number
 }
 
-interface Occurrence {
-  rank: number
-  reverse: boolean
+// An exact match: query [qs, qe) against target [ts, te), the target read
+// backwards when flipped.
+interface Run {
+  qs: number
+  qe: number
+  ts: number
+  te: number
+  flipped: boolean
 }
 
-const DEFAULT_MAX_GAP = 10000
+const DEFAULT_MIN_MATCH = 100
 const MAX_ALIGNED_CELLS = 4_000_000
+const CHAIN_LOOKBACK = 5000
+const KMER = 15
+const MAX_KMER_OCCURRENCES = 64
 
 // vg's scoring, the model the reference CIGARs in subgraph.ts are scored by
 const MATCH = 1
@@ -139,16 +150,279 @@ function affineAlignment(a: string, b: string, edits: PairEdit[]) {
   }
 }
 
-// The private bases between two shared nodes. A pair of stretches too large to
-// align is written as an insertion and a deletion, which claims no base of one
-// matches any base of the other.
-function alignPrivate(a: string, b: string, edits: PairEdit[]) {
+// What a chain of walk steps pays to go from one run to the next over dq
+// private query bases and dt target ones. Those runs lie outside both walks'
+// repeats, so each has one place to go and the cost only has to let a chain
+// hold through a structural variant of any size: vg's charge for a short
+// indel, growing with the logarithm past it.
+function stepJumpCost(dq: number, dt: number) {
+  const indel = Math.abs(dq - dt)
+  const indelCost =
+    indel === 0
+      ? 0
+      : Math.min(
+          -GAP_OPEN - (indel - 1) * GAP_EXTEND,
+          -GAP_OPEN + 10 * Math.log2(indel),
+        )
+  return indelCost + (Math.min(dq, dt) > 0 ? -MISMATCH : 0)
+}
+
+// What a chain of k-mer matches pays, which is minimap2's gap cost. Inside a
+// tandem array every copy offers a match, and the term that grows with the
+// indel is what keeps a chain in one register instead of hopping between
+// copies for a slightly longer match.
+function kmerJumpCost(dq: number, dt: number) {
+  const indel = Math.abs(dq - dt)
+  return indel === 0 ? 0 : 0.01 * KMER * indel + 0.5 * Math.log2(indel)
+}
+
+type JumpCost = (dq: number, dt: number) => number
+
+interface Link {
+  run: Run
+  trim: number
+}
+
+function overlaps(intervals: [number, number][], start: number, end: number) {
+  return intervals.some(([s, e]) => start < e && s < end)
+}
+
+// The best-scoring collinear chain of runs, then the best over the runs that
+// overlap no accepted run on either sequence, and so on: a second copy of a
+// repeat finds its target taken and an inversion finds its target free. A run
+// that overlaps its predecessor is trimmed from the front, which an exact
+// match allows at any base.
+function chainRuns(
+  runs: Run[],
+  maxGap: number,
+  minMatch: number,
+  jumpCost: JumpCost,
+) {
+  const chains: Link[][] = []
+  const queryTaken: [number, number][] = []
+  const targetTaken: [number, number][] = []
+  let pool = [...runs].sort((a, b) => a.qs - b.qs || a.ts - b.ts)
+  while (pool.length > 0) {
+    const score = pool.map(run => run.qe - run.qs)
+    const back = new Int32Array(pool.length).fill(-1)
+    const trims = new Int32Array(pool.length)
+    for (let j = 0; j < pool.length; j++) {
+      const b = pool[j]!
+      const len = b.qe - b.qs
+      for (let i = j - 1; i >= Math.max(0, j - CHAIN_LOOKBACK); i--) {
+        const a = pool[i]!
+        const advances =
+          a.flipped === b.flipped &&
+          a.qs < b.qs &&
+          (b.flipped ? b.te < a.te : a.ts < b.ts)
+        if (advances) {
+          const trim = Math.max(
+            0,
+            a.qe - b.qs,
+            b.flipped ? b.te - a.ts : a.te - b.ts,
+          )
+          const dq = b.qs + trim - a.qe
+          const dt = b.flipped ? a.ts - (b.te - trim) : b.ts + trim - a.te
+          if (trim < len && dq <= maxGap && dt <= maxGap) {
+            const candidate = score[i]! + len - trim - jumpCost(dq, dt)
+            if (candidate > score[j]!) {
+              score[j] = candidate
+              back[j] = i
+              trims[j] = trim
+            }
+          }
+        }
+      }
+    }
+    let end = 0
+    for (let j = 1; j < pool.length; j++) {
+      if (score[j]! > score[end]!) {
+        end = j
+      }
+    }
+    const chain: Link[] = []
+    for (let j = end; j >= 0; j = back[j]!) {
+      chain.push({ run: pool[j]!, trim: trims[j]! })
+    }
+    chain.reverse()
+    const matched = chain.reduce(
+      (sum, { run, trim }) => sum + run.qe - run.qs - trim,
+      0,
+    )
+    if (matched < minMatch) {
+      break
+    }
+    chains.push(chain)
+    for (const { run, trim } of chain) {
+      queryTaken.push([run.qs + trim, run.qe])
+      targetTaken.push(
+        run.flipped ? [run.ts, run.te - trim] : [run.ts + trim, run.te],
+      )
+    }
+    pool = pool.filter(
+      run =>
+        !overlaps(queryTaken, run.qs, run.qe) &&
+        !overlaps(targetTaken, run.ts, run.te),
+    )
+  }
+  return chains
+}
+
+// Exact matches of KMER bases or more between a and b, as runs along a
+// diagonal. A k-mer the target holds many times over seeds nothing.
+function forwardKmerRuns(a: string, b: string) {
+  const index = new Map<string, number[]>()
+  for (let p = 0; p + KMER <= b.length; p++) {
+    const kmer = b.slice(p, p + KMER)
+    const seen = index.get(kmer)
+    if (seen) {
+      seen.push(p)
+    } else {
+      index.set(kmer, [p])
+    }
+  }
+  const runs: Run[] = []
+  const open = new Map<number, Run>()
+  for (let i = 0; i + KMER <= a.length; i++) {
+    const hits = index.get(a.slice(i, i + KMER))
+    if (hits && hits.length <= MAX_KMER_OCCURRENCES) {
+      for (const p of hits) {
+        const diagonal = p - i
+        const run = open.get(diagonal)
+        if (run && i <= run.qe) {
+          run.qe = i + KMER
+          run.te = p + KMER
+        } else {
+          const started = {
+            qs: i,
+            qe: i + KMER,
+            ts: p,
+            te: p + KMER,
+            flipped: false,
+          }
+          open.set(diagonal, started)
+          runs.push(started)
+        }
+      }
+    }
+  }
+  return runs
+}
+
+function kmerRuns(a: string, b: string) {
+  return [
+    ...forwardKmerRuns(a, b),
+    ...forwardKmerRuns(a, reverseComplement(b)).map(run => ({
+      ...run,
+      ts: b.length - run.te,
+      te: b.length - run.ts,
+      flipped: true,
+    })),
+  ]
+}
+
+// The edits of one chain: each run is a run of `=`, and what lies between two
+// runs goes to `between`. Edits read along the query; the caller reverses a
+// flipped chain's so they read along the target.
+function chainEdits(
+  chain: Link[],
+  a: string,
+  b: string,
+  edits: PairEdit[],
+  between: (
+    a: string,
+    b: string,
+    edits: PairEdit[],
+    queryFrom: number,
+    targetFrom: number,
+  ) => void,
+) {
+  let previous: Run | undefined
+  for (const { run, trim } of chain) {
+    const qs = run.qs + trim
+    if (previous) {
+      const targetFrom = run.flipped ? run.te - trim : previous.te
+      const targetTo = run.flipped ? previous.ts : run.ts + trim
+      const target = b.slice(targetFrom, targetTo)
+      between(
+        a.slice(previous.qe, qs),
+        run.flipped ? reverseComplement(target) : target,
+        edits,
+        previous.qe,
+        targetFrom,
+      )
+    }
+    appendEdit(edits, '=', run.qe - qs)
+    previous = run
+  }
+}
+
+function alignSmall(a: string, b: string, edits: PairEdit[]) {
   if (a.length * b.length <= MAX_ALIGNED_CELLS) {
     affineAlignment(a, b, edits)
   } else {
     appendEdit(edits, 'I', a.length)
     appendEdit(edits, 'D', b.length)
   }
+}
+
+// A chain as a record in the coordinates of the two strings it was made on
+function recordOf(chain: Link[], a: string, b: string): PairChain {
+  const edits: PairEdit[] = []
+  chainEdits(chain, a, b, edits, alignSmall)
+  const first = chain[0]!
+  const last = chain.at(-1)!
+  const { flipped } = first.run
+  return {
+    queryStart: first.run.qs + first.trim,
+    queryEnd: last.run.qe,
+    targetStart: flipped ? last.run.ts : first.run.ts + first.trim,
+    targetEnd: flipped ? first.run.te - first.trim : last.run.te,
+    strand: flipped ? '-' : '+',
+    edits: flipped ? edits.reverse() : edits,
+    sharedBases: 0,
+  }
+}
+
+// The private bases between two shared nodes. A pair too large for the exact
+// alignment is seeded on shared k-mers in both orientations and chained the
+// way the walks are, which aligns two long copies of one sequence the graph
+// left apart. The best forward chain becomes edits. A flipped chain is an
+// inversion, which no CIGAR holds, so it comes back as a record of its own in
+// the coordinates of a and b. What no chain reaches is an insertion and a
+// deletion, which claims no homology.
+function alignPrivate(
+  a: string,
+  b: string,
+  edits: PairEdit[],
+  minMatch: number,
+): PairChain[] {
+  let inversions: PairChain[] = []
+  if (a.length * b.length <= MAX_ALIGNED_CELLS) {
+    affineAlignment(a, b, edits)
+  } else {
+    const chains = chainRuns(
+      kmerRuns(a, b),
+      Infinity,
+      Math.max(minMatch, KMER),
+      kmerJumpCost,
+    )
+    const forward = chains.find(chain => !chain[0]!.run.flipped)
+    inversions = chains
+      .filter(chain => chain[0]!.run.flipped)
+      .map(chain => recordOf(chain, a, b))
+    if (forward) {
+      const first = forward[0]!.run
+      const last = forward.at(-1)!.run
+      alignSmall(a.slice(0, first.qs), b.slice(0, first.ts), edits)
+      chainEdits(forward, a, b, edits, alignSmall)
+      alignSmall(a.slice(last.qe), b.slice(last.te), edits)
+    } else {
+      appendEdit(edits, 'I', a.length)
+      appendEdit(edits, 'D', b.length)
+    }
+  }
+  return inversions
 }
 
 function walkSequence(walk: number[], sequenceOf: (id: number) => string) {
@@ -160,127 +434,170 @@ function walkSequence(walk: number[], sequenceOf: (id: number) => string) {
     .join('')
 }
 
-// A query walk's alignments to a target walk, read off the nodes both visit:
-// a shared node is a run of `=`, and what lies between two shared nodes is
-// aligned base by base under vg's scoring. A chain is a run of shared nodes whose target ranks
-// move one way, up when the query crosses them in the target's orientation
-// and down when flipped, skipping at most maxGap private bases on either walk.
-// Coordinates count from each walk's first base; a `-` chain's edits read
-// along the target, the way minimap2 writes a reverse-strand row.
+function walkOffsets(walk: number[], sequenceOf: (id: number) => string) {
+  const offsets = [0]
+  for (const handle of walk) {
+    offsets.push(offsets.at(-1)! + sequenceOf(nodeId(handle)).length)
+  }
+  return offsets
+}
+
+// The steps between a walk's first and last visit to any node it visits more
+// than once. Copies of a repeat folded onto one node say nothing about which
+// copy of one haplotype pairs with which copy of the other, and a graph can
+// pair them out of register, so there the bases decide.
+function repeatSteps(walk: number[]) {
+  const first = new Map<number, number>()
+  const last = new Map<number, number>()
+  walk.forEach((handle, i) => {
+    const id = nodeId(handle)
+    if (first.has(id)) {
+      last.set(id, i)
+    } else {
+      first.set(id, i)
+    }
+  })
+  const change = new Int32Array(walk.length + 1)
+  for (const [id, end] of last) {
+    change[first.get(id)!]! += 1
+    change[end + 1]! -= 1
+  }
+  const inside = new Uint8Array(walk.length)
+  let depth = 0
+  for (let i = 0; i < walk.length; i++) {
+    depth += change[i]!
+    inside[i] = depth > 0 ? 1 : 0
+  }
+  return inside
+}
+
+// Every stretch of steps the two walks take through the same nodes, in the
+// same order or the opposite one, outside both walks' repeats.
+function sharedRuns(
+  query: number[],
+  target: number[],
+  queryOffsets: number[],
+  targetOffsets: number[],
+) {
+  const queryRepeat = repeatSteps(query)
+  const targetRepeat = repeatSteps(target)
+  const visits = new Map<number, number[]>()
+  target.forEach((handle, rank) => {
+    if (!targetRepeat[rank]) {
+      visits.set(nodeId(handle), [rank])
+    }
+  })
+  const width = 2 * target.length
+  const key = (i: number, rank: number, flipped: boolean) =>
+    i * width + 2 * rank + (flipped ? 1 : 0)
+  const seeds = new Set<number>()
+  query.forEach((handle, i) => {
+    for (const rank of queryRepeat[i]
+      ? []
+      : (visits.get(nodeId(handle)) ?? [])) {
+      seeds.add(key(i, rank, isReverse(handle) !== isReverse(target[rank]!)))
+    }
+  })
+  const runs: Run[] = []
+  query.forEach((handle, i) => {
+    for (const rank of queryRepeat[i]
+      ? []
+      : (visits.get(nodeId(handle)) ?? [])) {
+      const flipped = isReverse(handle) !== isReverse(target[rank]!)
+      const step = flipped ? -1 : 1
+      if (!seeds.has(key(i - 1, rank - step, flipped))) {
+        let j = i
+        let r = rank
+        while (
+          j < query.length &&
+          r >= 0 &&
+          r < target.length &&
+          seeds.has(key(j, r, flipped))
+        ) {
+          j += 1
+          r += step
+        }
+        const lastRank = r - step
+        runs.push({
+          qs: queryOffsets[i]!,
+          qe: queryOffsets[j]!,
+          ts: targetOffsets[Math.min(rank, lastRank)]!,
+          te: targetOffsets[Math.max(rank, lastRank) + 1]!,
+          flipped,
+        })
+      }
+    }
+  })
+  return runs
+}
+
+// A query walk's alignments to a target walk. A stretch of nodes both walks
+// visit is a run of `=`, a record is the best collinear chain of those
+// stretches, and what lies between two of them is aligned base by base under
+// vg's scoring, an inversion there coming back as a record of its own. A chain
+// pays for the gap it spans, so by default nothing bounds how far it reaches
+// but the window; maxGap caps that to bound the work. A record matching under
+// minMatch bases is dropped. Coordinates count from each walk's first base; a
+// `-` record's edits read along the target, the way minimap2 writes a
+// reverse-strand row.
 export function pairAlignments(
   query: number[],
   target: number[],
   sequenceOf: (id: number) => string,
   opts: PairOptions = {},
 ): PairChain[] {
-  const maxGap = opts.maxGap ?? DEFAULT_MAX_GAP
-  const querySequence = walkSequence(query, sequenceOf)
-  const targetSequence = walkSequence(target, sequenceOf)
-  const targetOffsets: number[] = []
-  const occurrences = new Map<number, Occurrence[]>()
-  let offset = 0
-  target.forEach((handle, rank) => {
-    const id = nodeId(handle)
-    targetOffsets.push(offset)
-    offset += sequenceOf(id).length
-    const seen = occurrences.get(id)
-    const occurrence = { rank, reverse: isReverse(handle) }
-    if (seen) {
-      seen.push(occurrence)
-    } else {
-      occurrences.set(id, [occurrence])
-    }
-  })
-
-  const chains: PairChain[] = []
-  let open:
-    | {
-        flipped: boolean
-        queryStart: number
-        queryEnd: number
-        targetFixed: number
-        targetMoving: number
-        last: number
-        edits: PairEdit[]
+  const a = walkSequence(query, sequenceOf)
+  const b = walkSequence(target, sequenceOf)
+  const runs = sharedRuns(
+    query,
+    target,
+    walkOffsets(query, sequenceOf),
+    walkOffsets(target, sequenceOf),
+  )
+  const minMatch = opts.minMatch ?? DEFAULT_MIN_MATCH
+  const records: PairChain[] = []
+  for (const chain of chainRuns(
+    runs,
+    opts.maxGap ?? Infinity,
+    minMatch,
+    stepJumpCost,
+  )) {
+    const edits: PairEdit[] = []
+    const first = chain[0]!
+    const last = chain.at(-1)!
+    const { flipped } = first.run
+    chainEdits(chain, a, b, edits, (qa, tb, into, queryFrom, targetFrom) => {
+      for (const inversion of alignPrivate(qa, tb, into, minMatch)) {
+        const targetTo = targetFrom + tb.length
+        records.push({
+          ...inversion,
+          queryStart: queryFrom + inversion.queryStart,
+          queryEnd: queryFrom + inversion.queryEnd,
+          targetStart: flipped
+            ? targetTo - inversion.targetEnd
+            : targetFrom + inversion.targetStart,
+          targetEnd: flipped
+            ? targetTo - inversion.targetStart
+            : targetFrom + inversion.targetEnd,
+          strand: flipped ? '+' : '-',
+          edits: flipped ? inversion.edits.reverse() : inversion.edits,
+        })
       }
-    | undefined
-  const close = () => {
-    if (open) {
-      const { flipped, targetFixed, targetMoving, edits } = open
-      chains.push({
-        queryStart: open.queryStart,
-        queryEnd: open.queryEnd,
-        targetStart: flipped ? targetMoving : targetFixed,
-        targetEnd: flipped ? targetFixed : targetMoving,
-        strand: flipped ? '-' : '+',
-        edits: flipped ? edits.reverse() : edits,
-      })
-      open = undefined
-    }
+    })
+    records.push({
+      queryStart: first.run.qs + first.trim,
+      queryEnd: last.run.qe,
+      targetStart: flipped ? last.run.ts : first.run.ts + first.trim,
+      targetEnd: flipped ? first.run.te - first.trim : last.run.te,
+      strand: flipped ? '-' : '+',
+      edits: flipped ? edits.reverse() : edits,
+      sharedBases: chain.reduce(
+        (sum, { run, trim }) => sum + run.qe - run.qs - trim,
+        0,
+      ),
+    })
   }
-
-  let q = 0
-  for (const handle of query) {
-    const id = nodeId(handle)
-    const len = sequenceOf(id).length
-    const candidates = occurrences.get(id)
-    if (candidates) {
-      const reverse = isReverse(handle)
-      let chosen: number | undefined
-      if (open) {
-        const { flipped, last } = open
-        for (const c of candidates) {
-          const ahead = flipped ? c.rank < last : c.rank > last
-          const nearer =
-            chosen === undefined ||
-            (flipped ? c.rank > chosen : c.rank < chosen)
-          if ((c.reverse !== reverse) === flipped && ahead && nearer) {
-            chosen = c.rank
-          }
-        }
-        if (chosen !== undefined) {
-          const t = targetOffsets[chosen]!
-          const queryGap = q - open.queryEnd
-          const targetGap = flipped
-            ? open.targetMoving - (t + len)
-            : t - open.targetMoving
-          if (queryGap <= maxGap && targetGap <= maxGap) {
-            const a = querySequence.slice(open.queryEnd, q)
-            const b = flipped
-              ? reverseComplement(
-                  targetSequence.slice(t + len, open.targetMoving),
-                )
-              : targetSequence.slice(open.targetMoving, t)
-            alignPrivate(a, b, open.edits)
-            appendEdit(open.edits, '=', len)
-            open.last = chosen
-            open.queryEnd = q + len
-            open.targetMoving = flipped ? t : t + len
-          } else {
-            chosen = undefined
-          }
-        }
-      }
-      if (chosen === undefined) {
-        close()
-        const first = candidates[0]!
-        const flipped = first.reverse !== reverse
-        const t = targetOffsets[first.rank]!
-        open = {
-          flipped,
-          queryStart: q,
-          queryEnd: q + len,
-          targetFixed: flipped ? t + len : t,
-          targetMoving: flipped ? t : t + len,
-          last: first.rank,
-          edits: [['=', len]],
-        }
-      }
-    }
-    q += len
-  }
-  close()
-  return chains
+  return records.sort((x, y) => x.queryStart - y.queryStart)
 }
 
 export function pairCigar(edits: PairEdit[]) {
