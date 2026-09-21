@@ -247,6 +247,7 @@ function chainRuns(
   maxGap: number,
   minMatch: number,
   jumpCost: JumpCost,
+  maxChains = Infinity,
 ) {
   const chains: Link[][] = []
   const basesTaken = { query: [] as Interval[], target: [] as Interval[] }
@@ -255,7 +256,7 @@ function chainRuns(
     flipped: { query: [] as Interval[], target: [] as Interval[] },
   }
   let pool = [...runs].sort((a, b) => a.qs - b.qs || a.ts - b.ts)
-  while (pool.length > 0) {
+  while (pool.length > 0 && chains.length < maxChains) {
     const score = pool.map(run => run.qe - run.qs)
     const back = new Int32Array(pool.length).fill(-1)
     const trims = new Int32Array(pool.length)
@@ -263,6 +264,9 @@ function chainRuns(
       const b = pool[j]!
       const len = b.qe - b.qs
       for (let i = j - 1; i >= Math.max(0, j - CHAIN_LOOKBACK); i--) {
+        if (score[i]! + len <= score[j]!) {
+          continue
+        }
         const a = pool[i]!
         const advances =
           a.flipped === b.flipped &&
@@ -448,7 +452,7 @@ function alignExact(a: string, b: string, edits: PairEdit[]) {
 function fillGap(a: string, b: string, edits: PairEdit[], depth = 0) {
   const [chain] =
     a.length * b.length > MAX_ALIGNED_CELLS && depth < MAX_FILL_DEPTH
-      ? chainRuns(forwardKmerRuns(a, b), Infinity, KMER, kmerJumpCost)
+      ? chainRuns(forwardKmerRuns(a, b), Infinity, KMER, kmerJumpCost, 1)
       : []
   if (!chain) {
     alignExact(a, b, edits)
