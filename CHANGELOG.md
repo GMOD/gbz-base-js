@@ -1,3 +1,14 @@
+## [2.7.0](https://github.com/GMOD/gbz-base-js/compare/v2.6.6...v2.7.0) (2026-09-21)
+
+### Other Changes
+
+- Haplotype-to-haplotype alignments with the bases compared: Subgraph.pairAlignments, --against and --stack ([eb73f6e](https://github.com/GMOD/gbz-base-js/commit/eb73f6e533700b3bd06f30dec46d6038cf7c2dc9))
+- Chain shared stretches collinearly, and let the bases decide inside a repeat ([f64bc26](https://github.com/GMOD/gbz-base-js/commit/f64bc26fdbcc7d935a0c46e8201d75aa59cbd662))
+- An inversion survives a flank that runs into it, and a paralog cannot re-claim an earlier record's bases ([1c7d5ff](https://github.com/GMOD/gbz-base-js/commit/1c7d5ffad016314815eed0872029dc0194a32a72))
+- A gap fill chains only the one chain it uses, and a jump that cannot win is not priced ([fe6554d](https://github.com/GMOD/gbz-base-js/commit/fe6554dc4f220169d889851fc24f55ae22257fab))
+- A base aligns in one record, the one scoring higher over the stretch two records share ([68edf10](https://github.com/GMOD/gbz-base-js/commit/68edf103d32c55d6e3677337de9c049061dea45b))
+- The one-alignment-per-base rule, and README points at haplotype-pair alignments ([c1f428b](https://github.com/GMOD/gbz-base-js/commit/c1f428b23c0b915b16906cf319abede972a5bebc))
+
 ## [2.6.6](https://github.com/GMOD/gbz-base-js/compare/v2.6.5...v2.6.6) (2026-09-17)
 
 ### Other Changes
