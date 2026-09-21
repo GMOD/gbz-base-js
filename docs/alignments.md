@@ -106,14 +106,21 @@ alignment between the matches. That aligns two long copies of one sequence the
 graph left on separate nodes, and a chain on the opposite strand there is an
 inversion, reported as a record of its own since no CIGAR holds one.
 
+A base aligns in one record at most. In a tandem array whose copies run both
+ways, one query copy can align forward to one target copy and inverted to
+another, and both are homology. Where two records align the same bases, the one
+scoring higher over the stretch the two share keeps them, and the other gives
+them up as an insertion and a deletion. In the HPRC amylase window that stretch
+is 58,204 query bases of NA18608#2 against HG00232#1, where the inverted record
+scores 93,009 and the forward one 6,271.
+
 Between a walk's first and last visit to a node it visits more than once, no
 node anchors anything. A graph folds the copies of a tandem repeat onto shared
 nodes, which says nothing about which copy of one haplotype pairs with which
 copy of the other, so the bases decide there, through the 15-mer chain. Taking
-the graph's pairing instead covers the same query bases across the five
-haplotypes of the HPRC amylase window, but draws 594 kb of them under two or
-more records rather than 459 kb, and pairs a 169 kb insertion with a 169 kb
-deletion inside one record where the copies line up one array apart.
+the graph's pairing instead pairs a 169 kb insertion with a 169 kb deletion
+inside one record of the HPRC amylase window, where the copies line up one array
+apart.
 
 `sharedBases` counts the `=` that came off shared nodes, so `matches` less
 `sharedBases` is what comparing bases found, and the CLI writes it as the PAF
@@ -136,7 +143,7 @@ view draws. Both print PAF from one fetch of the window:
 
 ```
 gbz-base-query graph.gbz.db --haplotype-index index.db --sample GRCh38 --contig chr6 \
-  --interval 31940000..32090000 --context 0 --max-gap 200000 \
+  --interval 31940000..32090000 --context 0 \
   --stack 'HG01978#2,HG02004#2,GRCh38#0,HG02818#1,HG00146#1' --contig-lengths lengths.tsv
 ```
 

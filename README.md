@@ -71,6 +71,12 @@ deletion, so `context` changes what is read rather than how many records you
 get. The fields, the joining rules and what `resolved` means:
 [docs/alignments.md](docs/alignments.md).
 
+`subgraph.pairAlignments` aligns one haplotype to another with the bases
+compared, so two haplotypes sharing sequence the reference lacks align through
+it, and `gbz-base-query --stack` prints each row of a stacked synteny view
+against the next as PAF:
+[docs/alignments.md](docs/alignments.md#one-haplotype-against-another).
+
 `getAlignmentsForRange` hands back data and spans path fragments;
 `getSubgraphForRange` hands back the `Subgraph` itself, because two disjoint
 fragments do not merge into one graph.
