@@ -112,7 +112,12 @@ another, and both are homology. Where two records align the same bases, the one
 scoring higher over the stretch the two share keeps them, and the other gives
 them up as an insertion and a deletion. In the HPRC amylase window that stretch
 is 58,204 query bases of NA18608#2 against HG00232#1, where the inverted record
-scores 93,009 and the forward one 6,271.
+scores 93,009 and the forward one 6,271. A tie goes to the record with more
+bases on shared nodes. Ties come up at an inversion a walk takes through shared
+nodes, because `pairAlignments` finds the inversion again by its bases in the
+gap of the forward record spanning it and aligns it the same way. At the FLNA
+inversion on chrX, the two records of HG01150#2 against GRCh38 match the same
+37,586 bases, and `pairAlignments` keeps the one with `sharedBases` 37,583.
 
 Between a walk's first and last visit to a node it visits more than once, no
 node anchors anything. A graph folds the copies of a tandem repeat onto shared

@@ -220,6 +220,15 @@ describe('pairAlignments past the exact alignment', () => {
       r.sharedBases,
     ])
 
+  it('reports an inversion a walk takes through a shared node once, though its bases align again in the gap of the forward record over it', () => {
+    expect(
+      summary(pairAlignments(throughSharedInversion, forward(1, 3, 2), lookup)),
+    ).toEqual([
+      ['+', 0, 3400, 0, 3400, '200=3000I3000D200=', 400],
+      ['-', 200, 3200, 200, 3200, '3000=', 3000],
+    ])
+  })
+
   it('with bases: false, reports the inversion a walk takes through a shared node and none that only the bases would find', () => {
     const noBases = (query: number[], target: number[]) =>
       summary(pairAlignments(query, target, lookup, { bases: false }))

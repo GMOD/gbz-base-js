@@ -694,7 +694,10 @@ function withoutColumns(r: Claimed, lost: Uint8Array): Claimed | undefined {
 // keeps them, and the other gives them up as an insertion and a deletion. In a
 // tandem array whose copies run both ways, one query copy aligns forward to one
 // target copy and inverted to another, and both are homology; the scoring
-// decides which one the pair's picture shows.
+// decides which one the pair's picture shows. A tie goes to the record with
+// more bases on shared nodes: alignPrivate finds an inversion a walk takes
+// through shared nodes again, base for base, in the gap of the forward record
+// spanning it.
 function claimOnce(
   records: Claimed[],
   queryLength: number,
@@ -750,9 +753,13 @@ function claimOnce(
       const [sj, ej] = spanOf(records[j]!, side)
       const lo = Math.max(si, sj)
       const hi = Math.min(ei, ej)
-      loses =
-        scoreOver(records[i]!, side, lo, hi) <
-        scoreOver(records[j]!, side, lo, hi)
+      const [mine, theirs] = [records[i]!, records[j]!]
+      const margins = [
+        scoreOver(theirs, side, lo, hi) - scoreOver(mine, side, lo, hi),
+        theirs.sharedBases - mine.sharedBases,
+        i - j,
+      ]
+      loses = margins.find(margin => margin !== 0)! > 0
       beaten.set(key, loses)
     }
     return loses
