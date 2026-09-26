@@ -138,6 +138,18 @@ coordinates, and a `-` record's CIGAR reads along the target, the way minimap2
 writes one. A haplotype the window holds as several walks gives records per
 walk, and none spans two.
 
+With `bases: false`, `pairAlignments` compares no bases. It chains the same
+shared nodes and writes the query's private bp between two shared stretches as
+`I` and the target's as `D`, so a SNP bubble reads `1I1D`, or `1D1I` in a `-`
+record, and `matches` equals `sharedBases`. How the private stretches relate
+goes unstated. Two copies of one sequence on separate nodes are an insertion and
+a deletion, and so is a stretch where either walk revisits the nodes of a tandem
+array. An inversion a walk takes through shared nodes is still a `-` record,
+since a chain holds it, and an inversion on private nodes is part of an
+insertion and a deletion. The CLI takes the option as `--no-bases` with
+`--against` or `--stack`, and the PAF it prints then contains only `=`, `I` and
+`D`, with `ns:i:` equal to column 10, the matches.
+
 Every walk has to be named, so this needs the
 [haplotype index](haplotype-index.md). `pairAlignments` in `pairAlignment.ts` is
 the same thing over two bare walks of node handles.

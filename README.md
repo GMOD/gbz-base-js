@@ -74,7 +74,9 @@ get. The fields, the joining rules and what `resolved` means:
 `subgraph.pairAlignments` aligns one haplotype to another with the bases
 compared, so two haplotypes sharing sequence the reference lacks align through
 it, and `gbz-base-query --stack` prints each row of a stacked synteny view
-against the next as PAF:
+against the next as PAF. With `bases: false` (`--no-bases`) a record contains
+the shared nodes as `=` and the sequence between them as an insertion and a
+deletion:
 [docs/alignments.md](docs/alignments.md#one-haplotype-against-another).
 
 `getAlignmentsForRange` hands back data and spans path fragments;
