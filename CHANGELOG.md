@@ -1,3 +1,11 @@
+## [2.8.0](https://github.com/GMOD/gbz-base-js/compare/v2.7.0...v2.8.0) (2026-09-26)
+
+### Other Changes
+
+- PairAlignments takes bases: false, and the CLI --no-bases ([b156d9c](https://github.com/GMOD/gbz-base-js/commit/b156d9c7f4066f313fb4f9d493fcb74c93861784))
+- An inversion a walk takes through shared nodes comes out once ([c1d85fa](https://github.com/GMOD/gbz-base-js/commit/c1d85fab6081893bd085be077f3ac629ad39f8cb))
+- Bases: false and --no-bases, and the pairAlignments options ([fea0769](https://github.com/GMOD/gbz-base-js/commit/fea0769df9c19ddadb976bc1db50b41efa17f60e))
+
 ## [2.7.0](https://github.com/GMOD/gbz-base-js/compare/v2.6.6...v2.7.0) (2026-09-21)
 
 ### Other Changes
