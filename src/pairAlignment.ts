@@ -18,6 +18,7 @@ export interface PairChain {
 export interface PairOptions {
   maxGap?: number
   minMatch?: number
+  bases?: boolean
 }
 
 // An exact match: query [qs, qe) against target [ts, te), the target read
@@ -398,6 +399,14 @@ function kmerRuns(a: string, b: string) {
   ]
 }
 
+type GapFill = (
+  a: string,
+  b: string,
+  edits: PairEdit[],
+  queryFrom: number,
+  targetFrom: number,
+) => void
+
 // The edits of one chain: each run is a run of `=`, and what lies between two
 // runs goes to `between`. Edits read along the query; the caller reverses a
 // flipped chain's so they read along the target.
@@ -406,13 +415,7 @@ function chainEdits(
   a: string,
   b: string,
   edits: PairEdit[],
-  between: (
-    a: string,
-    b: string,
-    edits: PairEdit[],
-    queryFrom: number,
-    targetFrom: number,
-  ) => void,
+  between: GapFill,
 ) {
   let previous: Run | undefined
   for (const { run, trim } of chain) {
@@ -434,14 +437,17 @@ function chainEdits(
   }
 }
 
-// Aligned exactly within the cell budget; past it an insertion and a deletion,
-// which claims no homology.
+// An insertion and a deletion, which claims no homology
+function unaligned(a: string, b: string, edits: PairEdit[]) {
+  appendEdit(edits, 'I', a.length)
+  appendEdit(edits, 'D', b.length)
+}
+
 function alignExact(a: string, b: string, edits: PairEdit[]) {
   if (a.length * b.length <= MAX_ALIGNED_CELLS) {
     affineAlignment(a, b, edits)
   } else {
-    appendEdit(edits, 'I', a.length)
-    appendEdit(edits, 'D', b.length)
+    unaligned(a, b, edits)
   }
 }
 
@@ -522,13 +528,7 @@ function alignPrivate(
       // unaligned in it. A gap that hides one is not seeded again: at a tandem
       // array that finds only a neighbouring copy, matched forward over bases
       // the inversion's own record already claims.
-      const forwardFill = (
-        qa: string,
-        tb: string,
-        into: PairEdit[],
-        queryFrom: number,
-        targetFrom: number,
-      ) => {
+      const forwardFill: GapFill = (qa, tb, into, queryFrom, targetFrom) => {
         const hidesInversion = inversions.some(
           inversion =>
             (queryFrom < inversion.queryEnd &&
@@ -548,8 +548,7 @@ function alignPrivate(
       chainEdits(forward, a, b, edits, forwardFill)
       forwardFill(a.slice(last.qe), b.slice(last.te), edits, last.qe, last.te)
     } else {
-      appendEdit(edits, 'I', a.length)
-      appendEdit(edits, 'D', b.length)
+      unaligned(a, b, edits)
     }
   }
   return inversions
@@ -894,12 +893,12 @@ function sharedRuns(
 // A query walk's alignments to a target walk. A stretch of nodes both walks
 // visit is a run of `=`, a record is the best collinear chain of those
 // stretches, and what lies between two of them is aligned base by base under
-// vg's scoring, an inversion there coming back as a record of its own. A chain
-// pays for the gap it spans, so by default nothing bounds how far it reaches
-// but the window; maxGap caps that to bound the work. A record matching under
-// minMatch bases is dropped. Coordinates count from each walk's first base; a
-// `-` record's edits read along the target, the way minimap2 writes a
-// reverse-strand row.
+// vg's scoring, an inversion there coming back as a record of its own. With
+// bases false it is an insertion and a deletion instead. A chain pays for the
+// gap it spans, so by default nothing bounds how far it reaches but the window;
+// maxGap caps that to bound the work. A record matching under minMatch bases is
+// dropped. Coordinates count from each walk's first base; a `-` record's edits
+// read along the target, the way minimap2 writes a reverse-strand row.
 export function pairAlignments(
   query: number[],
   target: number[],
@@ -915,6 +914,7 @@ export function pairAlignments(
     walkOffsets(target, sequenceOf),
   )
   const minMatch = opts.minMatch ?? DEFAULT_MIN_MATCH
+  const bases = opts.bases ?? true
   const records: Claimed[] = []
   for (const chain of chainRuns(
     runs,
@@ -926,7 +926,7 @@ export function pairAlignments(
     const first = chain[0]!
     const last = chain.at(-1)!
     const { flipped } = first.run
-    chainEdits(chain, a, b, edits, (qa, tb, into, queryFrom, targetFrom) => {
+    const alignBetween: GapFill = (qa, tb, into, queryFrom, targetFrom) => {
       for (const inversion of alignPrivate(qa, tb, into, minMatch)) {
         const targetTo = targetFrom + tb.length
         records.push({
@@ -944,7 +944,8 @@ export function pairAlignments(
           shared: [],
         })
       }
-    })
+    }
+    chainEdits(chain, a, b, edits, bases ? alignBetween : unaligned)
     records.push({
       queryStart: first.run.qs + first.trim,
       queryEnd: last.run.qe,

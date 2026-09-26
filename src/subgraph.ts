@@ -141,6 +141,7 @@ export interface PairAlignmentOptions {
   target: HaplotypeRef
   query?: HaplotypeRef
   maxGap?: number
+  bases?: boolean
 }
 
 export interface PairAlignment {
@@ -2412,11 +2413,11 @@ export class Subgraph {
   }
 
   // One haplotype's walks aligned to another's, on both haplotypes' own
-  // coordinates, with the bases between two shared nodes compared. The
-  // reference path is a named walk like any other, on either side. With no
-  // query, every other named walk in the window is one.
+  // coordinates, with the bases between two shared nodes compared unless bases
+  // is false. The reference path is a named walk like any other, on either
+  // side. With no query, every other named walk in the window is one.
   pairAlignments(opts: PairAlignmentOptions): PairAlignment[] {
-    const { target, query, maxGap } = opts
+    const { target, query, ...pairOptions } = opts
     const walks = this.paths.flatMap(info => {
       const { identity } = info
       return identity
@@ -2445,7 +2446,7 @@ export class Subgraph {
               queryWalk.steps,
               targetWalk.steps,
               sequenceOf,
-              maxGap === undefined ? {} : { maxGap },
+              pairOptions,
             ).map(chain => ({
               query: queryWalk.name,
               queryStart: queryWalk.start + chain.queryStart,

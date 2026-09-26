@@ -45,6 +45,7 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --alignments         print one alignment record per haplotype instead of the subgraph
   --against NAME       print PAF of every other named walk against this sample#haplotype, bases compared
   --stack A,B,C        print PAF of each sample#haplotype against the next one in the list, bases compared
+  --no-bases           compare no bases for --against or --stack: what lies between two shared stretches is an insertion and a deletion
   --max-gap INT        cap the private bp a PAF record skips on either walk between two shared nodes (default: none)
   --contig-lengths F   chrom.sizes or .fai giving PAF columns 2 and 7, keyed by contig or sample#haplotype#contig
   --haplotype-index F  companion database written by gbz-haplotype-index --output
@@ -73,6 +74,7 @@ interface Args {
   against?: string
   stack?: string[]
   maxGap?: number
+  bases: boolean
   contigLengths?: string
   blockSize: number
   haplotypeIndex?: string
@@ -112,6 +114,7 @@ function parseArgs(argv: string[]): Args {
     resolve: false,
     keep: [],
     alignments: false,
+    bases: true,
     blockSize: 65536,
     stats: false,
   }
@@ -205,6 +208,9 @@ function parseArgs(argv: string[]): Args {
         break
       case '--max-gap':
         args.maxGap = Number(next(i++))
+        break
+      case '--no-bases':
+        args.bases = false
         break
       case '--block-size':
         args.blockSize = Number(next(i++))
@@ -456,6 +462,7 @@ export async function main(argv: string[]) {
           subgraph.pairAlignments({
             ...pair,
             ...(args.maxGap === undefined ? {} : { maxGap: args.maxGap }),
+            bases: args.bases,
           }),
         ),
         lengths,
