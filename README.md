@@ -115,14 +115,11 @@ window's variation back without widening it by a bp radius.
 
 ## Why not compile the Rust to wasm
 
-gbwt-rs and simple-sds serialize `usize` at native width, so a `wasm32` build
-misreads every file written on a 64-bit host, and
-[the PR to fix that](https://github.com/jltsiren/gbwt-rs/pull/14) was closed
-unmerged — reasonably, since the same hazard sits on every other `usize` in the
-crate. `wasm64` fixes the width but cannot carry gbz-base, whose bundled SQLite
-has no wasm64 libc. A TypeScript reader has neither problem, and it supports
-HTTP range access and runs in a JBrowse RPC worker without extra code for
-either: [docs/why-not-wasm.md](docs/why-not-wasm.md).
+This initially started as a hackathon project compiling gbz-base to wasm, but
+the rust code (reasonably, uses `usize` which on wasm32 is the wrong size for
+the file format. The custom typescript code has no such problem, and we
+implement a custom lightweight file format reader that doesn't even require a
+full sqlite.c WASM build: [docs/why-not-wasm.md](docs/why-not-wasm.md).
 
 ## In JBrowse
 
