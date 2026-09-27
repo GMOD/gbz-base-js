@@ -1,8 +1,9 @@
 # Performance
 
-Small windows spend most of their time on request latency. Windows with hundreds
-of haplotypes spend it walking and aligning steps, and `keep` is the largest
-saving there. `gbz-base-query --stats` reports the counters for one query;
+A query on a small window spends most of its time waiting on request latency. A
+query on a window with hundreds of haplotypes spends most of its time walking
+and aligning steps, and `keep` saves the most time there.
+`gbz-base-query --stats` reports the counters for one query;
 `scripts/measure-windows.mjs` and `scripts/time-phases.mjs` produced these
 tables. They predate the [step-loop change](optimizations.md#the-step-loops),
 which made warm queries 1.3-1.8x faster.
@@ -28,10 +29,10 @@ A first query makes 16-46 range requests and reads 2.2-4.7 MB across both files.
 
 ## Context
 
-A larger `context` reads more nodes and leaves fewer walk pieces to name and
-join. MHC class II lies inside a snarl much larger than the window. The query
-returns 1.1M pieces at `context: 0` and 464 walks at `context: 1000`, and the
-second runs three times faster. The `snarls` option is the other way to get
+With a larger `context`, the query reads more nodes and has fewer walk pieces to
+name and join. MHC class II lies inside a snarl much larger than the window. The
+query returns 1.1M pieces at `context: 0` and 464 walks at `context: 1000`, and
+the second runs three times faster. The `snarls` option is the other way to get
 whole walks ([snarls.md](snarls.md)).
 
 ## A small window

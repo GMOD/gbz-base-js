@@ -13,8 +13,8 @@ against.
 
 A TypeScript reader reads 8-byte fields as 8 bytes, and it has other advantages:
 
-- Range requests through `generic-filehandle2`, so a query on a 10 GB remote
-  database fetches a few hundred KB.
+- It makes range requests through `generic-filehandle2`, so a query on a 10 GB
+  remote database fetches a few hundred KB.
 - It runs on JBrowse's file access layer, with its authentication and caching.
 - It ships as one small npm package, with readable stack traces.
 - The [oracle tests](internals.md#tests-against-upstream) fail on any difference

@@ -30,7 +30,7 @@ const subgraph = await db.getSubgraphForRange(
 )
 ```
 
-On the `micb-kir3dl1` test database, that 1 kb window gives:
+On the `micb-kir3dl1` test database, the 1 kb window above returns these counts:
 
 | `context` | `snarls`    | nodes | walks |
 | --------- | ----------- | ----- | ----- |
@@ -47,7 +47,7 @@ A snarl can be far larger than the window, so pair `overlapping` with `limit`.
 
 `getSubgraphForRange` and the lower-level `subgraphInInterval`,
 `subgraphAtOffset` and `subgraphAroundNodes` take `snarls`. A `keep` query on
-the anchored route walks the chosen haplotypes whole and ignores it.
+the anchored route walks the chosen haplotypes whole and ignores `snarls`.
 
 ## Between two boundary nodes
 
@@ -66,6 +66,6 @@ const subgraph = await subgraphBetween(
 await subgraph.identifyPaths()
 ```
 
-```
+```bash
 gbz-base-query graph.gbz.db --between 129+:160+
 ```

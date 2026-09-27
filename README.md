@@ -116,3 +116,15 @@ from ideas at MemPanG 26.
 ## License
 
 MIT © [Colin Diesh](https://github.com/cmdcolin)
+
+## Usage
+
+This module is currently used by
+
+- BandageJS https://github.com/cmdcolin/BandageJS (uses Bandage graph layout,
+  can fetch data with gbz-base)
+- sequenceTubeMap fork https://github.com/cmdcolin/sequenceTubeMap (modified
+  sequenceTubeMap, can fetch data with gbz-base)
+- jbrowse-plugin-graphgenomeviewer
+  https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer (similar to BandageJS
+  but has genome browser integration)

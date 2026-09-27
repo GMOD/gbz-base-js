@@ -14,10 +14,10 @@ queries in `queries.txt`. The tests require identical output, CIGARs included.
 
 ## Differences from upstream
 
-- On walks that loop through shared nodes, this reader uses a different
+- On walks that loop through shared nodes, this package uses a different
   weight-optimal search, which can pick a different alignment of equal weight
   ([optimizations.md](optimizations.md#aligning-a-walk-to-the-reference)).
-- Where the reference is stored reversed relative to its nodes, this reader
+- Where the reference is stored reversed relative to its nodes, this package
   aligns each walk in whichever orientation shares more sequence and marks those
   records `-`. Upstream gives all-insertion CIGARs there. CHM13 on HPRC chr20
   has one such region, just after the path fragment starting at 30,368,374.

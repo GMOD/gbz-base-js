@@ -54,8 +54,8 @@ Coordinates are 0-based half-open offsets along the path. The path is a PanSN
 `haplotypes: 'distinct'` merges identical walks into one record with a `weight`.
 `getAlignmentsForRange` accepts `all` and `distinct`.
 
-`keep` reduces the window to the reference, the accepted walks and the nodes
-they visit
+With `keep`, the query reduces the window to the reference, the accepted walks
+and the nodes they visit
 ([haplotype-index.md](haplotype-index.md#keeping-a-set-of-haplotypes)).
 
 `getAlignmentsForRange` covers every path fragment the window overlaps.
@@ -77,9 +77,9 @@ const compact = subgraph.toCompactSubgraph({ cigar: true, names: 'resolved' })
 
 ### JSON or compact
 
-`toSubgraphJson` is upstream's `gbz-base query --format json`, field for field.
-`toCompactSubgraph` stores the same subgraph in typed arrays, for sending
-between workers:
+`toSubgraphJson` writes the same fields as upstream's
+`gbz-base query --format json`. `toCompactSubgraph` stores the same subgraph in
+typed arrays, for sending between workers:
 
 ```ts
 interface CompactSubgraph {

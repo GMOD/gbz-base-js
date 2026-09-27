@@ -45,8 +45,8 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --alignments         print one alignment record per haplotype instead of the subgraph
   --against NAME       print PAF of every other named walk against this sample#haplotype, bases compared
   --stack A,B,C        print PAF of each sample#haplotype against the next one in the list, bases compared
-  --no-bases           compare no bases for --against or --stack: what lies between two shared stretches is an insertion and a deletion
-  --max-gap INT        cap the private bp a PAF record skips on either walk between two shared nodes (default: none)
+  --no-bases           for --against or --stack, write the bases between two shared stretches as an insertion and a deletion
+  --max-gap INT        cap the bases a PAF record skips on nodes only one walk visits (default: none)
   --contig-lengths F   chrom.sizes or .fai giving PAF columns 2 and 7, keyed by contig or sample#haplotype#contig
   --haplotype-index F  companion database written by gbz-haplotype-index --output
   --block-size INT     bytes fetched per range request (default: 65536)
@@ -176,7 +176,9 @@ function parseArgs(argv: string[]): Args {
       case '--haplotypes': {
         const output = next(i++)
         if (!isHaplotypeOutput(output)) {
-          throw new Error(`--haplotypes must be one of `)
+          throw new Error(
+            `--haplotypes must be one of ${HAPLOTYPE_OUTPUTS.join(', ')}`,
+          )
         }
         args.haplotypes = output
         break
@@ -389,7 +391,7 @@ export async function main(argv: string[]) {
     ...(args.sample === undefined ? {} : { sample: args.sample }),
   }
   if (args.against !== undefined && args.stack !== undefined) {
-    throw new Error('--against and --stack are two shapes of one output')
+    throw new Error('--against and --stack cannot be combined')
   }
   const kept = args.stack ?? [
     ...args.keep,

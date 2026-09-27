@@ -20,7 +20,7 @@ for (const alignment of alignments) {
 | `path`                | the walk as node handles                                                            |
 | `weight`              | the number of identical walks merged into the record, with `haplotypes: 'distinct'` |
 | `start`               | GBWT position of the walk's start, stable across refetches                          |
-| `resolved`            | `true` when the haplotype index named the record                                    |
+| `resolved`            | `true` when the library named the record from the haplotype index                   |
 
 A resolved record also has `name` (a `PathName`), `label` (such as
 `HG02723#1#JAHEOU010000100.1[4392999-4393486]`), `pathHandle`, and
@@ -61,10 +61,10 @@ for (const r of subgraph.pairAlignments({ target })) {
 ```
 
 A record is the best-scoring chain of runs of shared nodes, chained the way
-minimap2 chains seeds. The bases between two runs get a global alignment with
-vg's scores (match 1, mismatch -4, gap -6 and -1 per extra base). Where both
-stretches are long, the library chains shared 15-mers first, which also finds
-inversions. Each base aligns in at most one record.
+minimap2 chains seeds. The library aligns the bases between two runs globally,
+with vg's scores (match 1, mismatch -4, gap -6 and -1 per extra base). Where
+both stretches are long, the library chains shared 15-mers first, which also
+finds inversions. Each base aligns in at most one record.
 
 | field                       | meaning                                      |
 | --------------------------- | -------------------------------------------- |
@@ -86,7 +86,7 @@ the tag `ns:i:`. `--against HAP` aligns every walk to one haplotype, and
 `--stack A,B,C` aligns each haplotype to the next, which are the pairs a stacked
 synteny view draws.
 
-```
+```bash
 gbz-base-query graph.gbz.db --haplotype-index index.db --sample GRCh38 --contig chr6 \
   --interval 31940000..32090000 --context 0 \
   --stack 'HG01978#2,HG02004#2,GRCh38#0,HG02818#1,HG00146#1' --contig-lengths lengths.tsv
