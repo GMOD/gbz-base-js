@@ -106,7 +106,6 @@ Design:
 - [How a query flows](docs/dataflow.md)
 - [Performance](docs/performance.md) and [optimizations](docs/optimizations.md)
 - [Internals](docs/internals.md)
-- [Why not WebAssembly](docs/why-not-wasm.md)
 - [Contributing](CONTRIBUTING.md)
 
 [jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer)

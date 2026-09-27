@@ -21,7 +21,7 @@
 // SYNC: ~/src/gmod/bam-js/docs/img/dataflow.dot — same palette, legend and
 // spine, and tabix-js, cram-js and hic share them too. The orange "wasm" and
 // purple "off the main thread" entries of that legend are absent here rather
-// than restyled: nothing in this reader is wasm (docs/why-not-wasm.md is why)
+// than restyled: nothing in this reader is wasm (docs/internals.md#why-not-webassembly is why)
 // and it puts nothing on a thread of its own — JBrowse runs the whole thing
 // in an RPC worker instead. The blue "entry / result" entry is this diagram's
 // own addition: the siblings have one entry point and can leave the mark to
