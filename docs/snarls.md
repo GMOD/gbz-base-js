@@ -1,103 +1,58 @@
 # Snarls
 
-A snarl is a site of variation in the graph: a region bounded by two nodes that
-every haplotype crossing it enters through one and leaves through the other. A
-SNP bubble is a small snarl, and a large deletion or a centromere can be a snarl
-spanning megabases. Snarls nest, and a chain is a series of top-level snarls
-laid end to end along the graph, each sharing a boundary node with the next.
+A snarl is a site of variation: a region between two boundary nodes that every
+haplotype crossing it enters and leaves through. A SNP bubble is a small snarl;
+a large deletion can be a snarl spanning megabases. A chain is a series of
+top-level snarls laid end to end. `gbz-base construct` stores the top-level
+chains as links between boundary nodes.
 
-`gbz-base construct` stores the top-level chains in the database. Each boundary
-node record carries a `next` link to the boundary node at the other end of its
-snarl, and the `chains` and `chain_links` tags in the `Tags` table count them.
-On a database without those links, queries still work and the snarl options
-below add nothing.
+## The `snarls` option
 
-## Filling snarls around a window
+`context` extends a window by a bp radius. The `snarls` option extends it by
+whole snarls instead, using the stored chains.
 
-An interval query walks the reference for the window's length and then adds
-`context` bp of graph around it, breadth-first. A bp radius is a poor fit for
-variation: a radius too small cuts a bubble in half, and a radius large enough
-for the largest bubble in the window makes the query read far more than the
-window everywhere else. The `snarls` option adds whole snarls instead, using the
-stored chain links. The query adds them after the context step and before it
-extracts walks, so the walks through a filled snarl come back like any others.
+| `snarls`      | CLI               | adds                                                                            |
+| ------------- | ----------------- | ------------------------------------------------------------------------------- |
+| `contained`   | `--snarls`        | every top-level snarl with both boundary nodes in view                          |
+| `overlapping` | `--extend-snarls` | also snarls with one boundary in view, or the snarl containing the whole window |
 
-| `snarls`      | CLI               | adds                                                   |
-| ------------- | ----------------- | ------------------------------------------------------ |
-| `none`        |                   | nothing, the default                                   |
-| `contained`   | `--snarls`        | every top-level snarl with both boundary nodes in view |
-| `overlapping` | `--extend-snarls` | also snarls with one boundary node in view, see below  |
-
-Filling a top-level snarl adds every node between its two boundaries, which
-includes the snarls nested inside it.
-
-On the `micb-kir3dl1` test database, the 1 kb window `GRCh38#0#chr6`
-31,500,000-31,501,000 extracts:
-
-| `context` | `snarls`    | nodes | walks |
-| --------- | ----------- | ----- | ----- |
-| 0         | `none`      | 31    | 468   |
-| 0         | `contained` | 47    | 91    |
-| 100       | `none`      | 54    | 91    |
-| 100       | `contained` | 54    | 91    |
-
-With `context: 0` the window holds only the reference walk's nodes, so each
-haplotype that leaves the reference inside it comes back as several pieces: 468
-walks from 91 haplotype passages. `contained` restores the 16 nodes of the
-bubbles the reference skips, and each haplotype then crosses the window as one
-walk. At `context: 100` the radius already covers those bubbles and `contained`
-adds nothing. The `chr19` window 54,817,000-54,818,000 behaves the same way: 46
-nodes and 690 walks at `context: 0`, 67 nodes and 78 walks with `contained`.
-
-`overlapping` adds more in two cases. When a boundary node in view is the entry
-to a snarl whose other boundary lies outside the subgraph, the query fills that
-snarl too. When the subgraph holds no chain link at all, because it sits wholly
-inside one snarl, the query searches outward for the snarl containing it and
-fills that. A node query for node 200 on the same database returns 1 node with
-`none` or `contained` and 6 with `overlapping`. A snarl can be far larger than
-the window, so pair `overlapping` with `limit`; a query that reaches the limit
-throws `SubgraphLimitError`.
-
-A node query with more than one node rejects `overlapping`, as upstream does,
-because the nodes need not form one connected subgraph.
+A top-level snarl includes every snarl nested inside it.
 
 ```ts
 const subgraph = await db.getSubgraphForRange(
   'GRCh38#0#chr6',
   31500000,
   31501000,
-  { context: 0, snarls: 'contained' },
+  {
+    context: 0,
+    snarls: 'contained',
+  },
 )
 ```
 
-```
-gbz-base-query graph.gbz.db --sample GRCh38 --contig chr6 \
-  --interval 31500000..31501000 --context 0 --snarls
-```
+On the `micb-kir3dl1` test database, that 1 kb window gives:
 
-## Where the options apply
+| `context` | `snarls`    | nodes | walks |
+| --------- | ----------- | ----- | ----- |
+| 0         | `none`      | 31    | 468   |
+| 0         | `contained` | 47    | 91    |
+| 100       | `none`      | 54    | 91    |
+
+With `context: 0` the window holds only the reference's nodes, so haplotypes
+that leave the reference come back in pieces: 468 walks for 91 haplotypes.
+`contained` adds the 16 nodes of the skipped bubbles, and each haplotype comes
+back as one walk.
+
+A snarl can be far larger than the window, so pair `overlapping` with `limit`.
 
 `getSubgraphForRange` and the lower-level `subgraphInInterval`,
-`subgraphAtOffset` and `subgraphAroundNodes` take `snarls`.
-`getAlignmentsForRange` does not, and its type rejects the option: it joins the
-pieces of a haplotype that leaves the subgraph back into one record, so filling
-snarls would change how many pieces it joins and not the records it returns
-([alignments.md](alignments.md#one-record-is-one-haplotypes-passage)).
-
-On a companion with anchors, a `keep` query takes the anchored route: the reader
-walks each kept haplotype through the window from an anchor and never reads the
-chain links, so `snarls` has no effect. If the reader falls back to the sampled
-route, it applies `snarls` there
-([haplotype-index.md](haplotype-index.md#the-anchored-walk)).
+`subgraphAtOffset` and `subgraphAroundNodes` take `snarls`. A `keep` query on
+the anchored route walks the chosen haplotypes whole and ignores it.
 
 ## Between two boundary nodes
 
-`subgraphBetween(db, start, end)` is upstream's `--between`. It collects the two
-boundary nodes and every node reachable from them inward without passing through
-either boundary, with no context and no reference walk, then extracts the walks
-through those nodes. `start` and `end` are oriented GBWT handles, `2 * nodeId`
-forward and `2 * nodeId + 1` reverse, and normally the two boundaries of one
-snarl or of a stretch of one chain.
+`subgraphBetween` returns every node between two oriented node handles, usually
+the boundaries of a snarl. It is upstream's `--between`.
 
 ```ts
 import { nodes, subgraphBetween } from '@gmod/gbz-base'
@@ -107,14 +62,9 @@ const subgraph = await subgraphBetween(
   nodes.encodeNode(129, 'forward'),
   nodes.encodeNode(160, 'forward'),
 )
+await subgraph.identifyPaths()
 ```
 
 ```
 gbz-base-query graph.gbz.db --between 129+:160+
 ```
-
-On `micb-kir3dl1`, `129+:160+` gives 32 nodes and `154-:150-` gives 5.
-`subgraphBetween` takes `haplotypes`, `limit` and `signal`, and rejects
-`haplotypes: 'reference-only'` because it has no reference walk to keep. It does
-not name the walks; call `identifyPaths()` on the result, as with the other
-[lower-level queries](api.md#lower-level-queries).
