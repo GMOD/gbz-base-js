@@ -21,7 +21,7 @@ steps 3 to 7 with walks from an anchor.
    ([snarls.md](snarls.md)).
 6. **`extractPaths`** lists every walk crossing the window's nodes.
 7. **Naming** gives each walk its haplotype, by the sampled or the anchored
-   route ([haplotype-index.md](haplotype-index.md#two-ways-to-name-walks)).
+   route ([haplotype-index.md](haplotype-index.md#how-walks-get-their-names)).
 8. **`alignments()`** aligns each walk to the reference and joins pieces of one
    haplotype into a record ([alignments.md](alignments.md)).
 
