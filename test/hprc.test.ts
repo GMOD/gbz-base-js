@@ -97,28 +97,37 @@ describe.skipIf(!available(companion))('the published HPRC v2.1 graph', () => {
 describe.skipIf(!available(anchoredCompanion))(
   'the anchored companion for the published HPRC v2.1 graph',
   () => {
-    it('walks the tutorial’s eight haplotypes at KIV-2, AMY1 and MHC class II from the anchors, never falling back', async () => {
+    it('returns the sampled route’s walks for the tutorial’s eight haplotypes at KIV-2, AMY1 and MHC class II', async () => {
       const db = await openHprc(anchoredCompanion)
-      expect(await db.haplotypeAnchorSpacing()).toBe(131072)
+      expect(await db.haplotypeAnchorSpacing()).toBeDefined()
       const windows: [string, number, number][] = [
         ['chr6', 160616002, 160646753],
         ['chr1', 103690000, 103780000],
         ['chr6', 32510000, 32600000],
       ]
       for (const [contig, start, end] of windows) {
+        const query = { sample: 'GRCh38', contig }
+        const opts = {
+          context: 1000,
+          snarls: 'contained' as const,
+          keep: keepEight,
+        }
         const subgraph = await subgraphForHaplotypes(
           db,
-          { sample: 'GRCh38', contig },
+          query,
           start,
           end,
-          { context: 1000, snarls: 'contained', keep: keepEight },
+          opts,
         )
-        const stats = subgraph.stats.anchorWalk!
-        expect(stats.fallback).toBeUndefined()
-        expect(stats.walks.every(w => w.end === 'through the window')).toBe(
-          true,
-        )
+        expect(subgraph.stats.keep?.complete).toBe(true)
         expect(subgraph.stats.identification.chains).toEqual([])
+        const sampled = await subgraphInInterval(db, query, start, end, opts)
+        await sampled.identifyPaths()
+        sampled.keepHaplotypes(keepEight)
+        expect(await subgraph.toGFA({ names: 'resolved' })).toBe(
+          await sampled.toGFA({ names: 'resolved' }),
+        )
+        expect(subgraph.alignments()).toEqual(sampled.alignments())
         const alignments = subgraph.alignments()
         const haplotypes = new Set(
           alignments.map(a =>

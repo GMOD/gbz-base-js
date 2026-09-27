@@ -26,9 +26,6 @@ export {
 } from './subgraph.ts'
 export type {
   AlignmentSpan,
-  AnchorWalkEnd,
-  AnchorWalkRecord,
-  AnchorWalkStats,
   ChainEnd,
   ChainRecord,
   CompactPath,
@@ -56,6 +53,11 @@ export {
   subgraphInInterval,
 } from './query.ts'
 export type { HaplotypeQueryOptions, QueryOptions } from './query.ts'
+export type {
+  ChosenPieceSource,
+  KeepStats,
+  KeepWalkEnd,
+} from './chosenPaths.ts'
 export { SqliteDatabase } from './sqlite/database.ts'
 export type { GraphName } from './graphName.ts'
 export { weightedLcs } from './lcs.ts'

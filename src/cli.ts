@@ -12,10 +12,9 @@ import {
   subgraphInInterval,
 } from './query.ts'
 
+import type { KeepStats } from './chosenPaths.ts'
 import type { PathName } from './pathName.ts'
 import type {
-  AnchorWalkEnd,
-  AnchorWalkStats,
   ChainEnd,
   HaplotypeAlignment,
   HaplotypeOutput,
@@ -284,28 +283,21 @@ function identificationReport(stats: IdentificationStats) {
   ].join('\n')
 }
 
-const ANCHOR_WALK_ENDS: AnchorWalkEnd[] = [
-  'through the window',
-  'before the window',
-  'past the window',
-  'ended in the window',
-  'bound',
-]
-
-function anchorWalkReport(stats: AnchorWalkStats) {
-  const ends = ANCHOR_WALK_ENDS.map(
-    end => `${end} ${stats.walks.filter(w => w.end === end).length}`,
-  ).join(', ')
-  const steps = stats.walks.reduce((n, w) => n + w.steps, 0)
-  const pieces = stats.walks.reduce((n, w) => n + w.pieces, 0)
+function keepReport(stats: KeepStats) {
+  const sources = Object.entries(stats.sources)
+    .filter(([, n]) => n > 0)
+    .map(([source, n]) => `${source} ${n}`)
+    .join(', ')
+  const walks = Object.entries(stats.walks)
+    .map(([kind, n]) => `${kind} ${n}`)
+    .join(', ')
   const scanned = stats.scans.reduce((n, [a, b]) => n + ((b - a) >> 1) + 1, 0)
   return [
-    `anchored walk: spacing ${stats.spacing}; anchor for multiple ${stats.anchorOffset} at reference offset ${stats.anchorNodeOffset}, node ${stats.anchorHandle >> 1}, ${stats.rows} rows; reference ${stats.referenceSteps} steps`,
-    `  ${stats.walks.length} walks (${stats.walks.filter(w => w.from === 'sample').length} from a sample in the window), ${steps} steps in ${pieces} monotone pieces, ${stats.graphFetches} graph record lookups outside the subgraph`,
-    `  walk ends: ${ends}`,
-    `  completeness: ${stats.scans.length} index scans over ${scanned} nodes for ${stats.scanRows} samples`,
-    `  ms: reference ${stats.ms.reference.toFixed(0)}, rows ${stats.ms.rows.toFixed(0)}, walks ${stats.ms.walks.toFixed(0)}, scan ${stats.ms.scan.toFixed(0)}, sampled ${stats.ms.sampled.toFixed(0)}`,
-    `  ${stats.fallback ?? 'no fallback'}`,
+    `keep: ${stats.pieces} pieces (${sources}); ${stats.complete ? 'complete' : 'incomplete'}`,
+    `  anchor spacing ${stats.spacing ?? 'none'}; ${stats.scans.length} index scans over ${scanned} nodes for ${stats.scanRows} samples, ${stats.seeds} of them chosen`,
+    `  walks: ${walks || 'none'}; ${stats.graphFetches} graph records read outside the subgraph`,
+    `  twins: ${stats.twins.tried} tried, ${stats.twins.found} found, ${stats.twins.unresolved} unresolved`,
+    `  ms: seeds ${stats.ms.seeds.toFixed(0)}, intervals ${stats.ms.intervals.toFixed(0)}, chains ${stats.ms.chains.toFixed(0)}, approach ${stats.ms.approach.toFixed(0)}, twins ${stats.ms.twins.toFixed(0)}`,
   ].join('\n')
 }
 
@@ -490,9 +482,9 @@ export async function main(argv: string[]) {
         `${identificationReport(subgraph.stats.identification)}\n`,
       )
     }
-    const { anchorWalk } = subgraph.stats
-    if (anchorWalk) {
-      process.stderr.write(`${anchorWalkReport(anchorWalk)}\n`)
+    const { keep: keepStats } = subgraph.stats
+    if (keepStats) {
+      process.stderr.write(`${keepReport(keepStats)}\n`)
     }
   }
 }

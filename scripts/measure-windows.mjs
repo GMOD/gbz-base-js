@@ -63,7 +63,7 @@ async function run(db, contig, start, end, set) {
   )
   const alignments = subgraph.alignments()
   const ms = performance.now() - t0
-  const walk = subgraph.stats.anchorWalk
+  const keep = subgraph.stats.keep
   return {
     ms,
     records: alignments.length,
@@ -72,15 +72,10 @@ async function run(db, contig, start, end, set) {
     graphMB: (db.sqlite.pager.bytesFetched - graphBytes) / 1e6,
     indexRequests: db.index.pager.fetches - indexFetches,
     indexMB: (db.index.pager.bytesFetched - indexBytes) / 1e6,
-    route: walk
-      ? walk.fallback
-        ? 'anchored->sampled'
-        : 'anchored'
-      : 'sampled',
-    phases: walk
-      ? `ref ${walk.ms.reference.toFixed(0)} rows ${walk.ms.rows.toFixed(0)} walks ${walk.ms.walks.toFixed(0)} scan ${walk.ms.scan.toFixed(0)} sampled ${walk.ms.sampled.toFixed(0)}; ${walk.walks.filter(w => w.from === 'sample').length} from samples`
+    route: keep ? (keep.complete ? 'keep' : 'keep, incomplete') : 'sampled',
+    phases: keep
+      ? `seeds ${keep.ms.seeds.toFixed(0)} intervals ${keep.ms.intervals.toFixed(0)} chains ${keep.ms.chains.toFixed(0)} approach ${keep.ms.approach.toFixed(0)} twins ${keep.ms.twins.toFixed(0)}`
       : '',
-    steps: walk ? walk.walks.reduce((n, w) => n + w.steps, 0) : undefined,
   }
 }
 

@@ -1,17 +1,17 @@
 import path from 'node:path'
 
 import { LocalFile } from 'generic-filehandle2'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { openSampled } from './fixtures.ts'
 import { checkResolvedRecord, walkBack } from './walkBack.ts'
 import { GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode, nodeId } from '../src/gbwt/node.ts'
 import { subgraphForHaplotypes, subgraphInInterval } from '../src/query.ts'
-import { Subgraph } from '../src/subgraph.ts'
 
 import type { HaplotypeSample } from '../src/db.ts'
 import type { PathName } from '../src/pathName.ts'
+import type { HaplotypeQueryOptions } from '../src/query.ts'
 import type { HaplotypeAlignment } from '../src/subgraph.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
@@ -60,7 +60,7 @@ interface ExpectedAnchor {
 // The rule the tool documents, computed independently over the reader's
 // own walk of each indexed path: the first node for k = 0, and for k >= 1
 // the node with the most GBWT positions among those overlapping the half
-// spacing before k * spacing, the first on a tie.
+// spacing before k * spacing, the last on a tie.
 async function expectedAnchors(db: GBZBase, spacing: number) {
   const anchors: ExpectedAnchor[] = []
   for (const gbzPath of (await db.paths()).filter(p => p.isIndexed)) {
@@ -83,7 +83,7 @@ async function expectedAnchors(db: GBZBase, spacing: number) {
           step.offset < target && step.offset + step.len > target - spacing / 2,
       )
       const most = Math.max(...overlapping.map(step => visits.get(step.id)!))
-      const chosen = overlapping.find(step => visits.get(step.id) === most)!
+      const chosen = overlapping.findLast(step => visits.get(step.id) === most)!
       anchors.push({
         pathHandle: gbzPath.handle,
         anchorOffset: target,
@@ -117,35 +117,6 @@ function recordKey(alignment: HaplotypeAlignment) {
   return alignment.resolved
     ? `${alignment.label} ${alignment.strand} ${alignment.refStart}-${alignment.refEnd}`
     : 'unresolved'
-}
-
-async function sampledRoute(
-  db: GBZBase,
-  query: { sample: string; contig: string },
-  start: number,
-  end: number,
-  keep: (name: PathName) => boolean,
-) {
-  const subgraph = await subgraphInInterval(db, query, start, end, {
-    context: 0,
-  })
-  await subgraph.identifyPaths()
-  subgraph.keepHaplotypes(keep)
-  return subgraph
-}
-
-async function expectSameRecords(db: GBZBase, a: Subgraph, b: Subgraph) {
-  const left = a.alignments()
-  const right = b.alignments()
-  expect(left.map(recordKey).sort()).toEqual(right.map(recordKey).sort())
-  for (const alignment of left) {
-    const check = await checkResolvedRecord(db, alignment)
-    expect(check.start).toEqual(check.expectedStart)
-    expect(check.bpBefore).toBe(check.claimedBefore)
-    expect(check.hapLen).toBe(check.consumed.query)
-    expect(check.refLen).toBe(check.consumed.reference)
-  }
-  return left
 }
 
 describe('anchor rows in the companion', () => {
@@ -250,111 +221,103 @@ describe('anchor rows in the companion', () => {
   })
 })
 
-describe('the anchored walk', () => {
-  const chr6 = { sample: 'GRCh38', contig: 'chr6' }
+const chr6 = { sample: 'GRCh38', contig: 'chr6' }
 
-  it('gives the sampled route’s records from the rows at one node and no chain walk', async () => {
+// The sampled route narrowed by keepHaplotypes is the answer a query that uses
+// the keep option must give, down to the GBWT position each walk starts at.
+async function expectParity(
+  db: GBZBase,
+  query: { sample: string; contig: string },
+  start: number,
+  end: number,
+  opts: HaplotypeQueryOptions,
+) {
+  const kept = await subgraphForHaplotypes(db, query, start, end, opts)
+  const sampled = await subgraphInInterval(db, query, start, end, opts)
+  await sampled.identifyPaths()
+  sampled.keepHaplotypes(opts.keep)
+  expect(await kept.toGFA({ names: 'resolved' })).toBe(
+    await sampled.toGFA({ names: 'resolved' }),
+  )
+  const alignments = kept.alignments()
+  expect(alignments).toEqual(sampled.alignments())
+  for (const alignment of alignments) {
+    const check = await checkResolvedRecord(db, alignment)
+    expect(check.start).toEqual(check.expectedStart)
+    expect(check.bpBefore).toBe(check.claimedBefore)
+    expect(check.hapLen).toBe(check.consumed.query)
+    expect(check.refLen).toBe(check.consumed.reference)
+  }
+  return { kept, alignments }
+}
+
+const keepSets: [string, (name: PathName) => boolean][] = [
+  ['HG01106', name => name.sample === 'HG01106'],
+  ['HG00438#1', name => name.sample === 'HG00438' && name.haplotype === 1],
+  ['every HG0 sample', name => name.sample.startsWith('HG0')],
+  ['everything but CHM13', name => name.sample !== 'CHM13'],
+]
+
+describe('a query that uses the keep option', () => {
+  it('returns the sampled route’s walks at every context and snarl setting', async () => {
     const db = await openMicb()
-    const keep = (name: PathName) => name.sample === 'HG01106'
-    const anchored = await subgraphForHaplotypes(db, chr6, 31500000, 31501000, {
-      keep,
-    })
-    const sampled = await sampledRoute(db, chr6, 31500000, 31501000, keep)
-    const records = await expectSameRecords(db, anchored, sampled)
-    expect(records.length).toBe(2)
-    const stats = anchored.stats.anchorWalk!
-    expect(stats.spacing).toBe(2500)
-    expect(stats.anchorOffset).toBe(0)
-    expect(stats.rows).toBe(await positionsAt(db, stats.anchorHandle))
-    expect(stats.walks.map(w => w.end)).toEqual([
-      'through the window',
-      'through the window',
-    ])
-    expect(stats.fallback).toBeUndefined()
-    expect(anchored.stats.identification.chains).toEqual([])
-    expect(anchored.stats.identificationSteps).toBe(0)
-  })
+    const windows: [{ sample: string; contig: string }, number, number][] = [
+      [chr6, 31500000, 31501000],
+      [chr6, 31503000, 31504000],
+      [chr6, 31505000, 31505100],
+      [chr6, 31509000, 31511000],
+      [chr6, 31498140, 31511000],
+      [{ sample: 'GRCh38', contig: 'chr19' }, 54820000, 54822000],
+      [{ sample: 'GRCh38', contig: 'chr19' }, 54816500, 54830000],
+      [{ sample: 'CHM13', contig: 'chr6' }, 31352000, 31352500],
+    ]
+    let walks = 0
+    for (const [query, start, end] of windows) {
+      for (const context of [0, 100, 1000]) {
+        for (const snarls of ['none', 'contained'] as const) {
+          for (const [, keep] of keepSets) {
+            const { kept, alignments } = await expectParity(
+              db,
+              query,
+              start,
+              end,
+              { keep, context, snarls },
+            )
+            expect(kept.stats.keep?.complete).toBe(true)
+            walks += alignments.length
+          }
+        }
+      }
+    }
+    expect(walks).toBeGreaterThan(5000)
+  }, 120000)
 
-  it('starts from the anchor before the window, in both stored orientations, for every wanted walk', async () => {
-    const db = await openMicb()
-    const keep = (name: PathName) => name.sample.startsWith('HG0')
-    const anchored = await subgraphForHaplotypes(db, chr6, 31503000, 31504000, {
-      keep,
-    })
-    const sampled = await sampledRoute(db, chr6, 31503000, 31504000, keep)
-    const records = await expectSameRecords(db, anchored, sampled)
-    expect(records.length).toBeGreaterThan(50)
-    expect(records.some(r => r.strand === '-')).toBe(true)
-    expect(records.some(r => r.strand === '+')).toBe(true)
-    expect(anchored.stats.anchorWalk?.anchorOffset).toBe(2500)
-    expect(anchored.stats.anchorWalk?.walks.length).toBe(records.length)
-  })
-
-  it('holds the reference walk and the kept walks’ nodes, private ones included', async () => {
-    const db = await openMicb()
-    const keep = (name: PathName) => name.sample.startsWith('HG0')
-    const anchored = await subgraphForHaplotypes(db, chr6, 31509000, 31511000, {
-      keep,
-    })
-    const sampled = await sampledRoute(db, chr6, 31509000, 31511000, keep)
-    await expectSameRecords(db, anchored, sampled)
-    const json = anchored.toSubgraphJson({ names: 'resolved' })
-    const visited = new Set(json.paths.flatMap(p => p.path.map(s => s.id)))
-    expect(json.nodes.every(n => visited.has(n.id))).toBe(true)
-    expect(json.nodes.length).toBeGreaterThan(sampled.nodeCount)
-    expect(json.paths[0]?.name.startsWith('GRCh38#0#chr6[')).toBe(true)
-  })
-
-  it('works with the other reference as the window’s path', async () => {
-    const db = await openMicb()
-    const chm13 = { sample: 'CHM13', contig: 'chr6' }
-    const keep = (name: PathName) => name.sample !== 'CHM13'
-    const anchored = await subgraphForHaplotypes(
-      db,
-      chm13,
-      31352000,
-      31352500,
-      { keep },
-    )
-    const sampled = await sampledRoute(db, chm13, 31352000, 31352500, keep)
-    const records = await expectSameRecords(db, anchored, sampled)
-    expect(records.length).toBeGreaterThan(50)
-    expect(records.some(r => r.resolved && r.name.sample === 'GRCh38')).toBe(
-      true,
-    )
-  })
-
-  it('walks a contig off the reference’s end without a trailing private stretch', async () => {
+  it('follows a contig off the reference’s end and one that starts after the anchor', async () => {
     const db = await openSplit()
     const chr1 = { sample: 'GRCh38', contig: 'chr1' }
-    const keep = (name: PathName) => name.sample === 'HG001'
-    const anchored = await subgraphForHaplotypes(db, chr1, 200, 500, { keep })
-    const sampled = await sampledRoute(db, chr1, 200, 500, keep)
-    const records = await expectSameRecords(db, anchored, sampled)
-    expect(records.map(r => r.refEnd)).toEqual([501, 501])
-    expect(anchored.stats.anchorWalk?.walks.map(w => w.end)).toEqual([
-      'ended in the window',
-      'ended in the window',
-    ])
-    const second = await subgraphForHaplotypes(db, chr1, 1500, 1600, {
+    for (const context of [0, 100]) {
+      const { alignments } = await expectParity(db, chr1, 200, 500, {
+        keep: name => name.sample === 'HG001',
+        context,
+      })
+      expect(alignments.map(a => a.refEnd)).toEqual([501, 501])
+    }
+    const { alignments } = await expectParity(db, chr1, 1500, 1600, {
       keep: name => name.sample === 'HG002',
     })
-    expect(second.alignments().map(recordKey)).toEqual([
-      'HG002#1#ctgB[0-150] + 1500-1650',
+    expect(alignments.map(recordKey)).toEqual([
+      'HG002#1#ctgB[0-361] + 1500-1861',
     ])
-    expect(second.stats.anchorWalk?.anchorOffset).toBe(0)
   })
 
-  it('walks a wanted contig with no anchor row from its sample in the window, back to the reference and through', async () => {
+  it('finds a contig with no row at the anchor from its samples in the window', async () => {
     const db = await openMicb()
-    const keep = (name: PathName) => name.sample === 'HG01106'
-    const rows = await db.haplotypeSamplesAtNode(2)
+    const anchor = (await db.haplotypeAnchor(1, 0))!
+    const rows = await db.haplotypeSamplesAtNode(anchor.node)
     const dropped = rows.find(
       row => row.pathHandle !== 0 && row.pathHandle !== 1,
     )!
     const gbzPath = (await db.getPath(dropped.pathHandle))!
-    const wanted = (name: PathName) =>
-      keep(name) || name.contig === gbzPath.name.contig
     Object.defineProperty(db, 'haplotypeSamplesAtNode', {
       value: (handle: number) =>
         db
@@ -363,84 +326,26 @@ describe('the anchored walk', () => {
             all.filter(row => row.pathHandle !== dropped.pathHandle),
           ),
     })
-    const anchored = await subgraphForHaplotypes(db, chr6, 31500000, 31501000, {
-      keep: wanted,
+    const { alignments } = await expectParity(db, chr6, 31500000, 31501000, {
+      keep: name => name.contig === gbzPath.name.contig,
       context: 0,
     })
-    const stats = anchored.stats.anchorWalk!
-    expect(stats.fallback).toBeUndefined()
-    expect(stats.walks.map(w => w.from)).toEqual(['anchor', 'anchor', 'sample'])
-    expect(stats.walks[2]?.pathHandle).toBe(dropped.pathHandle)
-    expect(stats.walks[2]?.end).toBe('through the window')
-    expect(anchored.stats.identification.chains).toEqual([])
-    const sampled = await sampledRoute(db, chr6, 31500000, 31501000, wanted)
-    const records = await expectSameRecords(db, anchored, sampled)
     expect(
-      records.some(r => r.resolved && r.pathHandle === dropped.pathHandle),
+      alignments.some(a => a.resolved && a.pathHandle === dropped.pathHandle),
     ).toBe(true)
   })
 
-  it('finds a contig stored against the reference from a sample of the orientation that runs with it', async () => {
-    const db = await openMicb()
-    const keep = (name: PathName) => name.sample === 'HG01106'
-    const anchor = (await db.haplotypeAnchor(0, 0))!
-    const rows = await db.haplotypeSamplesAtNode(anchor.node)
-    const dropped = rows.find(
-      row =>
-        row.pathHandle !== 0 &&
-        row.pathHandle !== 1 &&
-        row.orientation === 'reverse',
-    )!
-    const gbzPath = (await db.getPath(dropped.pathHandle))!
-    const wanted = (name: PathName) =>
-      keep(name) || name.contig === gbzPath.name.contig
-    Object.defineProperty(db, 'haplotypeSamplesAtNode', {
-      value: (handle: number) =>
-        db
-          .haplotypeSamplesInRange(handle, handle)
-          .then(all =>
-            all.filter(row => row.pathHandle !== dropped.pathHandle),
-          ),
-    })
-    const anchored = await subgraphForHaplotypes(db, chr6, 31500000, 31501000, {
-      keep: wanted,
-      context: 0,
-    })
-    const stats = anchored.stats.anchorWalk!
-    expect(stats.fallback).toBeUndefined()
-    const fromSample = stats.walks.find(w => w.from === 'sample')!
-    expect(fromSample.pathHandle).toBe(dropped.pathHandle)
-    expect(fromSample.end).toBe('through the window')
-    const sampled = await sampledRoute(db, chr6, 31500000, 31501000, wanted)
-    const records = await expectSameRecords(db, anchored, sampled)
-    const record = records.find(
-      r => r.resolved && r.pathHandle === dropped.pathHandle,
-    )!
-    expect(record.strand).toBe('-')
-  })
-
-  it('falls back to the sampled route when a walk cannot be completed', async () => {
-    const db = await openMicb()
-    const keep = (name: PathName) => name.sample === 'HG01106'
-    const spy = vi
-      .spyOn(Subgraph.prototype, 'walkHaplotypesFromAnchor')
-      .mockResolvedValue('the walk hit its bound')
-    try {
-      const anchored = await subgraphForHaplotypes(
-        db,
-        chr6,
-        31500000,
-        31501000,
-        { keep, context: 0 },
-      )
-      expect(anchored.stats.anchorWalk).toBeUndefined()
-      expect(anchored.stats.identification.chains.length).toBeGreaterThan(0)
-      const sampled = await sampledRoute(db, chr6, 31500000, 31501000, keep)
-      const records = await expectSameRecords(db, anchored, sampled)
-      expect(records.length).toBe(2)
-    } finally {
-      spy.mockRestore()
-    }
+  it('identifies every walk on the same subgraph when the haplotype index has no anchors', async () => {
+    const db = await openSampled('micb-kir3dl1.gbz.db')
+    const { kept, alignments } = await expectParity(
+      db,
+      chr6,
+      31500000,
+      31501000,
+      { keep: name => name.sample === 'HG01106' },
+    )
+    expect(kept.stats.keep).toBeUndefined()
+    expect(alignments.length).toBe(2)
   })
 
   it('refuses anchor rows that do not include the reference’s own visit', async () => {
@@ -452,44 +357,34 @@ describe('the anchored walk', () => {
       subgraphForHaplotypes(db, chr6, 31500000, 31501000, {
         keep: name => name.sample === 'HG01106',
       }),
-    ).rejects.toThrow(/no anchor row for GRCh38#0#chr6/)
+    ).rejects.toThrow(/no anchor row for the reference path/)
   })
 
-  it('is what keep uses on the range queries, and degrades without anchors', async () => {
+  it('is what keep uses on the range queries, except with distinct haplotypes', async () => {
     const chr6Name = 'GRCh38#0#chr6'
     const keep = (name: PathName) => name.sample === 'HG01106'
-    const withAnchors = await openMicb()
-    const anchored = await withAnchors.getSubgraphForRange(
+    const db = await openMicb()
+    const kept = await db.getSubgraphForRange(chr6Name, 31500000, 31501000, {
+      keep,
+    })
+    expect(kept?.stats.keep?.complete).toBe(true)
+    const alignments = await db.getAlignmentsForRange(
       chr6Name,
       31500000,
       31501000,
       { keep },
     )
-    expect(anchored?.stats.anchorWalk?.fallback).toBeUndefined()
-    expect(anchored?.stats.anchorWalk?.walks.length).toBe(2)
-    const alignments = await withAnchors.getAlignmentsForRange(
-      chr6Name,
-      31500000,
-      31501000,
-      { keep },
-    )
-    const sampled = await openSampled('micb-kir3dl1.gbz.db')
-    const plain = await sampled.getSubgraphForRange(
-      chr6Name,
-      31500000,
-      31501000,
-      { keep, context: 0 },
-    )
-    expect(plain?.stats.anchorWalk).toBeUndefined()
-    expect(alignments.map(recordKey).sort()).toEqual(
-      plain!.alignments().map(recordKey).sort(),
-    )
-    const distinct = await withAnchors.getSubgraphForRange(
+    const plain = await (
+      await openSampled('micb-kir3dl1.gbz.db')
+    ).getSubgraphForRange(chr6Name, 31500000, 31501000, { keep })
+    expect(plain?.stats.keep).toBeUndefined()
+    expect(alignments).toEqual(plain!.alignments())
+    const distinct = await db.getSubgraphForRange(
       chr6Name,
       31500000,
       31501000,
       { keep, haplotypes: 'distinct' },
     )
-    expect(distinct?.stats.anchorWalk).toBeUndefined()
+    expect(distinct?.stats.keep).toBeUndefined()
   })
 })

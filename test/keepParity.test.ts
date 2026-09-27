@@ -53,54 +53,61 @@ async function walkSpans(subgraph: Subgraph) {
     .sort()
 }
 
-describe.skipIf(!available(anchoredCompanion))('the anchored walk', () => {
-  it('writes one W line per haplotype, spanning what its alignment does', async () => {
-    const db = await GBZBase.open(new RemoteFile(graphUrl), {
-      haplotypeIndex: isRemote(anchoredCompanion)
-        ? new RemoteFile(anchoredCompanion)
-        : new LocalFile(anchoredCompanion),
-    })
-    const anchored = await subgraphForHaplotypes(db, query, start, end, {
-      ...opts,
-      keep,
-    })
-    expect(await walkSpans(anchored)).toEqual(alignmentSpans(anchored))
-    expect(alignmentSpans(anchored)).toEqual([
-      'HG00099#1 3183',
-      'HG00099#2 388',
-      'HG02559#1 5525',
-      'HG02559#2 493',
-    ])
+describe.skipIf(!available(anchoredCompanion))(
+  'a query that uses the keep option',
+  () => {
+    it('writes one W line per haplotype, spanning what its alignment does, as the sampled route does', async () => {
+      const db = await GBZBase.open(new RemoteFile(graphUrl), {
+        haplotypeIndex: isRemote(anchoredCompanion)
+          ? new RemoteFile(anchoredCompanion)
+          : new LocalFile(anchoredCompanion),
+      })
+      const kept = await subgraphForHaplotypes(db, query, start, end, {
+        ...opts,
+        keep,
+      })
+      expect(await walkSpans(kept)).toEqual(alignmentSpans(kept))
+      expect(alignmentSpans(kept)).toEqual([
+        'HG00099#1 9160',
+        'HG00099#2 6363',
+        'HG02559#1 11643',
+        'HG02559#2 6472',
+      ])
+      const sampled = await subgraphInInterval(db, query, start, end, opts)
+      await sampled.identifyPaths()
+      sampled.keepHaplotypes(keep)
+      expect(await walkSpans(sampled)).toEqual(alignmentSpans(sampled))
+      expect(alignmentSpans(sampled)).toEqual(alignmentSpans(kept))
+    }, 300000)
 
-    const interval = await subgraphInInterval(db, query, start, end, opts)
-    await interval.identifyPaths()
-    expect(await walkSpans(interval)).toEqual(alignmentSpans(interval))
-  }, 300000)
-
-  // HG04199#2's contig ends between the anchor and the window, so walking
-  // forward from the anchor writes nothing for it, and the scan that recovers
-  // an unwalked contig reads the reference's own nodes, which this haplotype
-  // reaches the window without touching. It used to be missing from the cut
-  // with nothing said.
-  it('falls back rather than dropping a haplotype its anchor cannot reach', async () => {
-    const db = await GBZBase.open(new RemoteFile(graphUrl), {
-      haplotypeIndex: isRemote(anchoredCompanion)
-        ? new RemoteFile(anchoredCompanion)
-        : new LocalFile(anchoredCompanion),
-    })
-    const broken = ['HG04199#1', 'HG04199#2']
-    const anchored = await subgraphForHaplotypes(db, query, start, end, {
-      ...opts,
-      keep: (name: PathName) =>
-        broken.includes(`${name.sample}#${name.haplotype}`),
-    })
-    const names = anchored
-      .alignments()
-      .flatMap(a =>
-        a.resolved ? [`${a.name.sample}#${a.name.haplotype}`] : [],
-      )
-      .sort()
-    expect(names).toEqual(broken)
-    expect(anchored.stats.anchorWalk!.fallback).toMatch(/HG04199#2/)
-  }, 300000)
-})
+    // HG04199#2 has one contig that ends between the anchor and the window and
+    // another that starts after the anchor, so no anchor row leads to its walk
+    // through the window; a sample of the second contig in the window does.
+    it('keeps a haplotype whose contig starts after the anchor', async () => {
+      const db = await GBZBase.open(new RemoteFile(graphUrl), {
+        haplotypeIndex: isRemote(anchoredCompanion)
+          ? new RemoteFile(anchoredCompanion)
+          : new LocalFile(anchoredCompanion),
+      })
+      const broken = ['HG04199#1', 'HG04199#2']
+      const keep = (name: PathName) =>
+        broken.includes(`${name.sample}#${name.haplotype}`)
+      const kept = await subgraphForHaplotypes(db, query, start, end, {
+        ...opts,
+        keep,
+      })
+      expect(kept.stats.keep?.complete).toBe(true)
+      const names = kept
+        .alignments()
+        .flatMap(a =>
+          a.resolved ? [`${a.name.sample}#${a.name.haplotype}`] : [],
+        )
+        .sort()
+      expect(names).toEqual(broken)
+      const sampled = await subgraphInInterval(db, query, start, end, opts)
+      await sampled.identifyPaths()
+      sampled.keepHaplotypes(keep)
+      expect(kept.alignments()).toEqual(sampled.alignments())
+    }, 300000)
+  },
+)

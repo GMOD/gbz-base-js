@@ -94,9 +94,15 @@ export async function checkResolvedRecordAgainstSamples(
     end: alignment.hapEnd - gbzPath.name.fragment,
   }
   const consumed = cigarConsumption(alignment.cigar)
+  // A sample's coordinate is the forward offset of its node's first base, in
+  // either orientation.
+  const sampleLen = (await db.getRecord(sample.node))!.sequenceLen
   return {
     sampleOrientation: sample.orientation,
-    bpBefore: sample.pathOffset + bpBefore,
+    bpBefore:
+      sample.orientation === 'forward'
+        ? sample.pathOffset + bpBefore
+        : length - sample.pathOffset - sampleLen + bpBefore,
     claimedBefore: alignment.strand === '+' ? local.start : length - local.end,
     hapLen: local.end - local.start,
     consumed,
