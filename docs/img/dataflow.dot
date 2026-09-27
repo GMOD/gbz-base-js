@@ -57,7 +57,7 @@ digraph gbzbasejs {
   walk -> snarls [style=dashed label=" snarls "]
   walk -> extract
   snarls -> extract
-  extract -> anchored [style=dashed label=" keep " weight=6]
+  extract -> anchored [style=dashed label=" { keep: name => … } " weight=6]
   extract -> sampled [style=dashed label=" otherwise " weight=6]
   anchored -> align
   sampled -> align

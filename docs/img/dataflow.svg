@@ -111,16 +111,16 @@
 <!-- anchored -->
 <g id="node8" class="node">
 <title>anchored</title>
-<path fill="#dafbe1" stroke="#1a7f37" d="M280.7,-468C280.7,-468 147.3,-468 147.3,-468 141.3,-468 135.3,-462 135.3,-456 135.3,-456 135.3,-444 135.3,-444 135.3,-438 141.3,-432 147.3,-432 147.3,-432 280.7,-432 280.7,-432 286.7,-432 292.7,-438 292.7,-444 292.7,-444 292.7,-456 292.7,-456 292.7,-462 286.7,-468 280.7,-468"/>
-<text xml:space="preserve" text-anchor="middle" x="214" y="-453.25" font-family="Helvetica,sans-Serif" font-size="10.00">walkHaplotypesFromAnchor</text>
-<text xml:space="preserve" text-anchor="middle" x="214" y="-440.5" font-family="Helvetica,sans-Serif" font-size="10.00">HaplotypeAnchors</text>
+<path fill="#dafbe1" stroke="#1a7f37" d="M279.7,-468C279.7,-468 146.3,-468 146.3,-468 140.3,-468 134.3,-462 134.3,-456 134.3,-456 134.3,-444 134.3,-444 134.3,-438 140.3,-432 146.3,-432 146.3,-432 279.7,-432 279.7,-432 285.7,-432 291.7,-438 291.7,-444 291.7,-444 291.7,-456 291.7,-456 291.7,-462 285.7,-468 279.7,-468"/>
+<text xml:space="preserve" text-anchor="middle" x="213" y="-453.25" font-family="Helvetica,sans-Serif" font-size="10.00">walkHaplotypesFromAnchor</text>
+<text xml:space="preserve" text-anchor="middle" x="213" y="-440.5" font-family="Helvetica,sans-Serif" font-size="10.00">HaplotypeAnchors</text>
 </g>
 <!-- extract&#45;&gt;anchored -->
 <g id="edge9" class="edge">
 <title>extract&#45;&gt;anchored</title>
-<path fill="none" stroke="#57606a" stroke-dasharray="5,2" d="M260.23,-505C252.97,-496.51 244.06,-486.11 236.01,-476.7"/>
-<polygon fill="#57606a" stroke="#57606a" points="238.78,-474.56 229.61,-469.24 233.46,-479.11 238.78,-474.56"/>
-<text xml:space="preserve" text-anchor="middle" x="262.03" y="-483.7" font-family="Helvetica,sans-Serif" font-size="9.00"> keep </text>
+<path fill="none" stroke="#57606a" stroke-dasharray="5,2" d="M224.85,-504.89C220.09,-501.4 215.88,-497.23 212.75,-492.25 210.33,-488.4 209.13,-483.93 208.69,-479.38"/>
+<polygon fill="#57606a" stroke="#57606a" points="212.18,-479.78 208.86,-469.72 205.18,-479.65 212.18,-479.78"/>
+<text xml:space="preserve" text-anchor="middle" x="266.38" y="-483.7" font-family="Helvetica,sans-Serif" font-size="9.00"> { keep: name =&gt; … } </text>
 </g>
 <!-- sampled -->
 <g id="node9" class="node">
@@ -132,9 +132,9 @@
 <!-- extract&#45;&gt;sampled -->
 <g id="edge10" class="edge">
 <title>extract&#45;&gt;sampled</title>
-<path fill="none" stroke="#57606a" stroke-dasharray="5,2" d="M285.04,-504.97C290.94,-494.46 298.33,-480.67 304,-468 313.11,-447.64 321.71,-423.93 327.84,-405.92"/>
-<polygon fill="#57606a" stroke="#57606a" points="331.16,-407.03 331.02,-396.44 324.52,-404.81 331.16,-407.03"/>
-<text xml:space="preserve" text-anchor="middle" x="343.07" y="-447.07" font-family="Helvetica,sans-Serif" font-size="9.00"> otherwise </text>
+<path fill="none" stroke="#57606a" stroke-dasharray="5,2" d="M309.21,-504.91C313.78,-501.29 317.93,-497.08 321,-492.25 337.29,-466.6 339.91,-431.23 339.33,-406.62"/>
+<polygon fill="#57606a" stroke="#57606a" points="342.83,-406.51 338.88,-396.68 335.84,-406.82 342.83,-406.51"/>
+<text xml:space="preserve" text-anchor="middle" x="363.28" y="-447.07" font-family="Helvetica,sans-Serif" font-size="9.00"> otherwise </text>
 </g>
 <!-- gfa -->
 <g id="node13" class="node">
@@ -152,7 +152,7 @@
 <!-- anchored&#45;&gt;sampled -->
 <g id="edge13" class="edge">
 <title>anchored&#45;&gt;sampled</title>
-<path fill="none" stroke="#57606a" stroke-dasharray="5,2" d="M172.59,-431.59C162.2,-424.79 155.86,-416.52 163.25,-407.75 176.87,-391.58 226.39,-384.12 269.1,-380.69"/>
+<path fill="none" stroke="#57606a" stroke-dasharray="5,2" d="M172.65,-431.68C162.28,-424.83 155.88,-416.5 163.25,-407.75 176.87,-391.58 226.39,-384.12 269.1,-380.69"/>
 <polygon fill="#57606a" stroke="#57606a" points="269.13,-384.19 278.85,-379.97 268.62,-377.21 269.13,-384.19"/>
 <text xml:space="preserve" text-anchor="middle" x="241.62" y="-410.45" font-family="Helvetica,sans-Serif" font-size="9.00"> a walk never reaches the window </text>
 </g>
@@ -165,8 +165,8 @@
 <!-- anchored&#45;&gt;align -->
 <g id="edge11" class="edge">
 <title>anchored&#45;&gt;align</title>
-<path fill="none" stroke="#57606a" d="M168.32,-431.6C163.23,-428.08 158.59,-423.92 155,-419 139.04,-397.16 135.83,-365.88 135.97,-343.29"/>
-<polygon fill="#57606a" stroke="#57606a" points="139.46,-343.67 136.27,-333.57 132.47,-343.46 139.46,-343.67"/>
+<path fill="none" stroke="#57606a" d="M168.37,-431.7C163.25,-428.16 158.59,-423.96 155,-419 139.12,-397.11 135.89,-365.84 136.01,-343.26"/>
+<polygon fill="#57606a" stroke="#57606a" points="139.5,-343.65 136.3,-333.55 132.51,-343.44 139.5,-343.65"/>
 </g>
 <!-- sampled&#45;&gt;align -->
 <g id="edge12" class="edge">
