@@ -19,5 +19,6 @@ queries in `queries.txt`. The tests require identical output, CIGARs included.
   ([optimizations.md](optimizations.md#aligning-a-walk-to-the-reference)).
 - Where the reference is stored reversed relative to its nodes, this package
   aligns each walk in whichever orientation shares more sequence and marks those
-  records `-`. Upstream gives all-insertion CIGARs there. CHM13 on HPRC chr20
-  has one such region, just after the path fragment starting at 30,368,374.
+  records `-`. Upstream warns that the reference path is not in canonical
+  orientation and gives all-insertion CIGARs. CHM13's path fragment on HPRC
+  chr20 starting at 30,368,374 begins in such a region.
