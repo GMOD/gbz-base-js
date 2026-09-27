@@ -20,7 +20,7 @@ for (const alignment of alignments) {
 | `path`                | the walk as node handles                                                            |
 | `weight`              | the number of identical walks merged into the record, with `haplotypes: 'distinct'` |
 | `start`               | GBWT position of the walk's start, stable across refetches                          |
-| `resolved`            | `true` when the library named the record from the haplotype index                   |
+| `resolved`            | `true` when the library found the haplotype of the walk in the haplotype index      |
 
 A resolved record also has `name` (a `PathName`), `label` (such as
 `HG02723#1#JAHEOU010000100.1[4392999-4393486]`), `pathHandle`, and
@@ -42,10 +42,11 @@ matches any common prefix and suffix, then scores the rest with vg's parameters.
 
 ## One haplotype against another
 
-`subgraph.pairAlignments({ target, query })` aligns haplotypes to each other,
-comparing bases. The reference path can be the target or the query. Without
-`query`, `pairAlignments` aligns every other named walk to the target. It needs
-the haplotype index.
+`subgraph.pairAlignments({ target, query })` aligns two haplotypes to each
+other, comparing bases. The reference path can be the target or the query.
+Without `query`, `pairAlignments` aligns every other identified walk to the
+target. The function needs the haplotype index, because it selects walks by
+haplotype name.
 
 ```ts
 const target = { sample: 'HG02004', haplotype: 2 }

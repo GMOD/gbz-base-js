@@ -57,11 +57,11 @@ digraph gbzbasejs {
   walk -> snarls [style=dashed label=" snarls "]
   walk -> extract
   snarls -> extract
-  extract -> anchored [style=dashed label=" keep + anchors " weight=6]
+  extract -> anchored [style=dashed label=" keep " weight=6]
   extract -> sampled [style=dashed label=" otherwise " weight=6]
   anchored -> align
   sampled -> align
-  anchored -> sampled [style=dashed label=" walk cut short "]
+  anchored -> sampled [style=dashed label=" a walk never reaches the window "]
   align -> out [weight=10]
   extract -> gfa [style=dashed label=" Subgraph " weight=0]
 

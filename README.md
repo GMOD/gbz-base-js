@@ -4,13 +4,15 @@
 ![Build Status](https://img.shields.io/github/actions/workflow/status/GMOD/gbz-base-js/publish.yml?branch=main)
 
 A TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
-pangenome databases (`.gbz.db`). It reads only the pages a query needs, so it
-can query a multi-gigabyte database on a web server through range requests.
-Upstream's `gbz-base construct` builds the database from a `.gbz` file.
+pangenome databases (`.gbz.db`). The reader fetches only the pages a query
+touches, so a multi-gigabyte database on a web server answers through range
+requests. Upstream's `gbz-base construct` builds the database from a `.gbz`
+file.
 
 The npm package contains a JavaScript library and a command-line program that
 runs the same queries. A separate Rust program in this repository builds the
-optional haplotype index that names the walks.
+optional haplotype index, which tells the library the sample and haplotype of
+each walk a query returns.
 
 ## Library
 
@@ -55,16 +57,19 @@ npx -p @gmod/gbz-base gbz-base-query https://example.org/graph.gbz.db \
   --sample GRCh38 --contig chr6 --interval 31500000..31501000 --alignments
 ```
 
-`npm install -g @gmod/gbz-base` puts it on your PATH. The
+`npm install -g @gmod/gbz-base` puts `gbz-base-query` on your PATH. The
 [command-line reference](docs/cli.md) lists every flag with its library
 equivalent.
 
 ## Haplotype index
 
-Without a haplotype index, a query returns each walk unnamed. Build one with
-`gbz-haplotype-index` (`cargo install gbz-haplotype-index`) as a separate file
-beside the database ([haplotype index](docs/haplotype-index.md)). With an index,
-the `keep` option restricts a query to chosen haplotypes.
+Without a haplotype index, a query returns each walk as `unknown#N`. Build the
+index once per graph with `gbz-haplotype-index`
+(`cargo install gbz-haplotype-index`), as a separate file beside the database
+([haplotype index](docs/haplotype-index.md)). Every query that opens the
+database with the index then reports the sample, haplotype and contig of each
+walk. At query time, the `keep` option restricts the result to the haplotypes
+you ask for.
 
 ```ts
 const db = await GBZBase.open(new RemoteFile(graphUrl), {

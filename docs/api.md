@@ -16,11 +16,11 @@ const db = await GBZBase.open(new RemoteFile(url), {
 A source is any object with `read(length, position)` and `stat()`, such as
 `LocalFile`, `RemoteFile` or `BlobFile` from `generic-filehandle2`.
 
-| option           | description                                     |
-| ---------------- | ----------------------------------------------- |
-| `haplotypeIndex` | the haplotype index                             |
-| `blockSize`      | bytes fetched per page block, 64 KiB by default |
-| `maxBlocks`      | blocks cached per database, 256 by default      |
+| option           | description                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `haplotypeIndex` | a source for the [haplotype index](haplotype-index.md) file, which `gbz-haplotype-index` writes beside the database |
+| `blockSize`      | bytes fetched per page block, 64 KiB by default                                                                     |
+| `maxBlocks`      | blocks cached per database, 256 by default                                                                          |
 
 ## Range queries
 
@@ -39,25 +39,25 @@ const subgraph = await db.getSubgraphForRange(
 
 Coordinates are 0-based half-open offsets along the path. The path is a PanSN
 `sample#haplotype#contig` string, a bare contig, or
-`{ sample, haplotype, contig }`. `getAlignmentsForRange` and
-`getSubgraphForRange` name the walks when the database was opened with a
-haplotype index.
+`{ sample, haplotype, contig }`. When the database was opened with a haplotype
+index, both functions report the sample, haplotype and contig of every walk they
+return.
 
-| option       | description                                                                       |
-| ------------ | --------------------------------------------------------------------------------- |
-| `context`    | bp of graph around the window, 100 by default                                     |
-| `haplotypes` | `all` (default), `distinct`, `reference-only` or `none`                           |
-| `keep`       | return only walks whose `PathName` passes this predicate; needs a haplotype index |
-| `limit`      | maximum nodes per path fragment                                                   |
-| `snarls`     | `contained` or `overlapping` ([snarls.md](snarls.md)), subgraph only              |
-| `signal`     | `AbortSignal`, checked between range requests                                     |
+| option       | description                                                                                                      |
+| ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `context`    | bp of graph around the window, 100 by default                                                                    |
+| `haplotypes` | `all` (default), `distinct`, `reference-only` or `none`                                                          |
+| `keep`       | a predicate on `PathName`; the query returns the walks that pass it, plus the reference. Needs a haplotype index |
+| `limit`      | maximum nodes per path fragment                                                                                  |
+| `snarls`     | `contained` or `overlapping` ([snarls.md](snarls.md)), subgraph only                                             |
+| `signal`     | `AbortSignal`, checked between range requests                                                                    |
 
 `haplotypes: 'distinct'` merges identical walks into one record with a `weight`.
 `getAlignmentsForRange` accepts `all` and `distinct`.
 
-With `keep`, the query reduces the window to the reference, the chosen walks and
-the nodes they visit
-([haplotype-index.md](haplotype-index.md#choosing-haplotypes-at-query-time-with-keep)).
+With `keep`, the query returns the reference, the walks whose name passes the
+predicate, and the nodes those walks visit
+([haplotype-index.md](haplotype-index.md#querying-a-subset-of-the-haplotypes)).
 
 `getAlignmentsForRange` covers every path fragment the window overlaps.
 `getSubgraphForRange` returns the subgraph for the first one, or `undefined`
@@ -72,7 +72,9 @@ const json = subgraph.toSubgraphJson({ cigar: true, names: 'resolved' })
 const compact = subgraph.toCompactSubgraph({ cigar: true, names: 'resolved' })
 ```
 
-`names: 'resolved'` uses the names from `identifyPaths()`.
+With `names: 'resolved'`, each walk carries the `sample#haplotype#contig` name
+that `identifyPaths()` found for it; without that option, or for a walk the
+lookup could not identify, the walk prints as `unknown#N` like upstream.
 `subgraph.pairAlignments` aligns haplotypes to each other
 ([alignments.md](alignments.md#one-haplotype-against-another)).
 
@@ -108,8 +110,8 @@ against 295 ms for the JSON form. Transfer its buffers with
 `subgraphBetween` ([snarls.md](snarls.md#between-two-boundary-nodes)) are the
 four query modes of upstream's `gbz-base query`, and of `gbz-base-query`'s
 `--interval`, `--offset`, `--node` and `--between`. Each takes a window within
-one path fragment and returns unnamed walks, so call `identifyPaths()` to name
-them:
+one path fragment and returns walks with no haplotype attached, so call
+`identifyPaths()` afterwards to look the haplotypes up in the haplotype index:
 
 ```ts
 import { subgraphInInterval } from '@gmod/gbz-base'

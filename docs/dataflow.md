@@ -6,10 +6,9 @@ The source is [dataflow.dot](img/dataflow.dot); see
 [CONTRIBUTING.md](../CONTRIBUTING.md#the-data-flow-diagram) to re-render it.
 
 `getAlignmentsForRange` runs every step below. `getSubgraphForRange` stops after
-naming and returns the `Subgraph`. A query restricted to chosen haplotypes with
-`keep` can take the anchored route, which replaces steps 3 to 7 with walks from
-an anchor
-([haplotype-index.md](haplotype-index.md#choosing-haplotypes-at-query-time-with-keep)).
+step 7 and returns the `Subgraph`. A query with `keep` takes the anchored route,
+which replaces steps 3 to 7 with walks from an anchor node
+([haplotype-index.md](haplotype-index.md#querying-a-subset-of-the-haplotypes)).
 
 1. **`pathFragmentsForRange`** finds the path fragments overlapping the window.
    A contig can be stored as several fragments with gaps between them.
@@ -28,7 +27,7 @@ an anchor
 8. **`alignments()`** aligns each walk to the reference and joins pieces of one
    haplotype into a record ([alignments.md](alignments.md)).
 
-Under every step, a pager reads the database in 64 KiB blocks and caches them.
-Each block read is one HTTP range request. The graph database and the haplotype
-index have separate pagers, and `gbz-base-query --stats` counts their requests
-separately.
+Under every step, a pager reads the database in 64 KiB blocks and caches them,
+and each block read is one HTTP range request. The library opens a separate
+pager for the graph database and for the haplotype index, and
+`gbz-base-query --stats` reports the request count of each file separately.

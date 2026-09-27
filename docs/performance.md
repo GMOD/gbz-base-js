@@ -2,14 +2,15 @@
 
 A query on a small window spends most of its time waiting on request latency. A
 query on a window with hundreds of haplotypes spends most of its time walking
-and aligning steps, and restricting it to chosen haplotypes with `keep` saves
-the most time there. `gbz-base-query --stats` reports the counters for one
-query; `scripts/measure-windows.mjs` and `scripts/time-phases.mjs` produced
-these tables. They predate the
+and aligning steps, and that is where `keep` saves the most time, because the
+library then walks and aligns only the haplotypes you asked for.
+`gbz-base-query --stats` reports the counters for one query, and
+`scripts/measure-windows.mjs` and `scripts/time-phases.mjs` produced the tables
+below. The tables predate the
 [step-loop change](optimizations.md#the-step-loops), which made warm queries
 1.3-1.8x faster.
 
-## Keeping a set of haplotypes
+## A subset of the haplotypes
 
 We queried the HPRC v2.1 graph and its hosted haplotype index over HTTPS, with
 `context: 1000` and contained snarls. "First" is a fresh open after one warm-up
@@ -30,11 +31,12 @@ A first query makes 16-46 range requests and reads 2.2-4.7 MB across both files.
 
 ## Context
 
-With a larger `context`, the query reads more nodes and has fewer walk pieces to
-name and join. MHC class II lies inside a snarl much larger than the window. The
-query returns 1.1M pieces at `context: 0` and 464 walks at `context: 1000`, and
-the second runs three times faster. The `snarls` option is the other way to get
-whole walks ([snarls.md](snarls.md)).
+With a larger `context`, the query reads more nodes and returns each haplotype
+in fewer pieces, so the library has fewer pieces to identify and join. MHC class
+II lies inside a snarl much larger than the window: the query returns 1.1M
+pieces at `context: 0` and 464 whole walks at `context: 1000`, and the second
+query runs three times faster. The `snarls` option is the other way to get whole
+walks ([snarls.md](snarls.md)).
 
 ## A small window
 
@@ -48,10 +50,10 @@ We queried `GRCh38#0#chr20` on HPRC chr20 (134 MB) over HTTPS:
 | 10 kb  | 100 bp  | 1086  | 9              | 590 KB     | 0.8 s |
 
 A 200 kb window on the local indexed chr20 build (5,943 nodes, 178 haplotypes)
-takes 216 ms warm. With 30 ms of latency added to each read it takes 465 ms, and
-with 80 ms, 897 ms, so nearly all nine requests run one after another. At a
-realistic round trip, two thirds of the query is network, which is why the pager
-reads 64 KiB blocks and prefetches the reference walk.
+takes 216 ms warm. With 30 ms of latency added to each read the query takes 465
+ms, and with 80 ms, 897 ms, so nearly all nine requests run one after another.
+At a realistic round trip, two thirds of the query is network, which is why the
+pager reads 64 KiB blocks and prefetches the reference walk.
 
 ## A large window
 
@@ -75,21 +77,21 @@ network time.
 
 CPU time grows with walks times steps. Measured after the step-loop change, MHC
 class II with `keep` for eight haplotypes is 4.6x faster than all 464 (0.90 s
-against 4.13 s), because it walks 170,000 of the 9.86 million steps.
+against 4.13 s), because the library walks 170,000 of the 9.86 million steps.
 
 ## Small windows at the same locus
 
 We queried all 464 haplotypes with the pages cached and `context: 1000`:
 
-| window | fragments | naming time | median fragment |
-| ------ | --------- | ----------- | --------------- |
-| 2 kb   | 687       | 7.14 s      | 3.5 kb          |
-| 20 kb  | 1,130     | 4.21 s      | 4.5 kb          |
-| 45 kb  | 464       | 0.48 s      | 76 kb           |
-| 90 kb  | 464       | 0.10 s      | 95 kb           |
+| window | fragments | identification time | median fragment |
+| ------ | --------- | ------------------- | --------------- |
+| 2 kb   | 687       | 7.14 s              | 3.5 kb          |
+| 20 kb  | 1,130     | 4.21 s              | 4.5 kb          |
+| 45 kb  | 464       | 0.48 s              | 76 kb           |
+| 90 kb  | 464       | 0.10 s              | 95 kb           |
 
-Below 45 kb the query returns walks in pieces shorter than the haplotype index's
-16,384 bp sampling interval. A piece with no sample needs a lookup in the
-haplotype index, and 99.91% of those lookups miss. From 45 kb the window
-contains the whole snarl, each walk is one piece, and naming is an order of
-magnitude faster.
+Below 45 kb the query returns walks in pieces shorter than the 16,384 bp
+interval between samples in the haplotype index. A piece with no sample on it
+sends the library to the haplotype index for a lookup, and 99.91% of those
+lookups miss. From 45 kb the window contains the whole snarl, each walk is one
+piece, and identification is an order of magnitude faster.

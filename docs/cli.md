@@ -1,9 +1,9 @@
 # Command line
 
 `gbz-base-query` runs one query with the [library](api.md) and prints the
-result. It takes the flags of upstream's `gbz-base query`, and adds flags for
-the haplotype index, alignment records and PAF. The database and the haplotype
-index can each be a local path or an `http(s)://` URL.
+result. The program takes the flags of upstream's `gbz-base query`, and adds
+flags for the haplotype index, alignment records and PAF. The database and the
+haplotype index can each be a local path or an `http(s)://` URL.
 
 ```bash
 npx -p @gmod/gbz-base gbz-base-query --help   # run without installing
@@ -40,9 +40,10 @@ gbz-base-query https://host/graph.gbz.db \
 | `--alignments`           | a JSON array of [alignment records](alignments.md)        |
 | `--against` or `--stack` | [PAF](alignments.md#paf-output), one line per alignment   |
 
-`--stats` writes request and byte counts to stderr, with the named and unnamed
-walk counts and, on the anchored route, each walk's outcome and any fallback. On
-an error, `gbz-base-query` prints the message to stderr and exits with status 1.
+`--stats` writes request and byte counts to stderr, with how many walks the
+library identified and how many it could not, and on the anchored route the
+outcome of each walk and the reason for any fallback. On an error,
+`gbz-base-query` prints the message to stderr and exits with status 1.
 
 ## Flags
 
@@ -60,9 +61,9 @@ an error, `gbz-base-query` prints the message to stderr and exits with status 1.
 | `--haplotypes SEL`                  | `all` (default), `distinct`, `reference-only` or `none`             | `haplotypes`                                |
 | `--cigar`                           | include CIGAR strings                                               | `cigar: true`                               |
 | `--format json\|gfa`                | the subgraph's output format                                        | `toSubgraphJson`, `toGFA`                   |
-| `--haplotype-index F`               | haplotype index, a path or URL                                      | `haplotypeIndex`                            |
-| `--resolve`                         | name the walks                                                      | `identifyPaths()`, `names: 'resolved'`      |
-| `--keep SAMPLE[#HAP]`               | keep these haplotypes, repeatable; implies `--resolve`              | `keep`                                      |
+| `--haplotype-index F`               | the haplotype index file, a path or URL                             | `haplotypeIndex`                            |
+| `--resolve`                         | look up the haplotype of each walk in the haplotype index           | `identifyPaths()`, `names: 'resolved'`      |
+| `--keep SAMPLE[#HAP]`               | return only these haplotypes, repeatable; implies `--resolve`       | `keep`                                      |
 | `--alignments`                      | print alignment records; implies `--resolve`                        | `alignments()`, `getAlignmentsForRange`     |
 | `--against SAMPLE#HAP`              | PAF of every other named walk against this haplotype                | `pairAlignments({ target })`                |
 | `--stack A,B,C`                     | PAF of each haplotype against the next in the list                  | `pairAlignments({ query, target })`         |
@@ -70,4 +71,4 @@ an error, `gbz-base-query` prints the message to stderr and exits with status 1.
 | `--max-gap N`                       | the most bases a PAF record may skip on nodes only one walk visits  | `maxGap`                                    |
 | `--contig-lengths F`                | chrom.sizes or `.fai` file for PAF columns 2 and 7                  |                                             |
 | `--block-size N`                    | bytes per page block, 65536 by default                              | `blockSize`                                 |
-| `--stats`                           | print fetch and naming statistics to stderr                         | `db.sqlite.pager`, `subgraph.stats`         |
+| `--stats`                           | print fetch and identification statistics to stderr                 | `db.sqlite.pager`, `subgraph.stats`         |

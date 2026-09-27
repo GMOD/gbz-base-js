@@ -7,8 +7,9 @@ the rows around one reference region.
 
 This package computes alignments at query time. `getAlignmentsForRange` aligns
 each walk to the reference ([alignments.md](alignments.md)), and
-`pairAlignments` aligns haplotypes to each other. Walk names come from the
-haplotype index ([haplotype-index.md](haplotype-index.md)).
+`pairAlignments` aligns haplotypes to each other. The sample and haplotype of
+each walk come from the haplotype index, a second file built once per graph
+([haplotype-index.md](haplotype-index.md)).
 
 ## Limitations
 

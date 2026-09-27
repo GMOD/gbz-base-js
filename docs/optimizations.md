@@ -36,8 +36,9 @@ that pattern.
 ## Walking from an anchor
 
 `walkFromRow` keeps no visited set. `lf()` is a permutation of GBWT positions,
-so a walk over valid data is loop-free, and the walk's bp limit stops a corrupt
-one. Dropping the set took AMY1 (231 samples, 5M steps) from 8.2 to 6.6 s.
+so a walk over valid data is loop-free, and a bp limit on each walk stops one
+over corrupt data. Dropping the set took AMY1 (231 samples, 5M steps) from 8.2
+to 6.6 s.
 
 ## The step loops
 
@@ -72,10 +73,10 @@ Node sequences and CIGARs stay strings.
 
 ## Open problems
 
-- SMN1/2 takes 35 s with 14 samples kept: one anchored walk hits its bp limit in
-  the inverted segmental duplication, and the query falls back to the sampled
-  route.
-- Naming a walk piece shorter than the sampling interval scans the index, and
-  99.91% of those scans miss
-  ([performance.md](performance.md#small-windows-at-the-same-locus)). Walking
-  such a piece directly would skip the scan.
+- SMN1/2 takes 35 s with 14 samples kept. One anchored walk reaches the bp limit
+  inside the inverted segmental duplication, and the library falls back to the
+  sampled route for the whole window.
+- Identifying a walk piece shorter than the sampling interval scans the
+  haplotype index, and 99.91% of those scans miss
+  ([performance.md](performance.md#small-windows-at-the-same-locus)). Following
+  such a piece through the GBWT directly would skip the scan.
