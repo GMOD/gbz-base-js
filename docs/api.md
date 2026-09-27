@@ -43,20 +43,20 @@ Coordinates are 0-based half-open offsets along the path. The path is a PanSN
 `getSubgraphForRange` name the walks when the database was opened with a
 haplotype index.
 
-| option       | description                                                          |
-| ------------ | -------------------------------------------------------------------- |
-| `context`    | bp of graph around the window, 100 by default                        |
-| `haplotypes` | `all` (default), `distinct`, `reference-only` or `none`              |
-| `keep`       | predicate over each walk's `PathName`; needs a haplotype index       |
-| `limit`      | maximum nodes per path fragment                                      |
-| `snarls`     | `contained` or `overlapping` ([snarls.md](snarls.md)), subgraph only |
-| `signal`     | `AbortSignal`, checked between range requests                        |
+| option       | description                                                                       |
+| ------------ | --------------------------------------------------------------------------------- |
+| `context`    | bp of graph around the window, 100 by default                                     |
+| `haplotypes` | `all` (default), `distinct`, `reference-only` or `none`                           |
+| `keep`       | return only walks whose `PathName` passes this predicate; needs a haplotype index |
+| `limit`      | maximum nodes per path fragment                                                   |
+| `snarls`     | `contained` or `overlapping` ([snarls.md](snarls.md)), subgraph only              |
+| `signal`     | `AbortSignal`, checked between range requests                                     |
 
 `haplotypes: 'distinct'` merges identical walks into one record with a `weight`.
 `getAlignmentsForRange` accepts `all` and `distinct`.
 
-With `keep`, the query reduces the window to the reference, the accepted walks
-and the nodes they visit
+With `keep`, the query reduces the window to the reference, the chosen walks and
+the nodes they visit
 ([haplotype-index.md](haplotype-index.md#keeping-a-set-of-haplotypes)).
 
 `getAlignmentsForRange` covers every path fragment the window overlaps.

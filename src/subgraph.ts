@@ -1234,13 +1234,13 @@ export class Subgraph {
     this.refId = refInfo === undefined ? undefined : kept.indexOf(refInfo)
   }
 
-  // Builds the window for a chosen set from the companion's anchor rows: the
-  // reference walk through the window from the anchor the index names for the
-  // multiple of the spacing at or before the window, and for every wanted path
-  // visiting that anchor node, the path's own walk from its row through the
-  // window, named without a chain walk. Returns the reason the caller has to
-  // fall back to the sampled route instead, or undefined when the subgraph is
-  // complete.
+  // Builds the window for a chosen set from the haplotype index's anchor rows:
+  // the reference walk through the window from the anchor the index names for
+  // the multiple of the spacing at or before the window, and for every wanted
+  // path visiting that anchor node, the path's own walk from its row through
+  // the window, named without a chain walk. Returns the reason the caller has
+  // to fall back to the sampled route instead, or undefined when the subgraph
+  // is complete.
   async walkHaplotypesFromAnchor(
     reference: ReferencePath,
     len: number,

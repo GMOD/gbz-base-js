@@ -48,7 +48,7 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --no-bases           for --against or --stack, write the bases between two shared stretches as an insertion and a deletion
   --max-gap INT        cap the bases a PAF record skips on nodes only one walk visits (default: none)
   --contig-lengths F   chrom.sizes or .fai giving PAF columns 2 and 7, keyed by contig or sample#haplotype#contig
-  --haplotype-index F  companion database written by gbz-haplotype-index --output
+  --haplotype-index F  haplotype index written by gbz-haplotype-index
   --block-size INT     bytes fetched per range request (default: 65536)
   --stats              print fetch statistics to stderr
 `
@@ -279,7 +279,7 @@ function identificationReport(stats: IdentificationStats) {
     `  ${fragmentLengths.length} fragments in ${chains.length} chains for ${haplotypes} haplotypes (${resolved.length - haplotypes} chains beyond one per haplotype; ${unresolved.length} chains / ${unresolvedFragments} fragments unresolved)`,
     `  chain ends: ${ends}`,
     `  sibling links ${sum(c => c.fragments - 1)}; out-of-window steps ${sum(c => c.steps)}, ${sum(c => c.reentries)} re-entering the subgraph, ${sum(c => c.twinLandings)} on a discarded twin's start`,
-    `  companion seeks ${stats.companionSeeks} (${stats.companionMisses} misses); graph record lookups ${stats.graphLookups}, ${stats.graphFetches} fetched`,
+    `  haplotype index seeks ${stats.companionSeeks} (${stats.companionMisses} misses); graph record lookups ${stats.graphLookups}, ${stats.graphFetches} fetched`,
     `  fragment length max ${maxLen}, ${overBound} over the ${bound} bp bound`,
   ].join('\n')
 }

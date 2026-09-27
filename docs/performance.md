@@ -2,11 +2,12 @@
 
 A query on a small window spends most of its time waiting on request latency. A
 query on a window with hundreds of haplotypes spends most of its time walking
-and aligning steps, and `keep` saves the most time there.
-`gbz-base-query --stats` reports the counters for one query;
-`scripts/measure-windows.mjs` and `scripts/time-phases.mjs` produced these
-tables. They predate the [step-loop change](optimizations.md#the-step-loops),
-which made warm queries 1.3-1.8x faster.
+and aligning steps, and restricting it to chosen haplotypes with `keep` saves
+the most time there. `gbz-base-query --stats` reports the counters for one
+query; `scripts/measure-windows.mjs` and `scripts/time-phases.mjs` produced
+these tables. They predate the
+[step-loop change](optimizations.md#the-step-loops), which made warm queries
+1.3-1.8x faster.
 
 ## Keeping a set of haplotypes
 
@@ -72,9 +73,9 @@ ran the query twice in one process, the second time with every page cached:
 adjacent 90 kb window takes 5.36 s and 7 requests, of which about a third is
 network time.
 
-CPU time grows with walks times steps. Measured after the step-loop change,
-`keep` for eight haplotypes is 4.6x faster than all 464 (0.90 s against 4.13 s),
-because it walks 170,000 steps.
+CPU time grows with walks times steps. Measured after the step-loop change, MHC
+class II with `keep` for eight haplotypes is 4.6x faster than all 464 (0.90 s
+against 4.13 s), because it walks 170,000 of the 9.86 million steps.
 
 ## Small windows at the same locus
 
@@ -88,6 +89,7 @@ We queried all 464 haplotypes with the pages cached and `context: 1000`:
 | 90 kb  | 464       | 0.10 s      | 95 kb           |
 
 Below 45 kb the query returns walks in pieces shorter than the haplotype index's
-16,384 bp sampling interval. A piece with no sample needs an index scan, and
-99.91% of those scans miss. From 45 kb the window contains the whole snarl, each
-walk is one piece, and naming is an order of magnitude faster.
+16,384 bp sampling interval. A piece with no sample needs a lookup in the
+haplotype index, and 99.91% of those lookups miss. From 45 kb the window
+contains the whole snarl, each walk is one piece, and naming is an order of
+magnitude faster.

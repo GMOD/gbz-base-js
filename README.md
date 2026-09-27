@@ -62,9 +62,9 @@ equivalent.
 ## Haplotype index
 
 Without a haplotype index, a query returns each walk unnamed. Build one with
-`gbz-haplotype-index` (`cargo install gbz-haplotype-index`) as a companion file
-beside the database ([naming haplotypes](docs/haplotype-index.md)). With an
-index, `keep` restricts a query to chosen haplotypes.
+`gbz-haplotype-index` (`cargo install gbz-haplotype-index`) as a separate file
+beside the database ([haplotype index](docs/haplotype-index.md)). With an index,
+the `keep` option restricts a query to chosen haplotypes.
 
 ```ts
 const db = await GBZBase.open(new RemoteFile(graphUrl), {
@@ -100,7 +100,7 @@ Reference:
 Topics, with examples for both the library and the command line:
 
 - [Alignment records](docs/alignments.md), including haplotype-to-haplotype PAF
-- [Naming haplotypes](docs/haplotype-index.md)
+- [The haplotype index](docs/haplotype-index.md)
 - [Snarls](docs/snarls.md)
 - [Contents and limitations](docs/contents-and-limitations.md)
 

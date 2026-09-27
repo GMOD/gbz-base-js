@@ -6,8 +6,10 @@ The source is [dataflow.dot](img/dataflow.dot); see
 [CONTRIBUTING.md](../CONTRIBUTING.md#the-data-flow-diagram) to re-render it.
 
 `getAlignmentsForRange` runs every step below. `getSubgraphForRange` stops after
-naming and returns the `Subgraph`. A `keep` query on the anchored route replaces
-steps 3 to 7 with walks from an anchor.
+naming and returns the `Subgraph`. A query restricted to chosen haplotypes with
+`keep` can take the anchored route, which replaces steps 3 to 7 with walks from
+an anchor
+([haplotype-index.md](haplotype-index.md#keeping-a-set-of-haplotypes)).
 
 1. **`pathFragmentsForRange`** finds the path fragments overlapping the window.
    A contig can be stored as several fragments with gaps between them.
@@ -20,8 +22,9 @@ steps 3 to 7 with walks from an anchor.
 5. **`extractSnarls`** adds whole snarls when `snarls` is set
    ([snarls.md](snarls.md)).
 6. **`extractPaths`** lists every walk crossing the window's nodes.
-7. **Naming** gives each walk its haplotype, by the sampled or the anchored
-   route ([haplotype-index.md](haplotype-index.md#how-walks-get-their-names)).
+7. **Identification** finds the haplotype of each walk, by the sampled or the
+   anchored route
+   ([haplotype-index.md](haplotype-index.md#how-a-query-identifies-walks)).
 8. **`alignments()`** aligns each walk to the reference and joins pieces of one
    haplotype into a record ([alignments.md](alignments.md)).
 

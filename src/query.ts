@@ -66,7 +66,7 @@ export interface HaplotypeQueryOptions extends QueryOptions {
   keep: (name: PathName) => boolean
 }
 
-// The window for a chosen set of haplotypes. With a companion that carries
+// The window for a chosen set of haplotypes. With a haplotype index that has
 // anchor rows the set's walks come from the anchor node before the window
 // and nothing else is extracted or identified; without one, or when a wanted
 // contig starts inside the window, it is the sampled route narrowed after
