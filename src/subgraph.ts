@@ -1172,9 +1172,9 @@ export class Subgraph {
 
   // The walks extractPaths and identifyPaths would give this subgraph for the
   // haplotypes `keep` accepts, found from the haplotype index without walking
-  // the others. Returns false, leaving no walks, when the index has no anchor
-  // for the reference at or before the window; the caller then extracts and
-  // identifies every walk instead.
+  // the others. Returns false, leaving no walks, when the haplotype index
+  // cannot show that the walks it found are all of them; the caller then
+  // extracts and identifies every walk, and stats.keep.fallback says why.
   async extractChosenPaths(
     reference: ReferencePath,
     len: number,
@@ -1182,16 +1182,6 @@ export class Subgraph {
   ) {
     this.clearPaths()
     const start = reference.position.seqOffset
-    const spacing = await this.db.haplotypeAnchorSpacing()
-    const anchored =
-      spacing !== undefined &&
-      (await this.db.haplotypeAnchor(
-        reference.handle,
-        Math.floor(start / spacing) * spacing,
-      )) !== undefined
-    if (!anchored) {
-      return false
-    }
     const found = await findChosenPieces({
       db: this.db,
       records: this.records,
@@ -1207,6 +1197,10 @@ export class Subgraph {
       prefetchReferenceRange: (pathHandle, fromOffset, toOffset) =>
         this.prefetchReferenceRange(pathHandle, fromOffset, toOffset),
     })
+    this.stats.keep = found.stats
+    if (found.stats.fallback !== undefined) {
+      return false
+    }
     const pathsByHandle = await this.db.pathsByHandle()
     const infoOf = (piece: ChosenPiece): PathInfo => ({
       path: piece.handles,
@@ -1230,7 +1224,6 @@ export class Subgraph {
     this.refPath = reference.name
     this.refHandle = reference.handle
     this.refInterval = [found.reference.hapStart, found.reference.hapEnd]
-    this.stats.keep = found.stats
     return true
   }
 
@@ -1668,10 +1661,10 @@ export class Subgraph {
     }
     const ref = this.paths[this.refId]!.path
     let result: { edits: Edit[]; flipped: boolean }
-    if (pathIsCanonical(ref) && pathIsCanonical(info.path)) {
-      // A canonical walk against a canonical reference has nothing to gain
-      // from being flipped, so neither bound is worth the pass over its steps
-      // that measuring one costs.
+    if (pathIsCanonical(ref)) {
+      // A walk against a canonical reference has nothing to gain from being
+      // flipped, so neither bound is worth the pass over its steps that
+      // measuring one costs.
       result = {
         edits: this.editsAgainst(info.path, ref).edits,
         flipped: false,

@@ -7,6 +7,7 @@ import { openSampled } from './fixtures.ts'
 import { checkResolvedRecord, walkBack } from './walkBack.ts'
 import { GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode, nodeId } from '../src/gbwt/node.ts'
+import { keepTuning } from '../src/chosenPaths.ts'
 import { subgraphForHaplotypes, subgraphInInterval } from '../src/query.ts'
 
 import type { HaplotypeSample } from '../src/db.ts'
@@ -265,32 +266,44 @@ describe('a query that uses the keep option', () => {
       [chr6, 31500000, 31501000],
       [chr6, 31503000, 31504000],
       [chr6, 31505000, 31505100],
+      [chr6, 31507000, 31507050],
       [chr6, 31509000, 31511000],
       [chr6, 31498140, 31511000],
       [{ sample: 'GRCh38', contig: 'chr19' }, 54820000, 54822000],
       [{ sample: 'GRCh38', contig: 'chr19' }, 54816500, 54830000],
       [{ sample: 'CHM13', contig: 'chr6' }, 31352000, 31352500],
+      [{ sample: 'CHM13', contig: 'chr6' }, 31354000, 31354100],
     ]
+    const routes = new Map<string, number>()
     let walks = 0
-    for (const [query, start, end] of windows) {
-      for (const context of [0, 100, 1000]) {
-        for (const snarls of ['none', 'contained'] as const) {
-          for (const [, keep] of keepSets) {
-            const { kept, alignments } = await expectParity(
-              db,
-              query,
-              start,
-              end,
-              { keep, context, snarls },
-            )
-            expect(kept.stats.keep?.complete).toBe(true)
-            walks += alignments.length
+    const saved = keepTuning.mostChosenPaths
+    keepTuning.mostChosenPaths = Number.POSITIVE_INFINITY
+    try {
+      for (const [query, start, end] of windows) {
+        for (const context of [0, 100, 1000]) {
+          for (const snarls of ['none', 'contained', 'overlapping'] as const) {
+            for (const [, keep] of keepSets) {
+              const { kept, alignments } = await expectParity(
+                db,
+                query,
+                start,
+                end,
+                { keep, context, snarls },
+              )
+              const route = kept.stats.keep?.fallback ?? 'keep'
+              routes.set(route, (routes.get(route) ?? 0) + 1)
+              walks += alignments.length
+            }
           }
         }
       }
+    } finally {
+      keepTuning.mostChosenPaths = saved
     }
+    console.log(routes)
     expect(walks).toBeGreaterThan(5000)
-  }, 120000)
+    expect(routes.get('keep')).toBeGreaterThan(250)
+  }, 300000)
 
   it('follows a contig off the reference’s end and one that starts after the anchor', async () => {
     const db = await openSplit()
@@ -344,14 +357,18 @@ describe('a query that uses the keep option', () => {
       31501000,
       { keep: name => name.sample === 'HG01106' },
     )
-    expect(kept.stats.keep).toBeUndefined()
+    expect(kept.stats.keep?.fallback).toMatch(/no anchors/)
     expect(alignments.length).toBe(2)
   })
 
   it('refuses anchor rows that do not include the reference’s own visit', async () => {
     const db = await openMicb()
-    Object.defineProperty(db, 'haplotypeSamplesAtNode', {
-      value: () => Promise.resolve([]),
+    const anchor = db.haplotypeAnchor.bind(db)
+    Object.defineProperty(db, 'haplotypeAnchor', {
+      value: async (pathHandle: number, offset: number) => {
+        const named = await anchor(pathHandle, offset)
+        return named && { ...named, pathOffset: named.pathOffset + 1 }
+      },
     })
     await expect(
       subgraphForHaplotypes(db, chr6, 31500000, 31501000, {
@@ -367,7 +384,7 @@ describe('a query that uses the keep option', () => {
     const kept = await db.getSubgraphForRange(chr6Name, 31500000, 31501000, {
       keep,
     })
-    expect(kept?.stats.keep?.complete).toBe(true)
+    expect(kept?.stats.keep?.fallback).toBeUndefined()
     const alignments = await db.getAlignmentsForRange(
       chr6Name,
       31500000,
@@ -377,7 +394,7 @@ describe('a query that uses the keep option', () => {
     const plain = await (
       await openSampled('micb-kir3dl1.gbz.db')
     ).getSubgraphForRange(chr6Name, 31500000, 31501000, { keep })
-    expect(plain?.stats.keep).toBeUndefined()
+    expect(plain?.stats.keep?.fallback).toMatch(/no anchors/)
     expect(alignments).toEqual(plain!.alignments())
     const distinct = await db.getSubgraphForRange(
       chr6Name,

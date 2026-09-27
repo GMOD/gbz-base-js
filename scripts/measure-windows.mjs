@@ -72,9 +72,13 @@ async function run(db, contig, start, end, set) {
     graphMB: (db.sqlite.pager.bytesFetched - graphBytes) / 1e6,
     indexRequests: db.index.pager.fetches - indexFetches,
     indexMB: (db.index.pager.bytesFetched - indexBytes) / 1e6,
-    route: keep ? (keep.complete ? 'keep' : 'keep, incomplete') : 'sampled',
+    route: keep
+      ? keep.fallback
+        ? `every walk: ${keep.fallback}`
+        : 'keep'
+      : 'sampled',
     phases: keep
-      ? `seeds ${keep.ms.seeds.toFixed(0)} intervals ${keep.ms.intervals.toFixed(0)} chains ${keep.ms.chains.toFixed(0)} approach ${keep.ms.approach.toFixed(0)} twins ${keep.ms.twins.toFixed(0)}`
+      ? `scan ${keep.ms.scan.toFixed(0)} intervals ${keep.ms.intervals.toFixed(0)} seeds ${keep.ms.seeds.toFixed(0)} chains ${keep.ms.chains.toFixed(0)} twins ${keep.ms.twins.toFixed(0)}`
       : '',
   }
 }

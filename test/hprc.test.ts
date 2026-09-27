@@ -119,7 +119,7 @@ describe.skipIf(!available(anchoredCompanion))(
           end,
           opts,
         )
-        expect(subgraph.stats.keep?.complete).toBe(true)
+        expect(subgraph.stats.keep?.fallback).toBeUndefined()
         expect(subgraph.stats.identification.chains).toEqual([])
         const sampled = await subgraphInInterval(db, query, start, end, opts)
         await sampled.identifyPaths()

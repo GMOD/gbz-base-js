@@ -96,7 +96,6 @@ describe.skipIf(!available(anchoredCompanion))(
         ...opts,
         keep,
       })
-      expect(kept.stats.keep?.complete).toBe(true)
       const names = kept
         .alignments()
         .flatMap(a =>

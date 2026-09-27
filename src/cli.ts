@@ -293,11 +293,12 @@ function keepReport(stats: KeepStats) {
     .join(', ')
   const scanned = stats.scans.reduce((n, [a, b]) => n + ((b - a) >> 1) + 1, 0)
   return [
-    `keep: ${stats.pieces} pieces (${sources}); ${stats.complete ? 'complete' : 'incomplete'}`,
-    `  anchor spacing ${stats.spacing ?? 'none'}; ${stats.scans.length} index scans over ${scanned} nodes for ${stats.scanRows} samples, ${stats.seeds} of them chosen`,
-    `  walks: ${walks || 'none'}; ${stats.graphFetches} graph records read outside the subgraph`,
-    `  twins: ${stats.twins.tried} tried, ${stats.twins.found} found, ${stats.twins.unresolved} unresolved`,
-    `  ms: seeds ${stats.ms.seeds.toFixed(0)}, intervals ${stats.ms.intervals.toFixed(0)}, chains ${stats.ms.chains.toFixed(0)}, approach ${stats.ms.approach.toFixed(0)}, twins ${stats.ms.twins.toFixed(0)}`,
+    stats.fallback === undefined
+      ? `keep: ${stats.pieces} pieces (${sources}) for ${stats.chosenPaths} chosen paths`
+      : `keep: identified every walk, because ${stats.fallback}`,
+    `  anchor spacing ${stats.spacing ?? 'none'}${stats.anchors ? `, anchors at ${stats.anchors[0]} and ${stats.anchors[1]}` : ''}; ${stats.scans.length} index scans over ${scanned} nodes for ${stats.scanRows} samples`,
+    `  walks: ${walks || 'none'}; ${stats.graphFetches} graph records read outside the subgraph; ${stats.seeds} samples extended; twins ${stats.twins.found} of ${stats.twins.tried}`,
+    `  ms: scan ${stats.ms.scan.toFixed(0)}, intervals ${stats.ms.intervals.toFixed(0)}, seeds ${stats.ms.seeds.toFixed(0)}, chains ${stats.ms.chains.toFixed(0)}, twins ${stats.ms.twins.toFixed(0)}`,
   ].join('\n')
 }
 
