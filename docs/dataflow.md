@@ -1,6 +1,6 @@
 # How a query flows
 
-<img src="img/dataflow.svg" alt="gbz-base-js data flow" width="620">
+![gbz-base-js data flow](img/dataflow.svg)
 
 The source is [dataflow.dot](img/dataflow.dot); see
 [CONTRIBUTING.md](../CONTRIBUTING.md#the-data-flow-diagram) to re-render it.
