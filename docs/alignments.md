@@ -36,15 +36,16 @@ repeat lies between the pieces, the library keeps them as separate records.
 
 ## The CIGAR
 
-The CIGAR is a node-length-weighted longest common subsequence of the two walks,
-as upstream computes it. Between shared nodes, the library matches any common
-prefix and suffix, then scores the rest with vg's parameters.
+The CIGAR is a node-length-weighted longest common subsequence of the walk and
+the reference path, as upstream computes it. Between shared nodes, the library
+matches any common prefix and suffix, then scores the rest with vg's parameters.
 
 ## One haplotype against another
 
 `subgraph.pairAlignments({ target, query })` aligns haplotypes to each other,
-comparing bases. Either side can be the reference. Without `query`, it aligns
-every other named walk to the target. It needs the haplotype index.
+comparing bases. The reference path can be the target or the query. Without
+`query`, `pairAlignments` aligns every other named walk to the target. It needs
+the haplotype index.
 
 ```ts
 const target = { sample: 'HG02004', haplotype: 2 }
@@ -62,9 +63,9 @@ for (const r of subgraph.pairAlignments({ target })) {
 
 A record is the best-scoring chain of runs of shared nodes, chained the way
 minimap2 chains seeds. The library aligns the bases between two runs globally,
-with vg's scores (match 1, mismatch -4, gap -6 and -1 per extra base). Where
-both stretches are long, the library chains shared 15-mers first, which also
-finds inversions. Each base aligns in at most one record.
+with vg's scores (match 1, mismatch -4, gap -6 and -1 per extra base). Where the
+bases between two runs are long on both walks, the library chains shared 15-mers
+first, which also finds inversions. Each base aligns in at most one record.
 
 | field                       | meaning                                      |
 | --------------------------- | -------------------------------------------- |

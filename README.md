@@ -11,12 +11,12 @@ The npm package contains a JavaScript library and a command-line program that
 runs the same queries. A separate Rust program in this repository builds the
 optional haplotype index that names the walks.
 
-| Program               | Kind              | Source                   | Use it to                                    |
-| --------------------- | ----------------- | ------------------------ | -------------------------------------------- |
-| `GBZBase`             | JavaScript class  | this npm package         | query a database from browser or Node code   |
-| `gbz-base-query`      | Node command line | this npm package         | query a database from a shell                |
-| `gbz-haplotype-index` | Rust command line | `tools/haplotype-index/` | add the tables that name walks, once a graph |
-| `gbz-base construct`  | Rust command line | upstream gbz-base        | build the `.gbz.db` from a `.gbz` file       |
+| Program               | Kind              | Source                   | Use it to                                  |
+| --------------------- | ----------------- | ------------------------ | ------------------------------------------ |
+| `GBZBase`             | JavaScript class  | this npm package         | query a database from browser or Node code |
+| `gbz-base-query`      | Node command line | this npm package         | query a database from a shell              |
+| `gbz-haplotype-index` | Rust command line | `tools/haplotype-index/` | build the haplotype index, once per graph  |
+| `gbz-base construct`  | Rust command line | upstream gbz-base        | build the `.gbz.db` from a `.gbz` file     |
 
 ## Library
 

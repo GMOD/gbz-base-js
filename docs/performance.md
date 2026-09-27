@@ -10,9 +10,9 @@ which made warm queries 1.3-1.8x faster.
 
 ## Keeping a set of haplotypes
 
-HPRC v2.1 graph and hosted companion over HTTPS, `context: 1000`, contained
-snarls. "First" is a fresh open after one warm-up window elsewhere; "cached" has
-the window's pages in memory.
+We queried the HPRC v2.1 graph and its hosted haplotype index over HTTPS, with
+`context: 1000` and contained snarls. "First" is a fresh open after one warm-up
+window elsewhere; "cached" has the window's pages in memory.
 
 | Window       | Haplotypes | Route    | Nodes  | First  | Cached |
 | ------------ | ---------- | -------- | ------ | ------ | ------ |
@@ -37,7 +37,7 @@ whole walks ([snarls.md](snarls.md)).
 
 ## A small window
 
-HPRC chr20 (134 MB) over HTTPS, `GRCh38#0#chr20`:
+We queried `GRCh38#0#chr20` on HPRC chr20 (134 MB) over HTTPS:
 
 | window | context | nodes | range requests | bytes read | time  |
 | ------ | ------- | ----- | -------------- | ---------- | ----- |
@@ -54,8 +54,8 @@ reads 64 KiB blocks and prefetches the reference walk.
 
 ## A large window
 
-MHC class II on HPRC v2.1: 43,540 nodes, 464 walks, 9.86 million steps. Run
-twice in one process, the second time with every page cached:
+MHC class II on HPRC v2.1 has 43,540 nodes, 464 walks and 9.86 million steps. We
+ran the query twice in one process, the second time with every page cached:
 
 | phase                   | cold    | cached |
 | ----------------------- | ------- | ------ |
@@ -69,7 +69,8 @@ twice in one process, the second time with every page cached:
 | total                   | 13.18 s | 5.49 s |
 
 `extractPaths` and `alignments` are 87% of the cached time. Panning to an
-adjacent 90 kb window takes 5.36 s and 7 requests, about a third network.
+adjacent 90 kb window takes 5.36 s and 7 requests, of which about a third is
+network time.
 
 CPU time grows with walks times steps. Measured after the step-loop change,
 `keep` for eight haplotypes is 4.6x faster than all 464 (0.90 s against 4.13 s),
@@ -77,7 +78,7 @@ because it walks 170,000 steps.
 
 ## Small windows at the same locus
 
-All 464 haplotypes, cached, `context: 1000`:
+We queried all 464 haplotypes with the pages cached and `context: 1000`:
 
 | window | fragments | naming time | median fragment |
 | ------ | --------- | ----------- | --------------- |
@@ -86,7 +87,7 @@ All 464 haplotypes, cached, `context: 1000`:
 | 45 kb  | 464       | 0.48 s      | 76 kb           |
 | 90 kb  | 464       | 0.10 s      | 95 kb           |
 
-Below 45 kb the query returns walks in pieces shorter than the companion's
+Below 45 kb the query returns walks in pieces shorter than the haplotype index's
 16,384 bp sampling interval. A piece with no sample needs an index scan, and
 99.91% of those scans miss. From 45 kb the window contains the whole snarl, each
 walk is one piece, and naming is an order of magnitude faster.

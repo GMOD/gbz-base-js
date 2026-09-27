@@ -25,7 +25,7 @@ gbz-base-query graph.gbz.db --sample GRCh38 --contig chr6 \
 gbz-base-query https://host/graph.gbz.db --contig chrM --offset 1000 \
   --context 50 --stats
 
-# named alignment records, from a remote database and companion index
+# named alignment records, from a remote database and haplotype index
 gbz-base-query https://host/graph.gbz.db \
   --haplotype-index https://host/graph.haplotype-index.db \
   --sample GRCh38 --contig chr6 --interval 31500000..31501000 --alignments
@@ -40,9 +40,9 @@ gbz-base-query https://host/graph.gbz.db \
 | `--alignments`           | a JSON array of [alignment records](alignments.md)        |
 | `--against` or `--stack` | [PAF](alignments.md#paf-output), one line per alignment   |
 
-`--stats` writes request and byte counts, and a report on how naming went, to
-stderr. On an error, `gbz-base-query` prints the message to stderr and exits
-with status 1.
+`--stats` writes request and byte counts to stderr, with the named and unnamed
+walk counts and, on the anchored route, each walk's outcome and any fallback. On
+an error, `gbz-base-query` prints the message to stderr and exits with status 1.
 
 ## Flags
 
@@ -60,7 +60,7 @@ with status 1.
 | `--haplotypes SEL`                  | `all` (default), `distinct`, `reference-only` or `none`             | `haplotypes`                                |
 | `--cigar`                           | include CIGAR strings                                               | `cigar: true`                               |
 | `--format json\|gfa`                | the subgraph's output format                                        | `toSubgraphJson`, `toGFA`                   |
-| `--haplotype-index F`               | companion index, a path or URL                                      | `haplotypeIndex`                            |
+| `--haplotype-index F`               | haplotype index, a path or URL                                      | `haplotypeIndex`                            |
 | `--resolve`                         | name the walks                                                      | `identifyPaths()`, `names: 'resolved'`      |
 | `--keep SAMPLE[#HAP]`               | keep these haplotypes, repeatable; implies `--resolve`              | `keep`                                      |
 | `--alignments`                      | print alignment records; implies `--resolve`                        | `alignments()`, `getAlignmentsForRange`     |

@@ -1,8 +1,8 @@
 # Optimizations
 
 Each section records a design choice and the measurement behind it. Unless
-noted, we measured over HTTPS against HPRC v2.1 and its hosted anchored
-companion, running `gbz-base-query` with `--keep`, `--cigar` and `--stats`.
+noted, we measured over HTTPS against HPRC v2.1 and its hosted haplotype index
+with anchors, running `gbz-base-query` with `--keep`, `--cigar` and `--stats`.
 
 ## Aligning a walk to the reference
 
@@ -16,8 +16,8 @@ bases. A port of it ran out of a 3 GB heap in about 30 s on one AMY1 fragment
 (13,303 steps, 230,857 bp, against a 7,585-step reference). `weightedLcs` chains
 the step pairs that share a node as a heaviest increasing subsequence over a
 Fenwick tree, and splits the problem Hirschberg-style once pairs outnumber
-steps, so memory is linear in the walks. The two AMY1 fragments of that size
-align in 3-8 ms each, where a linear-space Hirschberg DP took 155-419 ms.
+steps, so memory is linear in the walk lengths. The two AMY1 fragments of that
+size align in 3-8 ms each, where a linear-space Hirschberg DP took 155-419 ms.
 
 Two walks looping through one node thousands of times make millions of shared
 pairs, so `solve` trims the shared prefix and suffix at every level of the
@@ -43,7 +43,8 @@ one. Dropping the set took AMY1 (231 samples, 5M steps) from 8.2 to 6.6 s.
 
 `extractPaths` stores successors in one flat pair of arrays, where they had been
 one `Int32Array` per node, and `orderedMatches` allocates no closure or tuple
-per match. Warm, both builds alternated in one process, median of five:
+per match. We timed warm queries, alternating the two builds in one process, and
+report the median of five:
 
 | Window       | Steps | Before   | After   | Ratio |
 | ------------ | ----- | -------- | ------- | ----- |

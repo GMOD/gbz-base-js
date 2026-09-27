@@ -18,7 +18,7 @@ A source is any object with `read(length, position)` and `stat()`, such as
 
 | option           | description                                     |
 | ---------------- | ----------------------------------------------- |
-| `haplotypeIndex` | companion database with the haplotype tables    |
+| `haplotypeIndex` | the haplotype index                             |
 | `blockSize`      | bytes fetched per page block, 64 KiB by default |
 | `maxBlocks`      | blocks cached per database, 256 by default      |
 
@@ -40,7 +40,8 @@ const subgraph = await db.getSubgraphForRange(
 Coordinates are 0-based half-open offsets along the path. The path is a PanSN
 `sample#haplotype#contig` string, a bare contig, or
 `{ sample, haplotype, contig }`. `getAlignmentsForRange` and
-`getSubgraphForRange` name the walks when opened with a haplotype index.
+`getSubgraphForRange` name the walks when the database was opened with a
+haplotype index.
 
 | option       | description                                                          |
 | ------------ | -------------------------------------------------------------------- |
@@ -128,9 +129,9 @@ await subgraph.identifyPaths()
 | class                   | thrown by      | means                                                                        |
 | ----------------------- | -------------- | ---------------------------------------------------------------------------- |
 | `SchemaVersionError`    | `GBZBase.open` | a different schema version (`found`), or `undefined` for a non-gbz-base file |
-| `ForwardOnlyIndexError` | `GBZBase.open` | the companion was built with `--forward-only`; rebuild it                    |
+| `ForwardOnlyIndexError` | `GBZBase.open` | the haplotype index was built with `--forward-only`; rebuild it              |
 | `SubgraphLimitError`    | any query      | `limit` reached; carries `windowBp` and `walkedBp`                           |
 
 Other errors are plain `Error`s with a message, for example an unknown path, a
 path the database has no random-access index for, `keep` without a haplotype
-index, or a companion built for a different graph.
+index, or a haplotype index built for a different graph.

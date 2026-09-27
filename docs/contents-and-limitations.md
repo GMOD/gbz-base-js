@@ -5,10 +5,10 @@ as a GBWT. gbz-base puts a GBZ into SQLite, with one row per node, a table of
 paths, and an index from reference offsets to GBWT positions. This package reads
 the rows around one reference region.
 
-This package computes alignments from the walks at query time, to the reference
-with `getAlignmentsForRange` ([alignments.md](alignments.md)) and between
-haplotypes with `pairAlignments`. Walk names come from the haplotype index
-([haplotype-index.md](haplotype-index.md)).
+This package computes alignments at query time. `getAlignmentsForRange` aligns
+each walk to the reference ([alignments.md](alignments.md)), and
+`pairAlignments` aligns haplotypes to each other. Walk names come from the
+haplotype index ([haplotype-index.md](haplotype-index.md)).
 
 ## Limitations
 
