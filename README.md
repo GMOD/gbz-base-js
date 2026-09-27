@@ -3,8 +3,10 @@
 [![NPM version](https://img.shields.io/npm/v/@gmod/gbz-base.svg?style=flat-square)](https://npmjs.org/package/@gmod/gbz-base)
 ![Build Status](https://img.shields.io/github/actions/workflow/status/GMOD/gbz-base-js/publish.yml?branch=main)
 
-A pure TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
-pangenome databases (`.gbz.db`).
+A TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
+pangenome databases (`.gbz.db`). It reads only the SQLite pages a query touches,
+so it can query a multi-gigabyte database on an HTTP server through range
+requests without downloading it.
 
 ## Install
 
@@ -38,133 +40,96 @@ const subgraph = await db.getSubgraphForRange(
 const gfa = await subgraph?.toGFA({ names: 'resolved' })
 ```
 
-Coordinates are 0-based half-open, and are offsets along the path you named, so
-`('GRCh38#0#chr6', 31500000, 31501000)` is the same window
-`gbz-base query --interval 31500000..31501000` gives. The path is a PanSN
+Coordinates are 0-based half-open offsets along the named path, so this window
+matches `gbz-base query --interval 31500000..31501000`. The path is a PanSN
 `sample#haplotype#contig` string, or a bare contig for a graph whose reference
-paths have no sample.
+paths have no sample. Any `generic-filehandle2` source works: `LocalFile`,
+`RemoteFile` or `BlobFile`.
 
-GBZBase reads only the SQLite pages a query touches, so it queries a
-multi-gigabyte database on an HTTP server through range requests without
-downloading it. Any `generic-filehandle2` source works — `LocalFile`,
-`RemoteFile`, `BlobFile` — and there is a `gbz-base-query` command line that
-mirrors the upstream tool. Every option, method and query function:
-[docs/api.md](docs/api.md); what a query does between the call and the records,
-drawn: [docs/dataflow.md](docs/dataflow.md).
+The package also installs `gbz-base-query`, a command line that mirrors the
+upstream `gbz-base query`:
 
-## Alignment records
-
-```ts
-for (const alignment of alignments) {
-  const { refStart, refEnd, strand, cigar } = alignment
-  if (alignment.resolved) {
-    console.log(alignment.label, alignment.hapStart, alignment.hapEnd)
-  }
-}
+```
+gbz-base-query https://example.org/graph.gbz.db --sample GRCh38 --contig chr6 \
+  --interval 31500000..31501000 --alignments
 ```
 
-A record is one haplotype's passage through the window, aligned to the reference
-path you queried. Where a haplotype leaves the subgraph and comes back — a
-private insertion, a bubble the window does not hold — the pieces are joined
-back into one record and the stretch between them becomes its insertion and
-deletion, so `context` changes what is read rather than how many records you
-get. The fields, the joining rules and what `resolved` means:
-[docs/alignments.md](docs/alignments.md).
+## What a query returns
 
-`subgraph.pairAlignments` aligns one haplotype to another with the bases
-compared, so two haplotypes sharing sequence the reference lacks align through
-it, and `gbz-base-query --stack` prints each row of a stacked synteny view
-against the next as PAF. With `bases: false` (`--no-bases`) a record contains
-the shared nodes as `=` and the sequence between them as an insertion and a
-deletion:
-[docs/alignments.md](docs/alignments.md#one-haplotype-against-another).
+`getAlignmentsForRange` returns one record per haplotype passage through the
+window, with its span on the reference, strand and CIGAR. A haplotype that
+leaves the window's subgraph and comes back still gives one record: the reader
+joins the pieces and scores the stretch between them as an insertion and a
+deletion. See [docs/alignments.md](docs/alignments.md).
 
-`getAlignmentsForRange` hands back data and spans path fragments;
-`getSubgraphForRange` hands back the `Subgraph` itself, because two disjoint
-fragments do not merge into one graph.
+`getSubgraphForRange` returns the `Subgraph` itself, which writes GFA,
+upstream's JSON, or a compact typed-array form for sending between workers
+([docs/api.md](docs/api.md#subgraph-output)). `subgraph.pairAlignments` aligns
+one haplotype to another, comparing bases, and `gbz-base-query --stack` prints
+those alignments as PAF for a stacked synteny view
+([docs/alignments.md](docs/alignments.md#one-haplotype-against-another)).
 
 ## Naming haplotypes
 
-Upstream gbz-base cannot determine which haplotype a subgraph path belongs to,
-so it emits `unknown#N`. This package adds that with two side tables that a
-small Rust tool (`tools/haplotype-index/`) writes into an existing database, or
-into a standalone companion beside a database someone else hosts:
+Upstream gbz-base cannot tell which haplotype a subgraph walk belongs to, so it
+prints `unknown#N`. This package names each walk with a haplotype index: side
+tables that a small Rust tool in `tools/haplotype-index/` writes into the
+database, or into a companion file beside a database someone else hosts.
 
 ```ts
 const db = await GBZBase.open(new RemoteFile(graphUrl), {
   haplotypeIndex: new RemoteFile(indexUrl),
 })
+const records = await db.getAlignmentsForRange(region, start, end, {
+  keep: name => name.sample === 'HG00097',
+})
 ```
 
-With names in hand, `keep` cuts a window to a chosen set of haplotypes — the
-reference walk, the walks the predicate accepts and the nodes those walks visit,
-so the drawing shows that set's private sequence and nothing else's. On a
-companion carrying anchors those haplotypes are walked from an anchor before the
-window, and nothing else is extracted or named, so the query's cost scales with
-the set rather than the graph: the eight haplotypes of the MHC class II tutorial
-window come back in 0.97 s against 9.16 s for all 464, both warm.
-[docs/haplotype-index.md](docs/haplotype-index.md) covers building the index and
-the two routes; [docs/performance.md](docs/performance.md) has the measurements.
-
-## Snarls
-
-The `snarls` option uses the top-level chains a `.gbz.db` already stores, the
-way upstream's `--snarls` and `--extend-snarls` do — `contained` brings a
-window's variation back without widening it by a bp radius.
-[docs/snarls.md](docs/snarls.md).
-
-## Why not compile the Rust to wasm
-
-This initially started as a hackathon project compiling gbz-base to wasm, but
-the rust code (reasonably, uses `usize` which on wasm32 is the wrong size for
-the file format. The custom typescript code has no such problem, and we
-implement a custom lightweight file format reader that doesn't even require a
-full sqlite.c WASM build: [docs/why-not-wasm.md](docs/why-not-wasm.md).
+With an index, the `keep` option cuts a window to a chosen set of haplotypes. On
+a companion with anchors, the reader walks only those haplotypes, so the cost
+follows the size of the set: the tutorial's eight haplotypes at MHC class II
+take 0.97 s, against 9.16 s for all 464, both with the window cached. See
+[docs/haplotype-index.md](docs/haplotype-index.md).
 
 ## In JBrowse
 
 [jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer)
-is the consumer this was written for. Its `GbzBaseSyntenyAdapter` opens a
-`.gbz.db` and its companion through JBrowse's own file access layer, and calls
-`getSubgraphForRange` for the graph view and `getAlignmentsForRange` for the
-haplotype lanes — in an RPC worker, like any other adapter.
+uses this package in its `GbzBaseSyntenyAdapter`, which runs in a JBrowse RPC
+worker. It calls `getSubgraphForRange` for the graph view and
+`getAlignmentsForRange` for the haplotype lanes, and passes the subgraph to the
+main thread with `toCompactSubgraph`, which structured-clones in 1.9 ms where
+upstream's JSON format takes 295 ms.
 
-Because the worker is where the subgraph is built and the main thread is where
-it is drawn, the representation it crosses in matters more than the
-representation it is built in. `toSubgraphJson` returns upstream's format, which
-uses an object and a stringified id for each of a human window's ~350,000 steps
-and costs about 295 ms to structured-clone; `toCompactSubgraph` returns the same
-subgraph as typed arrays of GBWT handles, which clones in 1.9 ms and can be
-transferred instead of copied.
-[docs/api.md](docs/api.md#which-of-the-two-to-take) has both formats and the
-measurements.
+## Documentation
 
-## Docs
+Using the package:
 
-- [docs/contents-and-limitations.md](docs/contents-and-limitations.md) — how a
-  GBZ differs from an rGFA, and the limits of a query
-- [docs/api.md](docs/api.md) — every option, query function, output format and
-  command line flag
-- [docs/dataflow.md](docs/dataflow.md) — how a query flows, and where the two
-  identification routes branch
-- [docs/alignments.md](docs/alignments.md) — what an alignment record is, and
-  how walk fragments are joined into one
-- [docs/haplotype-index.md](docs/haplotype-index.md) — building the haplotype
-  index, and the two routes a named query takes
-- [docs/snarls.md](docs/snarls.md) — the snarl options and `--between`
-- [docs/performance.md](docs/performance.md) — measured windows, and picking
-  `context`
-- [docs/optimizations.md](docs/optimizations.md) — why the alignment and the
-  anchored walk look the way they do
-- [docs/internals.md](docs/internals.md) — reading SQLite without SQLite, and
-  where this reader's CIGARs differ from upstream's
-- [docs/why-not-wasm.md](docs/why-not-wasm.md) — why the Rust was not compiled
-  to WebAssembly instead
-- [CONTRIBUTING.md](CONTRIBUTING.md) — development, test data and release steps
+- [Contents and limitations](docs/contents-and-limitations.md): what a GBZ
+  records, and what a query cannot do
+- [API](docs/api.md): options, query functions, output formats, errors and the
+  command line
+- [Alignment records](docs/alignments.md): the record fields, how pieces are
+  joined, and haplotype-to-haplotype alignment
+- [Naming haplotypes](docs/haplotype-index.md): building the index, and the
+  sampled and anchored routes
+- [Snarls](docs/snarls.md): filling variation sites around a window, and
+  `--between`
 
-## Footnote
+How it works:
 
-Started from ideas at MemPanG 26!
+- [How a query flows](docs/dataflow.md): a diagram of each step from the call to
+  the range request
+- [Internals](docs/internals.md): reading SQLite without SQLite, and fidelity to
+  upstream
+- [Performance](docs/performance.md): measured windows, and where the time goes
+- [Optimizations](docs/optimizations.md): the alignment search, the anchored
+  walk and the output format
+- [Why not WebAssembly](docs/why-not-wasm.md): why this is a TypeScript reader
+  and not the Rust compiled to wasm
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers development, test data and releases.
+
+The project started from ideas at MemPanG 26.
 
 ## License
 

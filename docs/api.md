@@ -17,98 +17,85 @@ const db = await GBZBase.open(new RemoteFile(url), {
 | `blockSize`      | bytes fetched per page block, 64 KiB by default               |
 | `maxBlocks`      | blocks kept cached per database, 256 by default               |
 
-Any object with `read(length, position)` and `stat()` works as a source, so
-`LocalFile`, `RemoteFile` and `BlobFile` from `generic-filehandle2` all do.
-Pages are fetched in blocks and cached, so a query reads only the parts of the
-database it touches.
+A source is any object with `read(length, position)` and `stat()`, which
+includes `LocalFile`, `RemoteFile` and `BlobFile` from `generic-filehandle2`.
+The reader fetches pages in blocks and caches them, so a query reads only the
+parts of the database it touches.
 
-`open` refuses a companion built for a different graph — it records the graph's
-path and node counts — and refuses a forward-only index with
-`ForwardOnlyIndexError`. Both are described in
-[haplotype-index.md](haplotype-index.md).
+`open` refuses a companion built for a different graph, which it detects from
+the path and node counts the companion records, and refuses a forward-only index
+with `ForwardOnlyIndexError` ([haplotype-index.md](haplotype-index.md)).
 
 ## Range queries
 
 `getAlignmentsForRange(path, start, end, opts?)` and
 `getSubgraphForRange(path, start, end, opts?)` take 0-based half-open offsets
-along the path you named, so `('GRCh38#0#chr6', 31500000, 31501000)` is the same
-window `gbz-base query --interval 31500000..31501000` gives.
+along the named path, so `('GRCh38#0#chr6', 31500000, 31501000)` is the window
+`gbz-base query --interval 31500000..31501000` gives.
 
-The path is a PanSN `sample#haplotype#contig` string, or a bare contig for a
-graph whose reference paths have no sample. `{ sample, haplotype, contig }`
-works too, and `parsePathName` is the parser if you want it separately.
+The path is a PanSN `sample#haplotype#contig` string, a bare contig for a graph
+whose reference paths have no sample, or an object
+`{ sample, haplotype, contig }`. `parsePathName` converts the string form to the
+object.
 
 | option       | description                                                      |
 | ------------ | ---------------------------------------------------------------- |
 | `context`    | bp of graph context past the window, 100 by default              |
-| `haplotypes` | which walks to extract, `all` by default (see below)             |
+| `haplotypes` | which walks to extract, `all` by default                         |
 | `keep`       | predicate over each walk's `PathName`, needs the haplotype index |
 | `limit`      | cap the subgraph at this many nodes, per fragment                |
 | `snarls`     | `contained` or `overlapping`, `getSubgraphForRange` only         |
 | `signal`     | `AbortSignal`, checked between range requests                    |
 
-The two range queries resolve haplotype names when the database can.
+The range queries name the walks when the database has a haplotype index.
 
-`haplotypes` is upstream's set of four. `all` keeps every walk crossing the
-window and `distinct` merges the identical ones into one record carrying their
-`weight` — those two are the ones `getAlignmentsForRange` accepts, since they
-are the outputs that leave something to align against the reference.
-`reference-only` drops every walk but the reference (it throws where there is no
-reference to keep, as in a node query) and `none` extracts no walks at all,
-leaving a subgraph of nodes and edges; both are subgraph outputs.
+`haplotypes` takes upstream's four values. `all` keeps every walk crossing the
+window, and `distinct` merges identical walks into one record carrying their
+`weight`; `getAlignmentsForRange` accepts only these two, since the other two
+leave nothing to align. `reference-only` drops every walk but the reference, and
+throws where there is no reference, as in a node query. `none` extracts no walks
+and leaves a subgraph of nodes and edges.
 
-`keep` narrows the window to the reference walk, the walks it accepts and the
-nodes those walks visit, so a query for a chosen set draws that set's private
-sequence and nothing else's. It needs the haplotype index and throws without
-one; what it costs, and the anchored route it takes on a companion carrying
-anchors, is in [haplotype-index.md](haplotype-index.md#the-anchored-walk).
+`keep` narrows the window to the reference walk, the walks the predicate
+accepts, and the nodes those walks visit, so the result contains that set's
+private sequence and no other. It throws without a haplotype index. On a
+companion with anchors it takes a faster route
+([haplotype-index.md](haplotype-index.md#the-anchored-walk)).
 
-`context` does not determine how many records come back, since the pieces of a
-walk that leaves the subgraph are joined again; it trades nodes read against
-pieces to identify and join. [performance.md](performance.md#context) has the
-measurements for picking it.
+`context` does not change how many records `getAlignmentsForRange` returns,
+because the reader joins the pieces of a walk that leaves the subgraph. A larger
+`context` reads more nodes and leaves fewer pieces to identify and join
+([performance.md](performance.md#context)).
 
-`signal` is checked between range requests, so an abort stops the next fetch
-rather than the one in flight.
+`snarls` adds whole variation sites instead of a bp radius
+([snarls.md](snarls.md)).
 
-### One returns records, the other a query object
+An abort through `signal` stops the next fetch; the request in flight completes.
 
-`getAlignmentsForRange` hands back data, and spans path fragments — a window
-crossing a boundary queries each fragment and concatenates, which is
-coordinate-correct because a record's `refStart`/`refEnd` are absolute.
+### Records or a subgraph
 
-`getSubgraphForRange` hands back the `Subgraph` itself, because two disjoint
-fragments do not merge into one graph. It answers for the first fragment
-overlapping the window, clamped to it, and is `undefined` when the path is
-unknown or no fragment overlaps the window. `subgraph.referenceInterval` is the
-reference walk the subgraph holds, which runs to node boundaries and through
-`context`, so it is wider than the clamped window on both sides. Use
-`pathFragmentsForRange` to see the fragment bounds themselves, and `hasPath` to
-ask about a path alone.
+A contig can be stored as several path fragments with gaps between them.
+`getAlignmentsForRange` queries each fragment the window overlaps and
+concatenates the records, which is safe because a record's `refStart` and
+`refEnd` are offsets on the whole path.
 
-A path that exists but was never indexed for random access throws rather than
-returning nothing — that is a database that needs rebuilding, not an empty
-window.
+`getSubgraphForRange` returns a `Subgraph`, and two disjoint fragments do not
+merge into one graph, so it answers for the first fragment overlapping the
+window, clamped to it. It returns `undefined` when the path is unknown or no
+fragment overlaps the window. `subgraph.referenceInterval` is the reference walk
+the subgraph holds; it runs to node boundaries and through `context`, so it is
+wider than the window on both sides. `pathFragmentsForRange` returns the
+fragment bounds, and `hasPath` checks whether a path exists.
 
-## Alignment records
+A path that exists but was never indexed for random access throws, because the
+database needs rebuilding to answer it.
 
-`getAlignmentsForRange` returns one record per haplotype crossing the window:
+## Pair alignments
 
-```ts
-for (const alignment of alignments) {
-  const { refStart, refEnd, strand, cigar } = alignment
-  if (alignment.resolved) {
-    console.log(alignment.label, alignment.hapStart, alignment.hapEnd)
-  }
-}
-```
-
-The fields, how pieces of one walk are joined into a record, and what `resolved`
-means are in [alignments.md](alignments.md).
-
-`subgraph.pairAlignments({ target })` aligns the window's other walks to a
-haplotype instead of to the reference:
-[alignments.md](alignments.md#one-haplotype-against-another).
+`getAlignmentsForRange` returns one record per haplotype passage, aligned to the
+reference ([alignments.md](alignments.md)). `subgraph.pairAlignments` aligns the
+window's walks to a chosen haplotype instead
+([alignments.md](alignments.md#one-haplotype-against-another)).
 
 | option   | description                                                              |
 | -------- | ------------------------------------------------------------------------ |
@@ -125,22 +112,22 @@ const json = subgraph.toSubgraphJson({ cigar: true, names: 'resolved' })
 const compact = subgraph.toCompactSubgraph({ cigar: true, names: 'resolved' })
 ```
 
-All three take the same options. `names: 'resolved'` needs `identifyPaths()` to
-have run — the range queries run it for you when the database has the tables.
-`keepHaplotypes(predicate)` narrows an identified subgraph the way the `keep`
-option does. A named walk lists its steps in the haplotype's own direction,
-whichever twin of the walk the extraction kept, so `start..end` and the steps
-agree as the W line spec requires.
+The three output methods take the same options. `names: 'resolved'` needs
+`identifyPaths()` to have run, and the range queries run it when the database
+has a haplotype index. `keepHaplotypes(predicate)` narrows an identified
+subgraph the way the `keep` option does. A named walk lists its steps in the
+haplotype's own direction, so its `start..end` and its steps agree, as the GFA W
+line requires.
 
-### Which of the two to take
+### JSON or compact
 
-`toSubgraphJson` is upstream's format, field for field —
-`gbz-base query --format json` output, held to it by the
-[oracle tests](internals.md#fidelity-to-upstream). Take it when something
-downstream already parses that format, and do not expect it to change.
+`toSubgraphJson` writes upstream's format field for field, the output of
+`gbz-base query --format json`, and the
+[oracle tests](internals.md#fidelity-to-upstream) hold it to that. Use it when
+something downstream already parses the format.
 
-`toCompactSubgraph` is this package's own format and carries the same subgraph
-as typed arrays:
+`toCompactSubgraph` writes this package's own format, the same subgraph as typed
+arrays:
 
 ```ts
 interface CompactSubgraph {
@@ -156,8 +143,8 @@ interface CompactSubgraph {
 }
 ```
 
-A step, and either end of an edge, is a **GBWT handle**: `2 * nodeId` forward,
-`2 * nodeId + 1` reverse. The exported `nodes` helpers read the halves back:
+A step, and each end of an edge, is a **GBWT handle**: `2 * nodeId` forward,
+`2 * nodeId + 1` reverse. The exported `nodes` helpers split a handle:
 
 ```ts
 import { nodes } from '@gmod/gbz-base'
@@ -167,20 +154,19 @@ for (const handle of compact.paths[1].steps) {
 }
 ```
 
-The upstream format uses an object and a stringified id for every step of every
-walk, and a 200 kb human window has about 350,000 of them. That is affordable to
-build and ruinous to move: sending one across a worker boundary is a structured
-clone of every one of those objects. Measured on HPRC chr20, `CHM13#0#chr20`
-30.0–30.2 Mb, 5,943 nodes and 178 haplotypes, with CIGARs:
+The upstream format has an object with a stringified id for every step of every
+walk, about 350,000 of them in a 200 kb human window, and sending it to another
+worker structured-clones every one. On HPRC chr20, `CHM13#0#chr20` 30.0-30.2 Mb,
+5,943 nodes and 178 haplotypes, with CIGARs:
 
 |                   | `toSubgraphJson` | `toCompactSubgraph` |
 | ----------------- | ---------------- | ------------------- |
 | build             | 99 ms            | 71 ms               |
 | `structuredClone` | 295 ms           | 1.9 ms              |
 
-Most of the 71 ms each takes is CIGAR generation; drop `cigar` and the compact
-build is about 8 ms. For a `postMessage` the buffers can be transferred rather
-than copied:
+CIGAR generation takes most of the 71 ms; without `cigar` the compact build
+takes about 8 ms. A `postMessage` can transfer the buffers instead of copying
+them:
 
 ```ts
 import { compactSubgraphTransferables } from '@gmod/gbz-base'
@@ -188,36 +174,15 @@ import { compactSubgraphTransferables } from '@gmod/gbz-base'
 port.postMessage(compact, compactSubgraphTransferables(compact))
 ```
 
-Transferring detaches the buffers, so the sending side must not read the
-subgraph afterwards.
-
-### Why only the steps are packed
-
-bam-js hands back `NUMERIC_SEQ` and `NUMERIC_CIGAR` — the packed bytes as the
-file holds them — and derives the strings lazily, because a nanopore read is
-long enough that decoding one to compare twenty positions is waste. The same
-trick was measured here on both remaining fields and is not worth it, because it
-only helps a _long_ per-record field, and only the step list is long:
-
-| field  | size here                 | packed  | strings | verdict              |
-| ------ | ------------------------- | ------- | ------- | -------------------- |
-| steps  | 346,993 per window        | 1.9 ms  | 295 ms  | packed, 155x         |
-| CIGARs | 323 chars avg, 17,555 ops | 0.20 ms | 0.09 ms | strings clone faster |
-| seqs   | 34 bp avg, 5,943 nodes    | 1.07 ms | 0.95 ms | about even           |
-
-Node sequences pack 2.86x smaller, but a consumer drawing the graph wants the
-string for every node anyway, and CIGARs packed into one `Int32Array` per path
-clone _slower_ than the strings — 178 small typed arrays cost more than 178
-strings. So `nodeSequences` and `cigar` stay strings, and the CIGAR phase is 103
-ms of computing edits against 2 ms of building the string, which is not a
-representation problem at all.
+Transferring detaches the buffers, so the sender must not read the subgraph
+afterwards. [optimizations.md](optimizations.md#the-compact-output-format)
+explains why node sequences and CIGARs stay strings.
 
 ## Lower-level queries
 
-The two range queries cover the interval query and hide where a contig is stored
-split into path fragments. The four query functions underneath are what
-`gbz-base query` itself does, take a window you have already resolved, and leave
-identification to you:
+The range queries resolve a window to path fragments and name the walks. The
+four query functions underneath do what `gbz-base query` does: they take a
+window within one fragment and leave naming to the caller.
 
 ```ts
 import { subgraphAtOffset, subgraphInInterval } from '@gmod/gbz-base'
@@ -233,14 +198,14 @@ await subgraph.identifyPaths()
 const graph = subgraph.toSubgraphJson({ cigar: true, names: 'resolved' })
 ```
 
-`subgraphAtOffset` and `subgraphAroundNodes` are the other two;
-`subgraphBetween` is described in [snarls.md](snarls.md). They throw for a
-window that runs past the end of a path fragment, where `getAlignmentsForRange`
-clamps.
+The other two are `subgraphAtOffset` and `subgraphAroundNodes`, and
+[snarls.md](snarls.md#between-two-boundary-nodes) covers `subgraphBetween`. All
+four throw for a window that runs past the end of a path fragment, where the
+range queries clamp.
 
 ## Command line
 
-The command line mirrors the upstream tool for the query types it supports:
+`gbz-base-query` mirrors the upstream tool for the query types it supports:
 
 ```
 gbz-base-query graph.gbz.db --sample GRCh38 --contig chr6 --interval 31500000..31501000 --cigar
@@ -266,17 +231,18 @@ gbz-base-query https://host/graph.gbz.db --contig chrM --offset 1000 --context 5
 | `--format` / `--block-size`             | output format / bytes per page block             |
 | `--stats`                               | report requests, bytes and the route taken       |
 
-## Reading the stats
+### `--stats`
 
 `--stats` reports how many range requests a query made and how many bytes they
-carried, and with `--resolve` or `--alignments` how identification went: index
-scans, chains per haplotype, why each chain ended, companion seeks against graph
-record lookups, and fragment lengths against the walk bound.
+carried, separately for the graph database and the companion. With `--resolve`
+or `--alignments` it also reports how naming went: index scans, chains per
+haplotype, why each chain ended, companion seeks against graph record lookups,
+fragment lengths against the walk bound, and which route a `keep` query took.
 
 ## Errors
 
-Three error classes are exported, for the conditions worth catching by type
-rather than by message:
+The package exports three error classes for the conditions worth catching by
+type:
 
 | class                   | thrown by      | means                                                |
 | ----------------------- | -------------- | ---------------------------------------------------- |
@@ -285,23 +251,23 @@ rather than by message:
 | `SubgraphLimitError`    | any query      | `limit` was reached before the window was covered    |
 
 `SchemaVersionError.found` is the version string the database carried, or
-`undefined` when its `Tags` table had none — the difference between a database
-built by a different gbz-base and a file that is not one at all.
-`SCHEMA_VERSION` is the string this reader understands, exported beside it.
+`undefined` when its `Tags` table had none. A string means a database from a
+different gbz-base version, and `undefined` means a file that is not a gbz-base
+database. `SCHEMA_VERSION`, exported beside it, is the version this reader
+understands.
 
-`ForwardOnlyIndexError` is refused at open rather than at query time, because a
-forward-only index has no sample for a walk on a contig stored against its
-reference, which is about half the contigs in a graph like HPRC's, so
-`GBZBase.open` refuses rather than return a half-named result to a caller.
-Rebuild the companion without `--forward-only`.
+A forward-only index has no sample for a walk on a contig stored against its
+reference, which is about half the contigs in a graph like HPRC's, so `open`
+throws `ForwardOnlyIndexError` instead of returning half-named results. Rebuild
+the companion without `--forward-only`.
 
-`SubgraphLimitError` carries the `limit` it hit, and for an interval query the
-`windowBp` asked for against the `walkedBp` covered before it stopped, so a
-caller can tell a limit that was slightly too low from one that stopped in the
-first percent of a window inside a huge snarl. Raising `limit`, or narrowing
-`snarls: 'overlapping'`, is the fix.
+`SubgraphLimitError` carries the `limit` it hit and, for an interval query, the
+`windowBp` requested and the `walkedBp` covered before it stopped. A caller can
+use them to tell a limit set slightly too low from one hit early in a window
+inside a huge snarl. Raise `limit`, or use `snarls: 'contained'` in place of
+`'overlapping'`.
 
-Everything else throws a plain `Error` with a message: a path name that matches
+Other failures throw a plain `Error` with a message: a path name that matches
 nothing, a path that exists but was never indexed for random access, `keep`
 without a haplotype index, a companion whose path or node counts disagree with
 the graph's, and a database missing a table a query needs.
