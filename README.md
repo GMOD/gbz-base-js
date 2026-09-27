@@ -6,17 +6,11 @@
 A TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
 pangenome databases (`.gbz.db`). It reads only the pages a query needs, so it
 can query a multi-gigabyte database on a web server through range requests.
+Upstream's `gbz-base construct` builds the database from a `.gbz` file.
 
 The npm package contains a JavaScript library and a command-line program that
 runs the same queries. A separate Rust program in this repository builds the
 optional haplotype index that names the walks.
-
-| Program               | Kind              | Source                   | Use it to                                  |
-| --------------------- | ----------------- | ------------------------ | ------------------------------------------ |
-| `GBZBase`             | JavaScript class  | this npm package         | query a database from browser or Node code |
-| `gbz-base-query`      | Node command line | this npm package         | query a database from a shell              |
-| `gbz-haplotype-index` | Rust command line | `tools/haplotype-index/` | build the haplotype index, once per graph  |
-| `gbz-base construct`  | Rust command line | upstream gbz-base        | build the `.gbz.db` from a `.gbz` file     |
 
 ## Library
 
@@ -87,6 +81,15 @@ gbz-base-query "$graphUrl" --haplotype-index "$indexUrl" \
   --alignments --keep HG00097
 ```
 
+## Programs
+
+| Program                         | Use it to                                  |
+| ------------------------------- | ------------------------------------------ |
+| `GBZBase`                       | query a database from browser or Node code |
+| `gbz-base-query`                | query a database from a shell              |
+| `gbz-haplotype-index`           | build the haplotype index, once per graph  |
+| `gbz-base construct` (upstream) | build the `.gbz.db` from a `.gbz` file     |
+
 ## Documentation
 
 Reference:
@@ -118,7 +121,9 @@ Design:
   uses gbz-base for a graph view like BandageJS's, inside a genome browser, and
   for haplotype lanes.
 
-The project started from ideas at MemPanG 26.
+## Inspiration
+
+The project started from ideas at MemPanG 26 hackathon
 
 ## License
 
