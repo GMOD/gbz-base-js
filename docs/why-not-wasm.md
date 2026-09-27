@@ -6,10 +6,8 @@ on the 64-bit machines that write these files, 4 bytes on `wasm32`. The symptom
 is a spurious "SDSL format is not supported" error.
 
 [gbwt-rs#14](https://github.com/jltsiren/gbwt-rs/pull/14) proposed `u64` header
-fields. The maintainer replied that every `usize` in the code is a potential bug
-and doubted a 32-bit gbz-base could handle human graphs without a major rewrite,
-so we withdrew the PR in May 2026. `wasm64` fixes the width, but gbz-base also
-compiles SQLite from C, and wasm64 has no libc to build it against.
+fields and closed unmerged. `wasm64` fixes the width, but gbz-base also compiles
+SQLite from C, and wasm64 has no libc to build it against.
 
 A TypeScript reader reads 8-byte fields as 8 bytes, and it has other advantages:
 
