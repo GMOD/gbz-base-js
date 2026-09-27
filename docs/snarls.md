@@ -38,10 +38,10 @@ On the `micb-kir3dl1` test database, that 1 kb window gives:
 | 0         | `contained` | 47    | 91    |
 | 100       | `none`      | 54    | 91    |
 
-With `context: 0` the window holds only the reference's nodes, so haplotypes
-that leave the reference come back in pieces: 468 walks for 91 haplotypes.
-`contained` adds the 16 nodes of the skipped bubbles, and each haplotype comes
-back as one walk.
+With `context: 0` the window holds only the reference's nodes, so the query
+returns each haplotype that leaves the reference as several pieces: 468 walks
+for 91 haplotypes. `contained` adds the 16 nodes of the skipped bubbles, and the
+query returns each haplotype as one walk.
 
 A snarl can be far larger than the window, so pair `overlapping` with `limit`.
 
@@ -52,7 +52,8 @@ the anchored route walks the chosen haplotypes whole and ignores it.
 ## Between two boundary nodes
 
 `subgraphBetween` returns every node between two oriented node handles, usually
-the boundaries of a snarl. It is upstream's `--between`.
+the boundaries of a snarl. The command-line equivalent is `--between`, as in
+upstream.
 
 ```ts
 import { nodes, subgraphBetween } from '@gmod/gbz-base'

@@ -1,0 +1,73 @@
+# Command line
+
+`gbz-base-query` runs one query with the [library](api.md) and prints the
+result. It takes the flags of upstream's `gbz-base query`, and adds flags for
+the haplotype index, alignment records and PAF. The database and the haplotype
+index can each be a local path or an `http(s)://` URL.
+
+```bash
+npx -p @gmod/gbz-base gbz-base-query --help   # run without installing
+npm install -g @gmod/gbz-base                 # or put it on your PATH
+```
+
+## Examples
+
+```bash
+# the subgraph around a window, as upstream's JSON
+gbz-base-query graph.gbz.db --sample GRCh38 --contig chr6 \
+  --interval 31500000..31501000 --cigar
+
+# the same window as GFA
+gbz-base-query graph.gbz.db --sample GRCh38 --contig chr6 \
+  --interval 31500000..31501000 --format gfa
+
+# 50 bp around one offset of a remote database, with request counts
+gbz-base-query https://host/graph.gbz.db --contig chrM --offset 1000 \
+  --context 50 --stats
+
+# named alignment records, from a remote database and companion index
+gbz-base-query https://host/graph.gbz.db \
+  --haplotype-index https://host/graph.haplotype-index.db \
+  --sample GRCh38 --contig chr6 --interval 31500000..31501000 --alignments
+```
+
+## Output
+
+| flags                    | stdout                                                    |
+| ------------------------ | --------------------------------------------------------- |
+| none                     | the subgraph as JSON, matching upstream's `--format json` |
+| `--format gfa`           | the subgraph as GFA                                       |
+| `--alignments`           | a JSON array of [alignment records](alignments.md)        |
+| `--against` or `--stack` | [PAF](alignments.md#paf-output), one line per alignment   |
+
+`--stats` writes request and byte counts, and a report on how naming went, to
+stderr. On an error, `gbz-base-query` prints the message to stderr and exits
+with status 1.
+
+## Flags
+
+| flag                                | meaning                                                             | library equivalent                          |
+| ----------------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
+| `--sample` `--haplotype` `--contig` | the path to query; `--haplotype` defaults to 0                      | `{ sample, haplotype, contig }`             |
+| `-i`, `--interval A..B`             | the half-open window, in path offsets                               | `getSubgraphForRange`, `subgraphInInterval` |
+| `-o`, `--offset N`                  | a window around one offset                                          | `subgraphAtOffset`                          |
+| `-n`, `--node ID`                   | a window around a node id, repeatable                               | `subgraphAroundNodes`                       |
+| `-b`, `--between A:B`               | every node between two oriented handles, such as `129+:160+`        | `subgraphBetween`                           |
+| `--context N`                       | bp of graph around the window, 100 by default                       | `context`                                   |
+| `--snarls`                          | add contained top-level [snarls](snarls.md)                         | `snarls: 'contained'`                       |
+| `--extend-snarls`                   | add overlapping top-level snarls                                    | `snarls: 'overlapping'`                     |
+| `--limit N`                         | maximum nodes per path fragment                                     | `limit`                                     |
+| `--haplotypes SEL`                  | `all` (default), `distinct`, `reference-only` or `none`             | `haplotypes`                                |
+| `--cigar`                           | include CIGAR strings                                               | `cigar: true`                               |
+| `--format json\|gfa`                | the subgraph's output format                                        | `toSubgraphJson`, `toGFA`                   |
+| `--haplotype-index F`               | companion index, a path or URL                                      | `haplotypeIndex`                            |
+| `--resolve`                         | name the walks                                                      | `identifyPaths()`, `names: 'resolved'`      |
+| `--keep SAMPLE[#HAP]`               | keep these haplotypes, repeatable; implies `--resolve`              | `keep`                                      |
+| `--alignments`                      | print alignment records; implies `--resolve`                        | `alignments()`, `getAlignmentsForRange`     |
+| `--against SAMPLE#HAP`              | PAF of every other named walk against this haplotype                | `pairAlignments({ target })`                |
+| `--stack A,B,C`                     | PAF of each haplotype against the next in the list                  | `pairAlignments({ query, target })`         |
+| `--no-bases`                        | compare shared nodes only; write the bases between them as `I`, `D` | `bases: false`                              |
+| `--max-gap N`                       | the most bases a PAF record may skip on nodes only one walk visits  | `maxGap`                                    |
+| `--contig-lengths F`                | chrom.sizes or `.fai` file for PAF columns 2 and 7                  |                                             |
+| `--block-size N`                    | bytes per page block, 65536 by default                              | `blockSize`                                 |
+| `--stats`                           | print fetch and naming statistics to stderr                         | `db.sqlite.pager`, `subgraph.stats`         |

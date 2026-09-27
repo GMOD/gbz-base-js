@@ -27,4 +27,5 @@ steps 3 to 7 with walks from an anchor.
 
 Under every step, a pager reads the database in 64 KiB blocks and caches them.
 Each block read is one HTTP range request. The graph database and the companion
-have separate pagers, and `--stats` counts their requests separately.
+have separate pagers, and `gbz-base-query --stats` counts their requests
+separately.

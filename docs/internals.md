@@ -2,9 +2,9 @@
 
 ## Reading SQLite directly
 
-The reader walks the SQLite b-trees itself (rowid lookups, index seeks, overflow
-pages) and decodes GBWT node records the way gbwt-rs does. It reads databases
-built by stock `gbz-base construct`.
+This package walks the SQLite b-trees itself (rowid lookups, index seeks,
+overflow pages) and decodes GBWT node records the way gbwt-rs does. It reads
+databases built by stock `gbz-base construct`.
 
 ## Tests against upstream
 

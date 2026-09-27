@@ -1,4 +1,6 @@
-# API
+# Library API
+
+The [command line](cli.md) runs the same queries from a shell.
 
 ## `GBZBase.open(source, opts?)`
 
@@ -37,8 +39,8 @@ const subgraph = await db.getSubgraphForRange(
 
 Coordinates are 0-based half-open offsets along the path. The path is a PanSN
 `sample#haplotype#contig` string, a bare contig, or
-`{ sample, haplotype, contig }`. Both queries name the walks when the database
-has a haplotype index.
+`{ sample, haplotype, contig }`. `getAlignmentsForRange` and
+`getSubgraphForRange` name the walks when the database has a haplotype index.
 
 | option       | description                                                          |
 | ------------ | -------------------------------------------------------------------- |
@@ -76,8 +78,8 @@ const compact = subgraph.toCompactSubgraph({ cigar: true, names: 'resolved' })
 ### JSON or compact
 
 `toSubgraphJson` is upstream's `gbz-base query --format json`, field for field.
-`toCompactSubgraph` holds the same subgraph in typed arrays, for sending between
-workers:
+`toCompactSubgraph` stores the same subgraph in typed arrays, for sending
+between workers:
 
 ```ts
 interface CompactSubgraph {
@@ -102,9 +104,11 @@ against 295 ms for the JSON form. Transfer its buffers with
 ## Lower-level queries
 
 `subgraphInInterval`, `subgraphAtOffset`, `subgraphAroundNodes` and
-`subgraphBetween` ([snarls.md](snarls.md#between-two-boundary-nodes)) match
-`gbz-base query`. They take a window within one path fragment, and naming is a
-separate step:
+`subgraphBetween` ([snarls.md](snarls.md#between-two-boundary-nodes)) are the
+four query modes of upstream's `gbz-base query`, and of `gbz-base-query`'s
+`--interval`, `--offset`, `--node` and `--between`. Each takes a window within
+one path fragment and returns unnamed walks, so call `identifyPaths()` to name
+them:
 
 ```ts
 import { subgraphInInterval } from '@gmod/gbz-base'
@@ -118,32 +122,6 @@ const subgraph = await subgraphInInterval(
 )
 await subgraph.identifyPaths()
 ```
-
-## Command line
-
-```
-gbz-base-query graph.gbz.db --sample GRCh38 --contig chr6 --interval 31500000..31501000 --cigar
-gbz-base-query https://host/graph.gbz.db --contig chrM --offset 1000 --context 50 --stats
-```
-
-| flag                                    | description                                       |
-| --------------------------------------- | ------------------------------------------------- |
-| `--sample` / `--haplotype` / `--contig` | the path to query                                 |
-| `--interval A..B` / `--offset`          | the window, in path offsets                       |
-| `--node`                                | query around a node id                            |
-| `--context`                             | bp of graph around the window                     |
-| `--snarls` / `--extend-snarls`          | `contained` / `overlapping`                       |
-| `--between 129+:160+`                   | everything between two oriented boundary handles  |
-| `--haplotype-index PATH`                | companion database with the haplotype tables      |
-| `--resolve` / `--alignments`            | name the walks / print alignment records          |
-| `--keep SAMPLE[#HAP]`                   | keep these haplotypes, repeatable                 |
-| `--cigar`                               | include CIGAR strings                             |
-| `--against SAMPLE#HAP` / `--stack A,B`  | PAF against one haplotype / each against the next |
-| `--no-bases`                            | PAF from shared nodes alone                       |
-| `--max-gap` / `--contig-lengths`        | `maxGap` / lengths for PAF columns 2 and 7        |
-| `--haplotypes` / `--limit`              | the walk set / the node cap                       |
-| `--format` / `--block-size`             | output format / bytes per page block              |
-| `--stats`                               | requests, bytes, and how naming went              |
 
 ## Errors
 

@@ -12,15 +12,15 @@ for (const alignment of alignments) {
 }
 ```
 
-| field                 | meaning                                                                       |
-| --------------------- | ----------------------------------------------------------------------------- |
-| `refStart` / `refEnd` | span on the reference, extended to node boundaries                            |
-| `cigar`               | alignment to the reference                                                    |
-| `strand`              | `-` when the haplotype runs opposite to the reference                         |
-| `path`                | the walk as node handles                                                      |
-| `weight`              | how many identical walks the record stands for, with `haplotypes: 'distinct'` |
-| `start`               | GBWT position of the walk's start, stable across refetches                    |
-| `resolved`            | `true` when the haplotype index named the record                              |
+| field                 | meaning                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| `refStart` / `refEnd` | span on the reference, extended to node boundaries                                  |
+| `cigar`               | alignment to the reference                                                          |
+| `strand`              | `-` when the haplotype runs opposite to the reference                               |
+| `path`                | the walk as node handles                                                            |
+| `weight`              | the number of identical walks merged into the record, with `haplotypes: 'distinct'` |
+| `start`               | GBWT position of the walk's start, stable across refetches                          |
+| `resolved`            | `true` when the haplotype index named the record                                    |
 
 A resolved record also has `name` (a `PathName`), `label` (such as
 `HG02723#1#JAHEOU010000100.1[4392999-4393486]`), `pathHandle`, and
@@ -29,15 +29,15 @@ A resolved record also has `name` (a `PathName`), `label` (such as
 ## Joined pieces
 
 A haplotype can leave the window and come back, for example through an
-insertion. The reader joins the two pieces into one record when they are
-consecutive, on the same strand and in order on both paths. The sequence between
-them becomes an insertion and a deletion. An inversion or a repeat between the
-pieces leaves them as separate records.
+insertion. The library joins the two pieces into one record when they are
+consecutive, on the same strand and in order on both paths, and writes the
+sequence between them as an insertion and a deletion. When an inversion or a
+repeat lies between the pieces, the library keeps them as separate records.
 
 ## The CIGAR
 
 The CIGAR is a node-length-weighted longest common subsequence of the two walks,
-as upstream computes it. Between shared nodes, the reader matches any common
+as upstream computes it. Between shared nodes, the library matches any common
 prefix and suffix, then scores the rest with vg's parameters.
 
 ## One haplotype against another
@@ -63,7 +63,7 @@ for (const r of subgraph.pairAlignments({ target })) {
 A record is the best-scoring chain of runs of shared nodes, chained the way
 minimap2 chains seeds. The bases between two runs get a global alignment with
 vg's scores (match 1, mismatch -4, gap -6 and -1 per extra base). Where both
-stretches are long, the reader chains shared 15-mers first, which also finds
+stretches are long, the library chains shared 15-mers first, which also finds
 inversions. Each base aligns in at most one record.
 
 | field                       | meaning                                      |
@@ -74,16 +74,17 @@ inversions. Each base aligns in at most one record.
 | `matches`                   | matching bases                               |
 | `sharedBases`               | matching bases on nodes both walks visit     |
 
-| option   | meaning                                                                     |
-| -------- | --------------------------------------------------------------------------- |
-| `maxGap` | the most unshared bp a record may skip on either walk, unlimited by default |
-| `bases`  | `false` writes the sequence between shared nodes as `I` and `D`             |
+| option   | meaning                                                                              |
+| -------- | ------------------------------------------------------------------------------------ |
+| `maxGap` | the most bases a record may skip on nodes only one walk visits, unlimited by default |
+| `bases`  | `false` writes the sequence between shared nodes as `I` and `D`                      |
 
 ## PAF output
 
-`--against HAP` aligns every walk to one haplotype, and `--stack A,B,C` aligns
-each haplotype to the next, the pairs a stacked synteny view draws. Both print
-PAF, with `sharedBases` as the tag `ns:i:`.
+The command line prints `pairAlignments` records as PAF, with `sharedBases` as
+the tag `ns:i:`. `--against HAP` aligns every walk to one haplotype, and
+`--stack A,B,C` aligns each haplotype to the next, which are the pairs a stacked
+synteny view draws.
 
 ```
 gbz-base-query graph.gbz.db --haplotype-index index.db --sample GRCh38 --contig chr6 \
@@ -92,4 +93,4 @@ gbz-base-query graph.gbz.db --haplotype-index index.db --sample GRCh38 --contig 
 ```
 
 `--contig-lengths` takes a chrom.sizes or `.fai` file for PAF columns 2 and 7.
-`--no-bases` sets `bases: false`.
+`--no-bases` and `--max-gap` set `bases: false` and `maxGap`.

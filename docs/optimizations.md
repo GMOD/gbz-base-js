@@ -1,8 +1,8 @@
 # Optimizations
 
-Design choices, each with the measurement behind it. Unless noted, measured over
-HTTPS against HPRC v2.1 and its hosted anchored companion, with `--keep`,
-`--cigar` and `--stats`.
+Each section records a design choice and the measurement behind it. Unless
+noted, we measured over HTTPS against HPRC v2.1 and its hosted anchored
+companion, running `gbz-base-query` with `--keep`, `--cigar` and `--stats`.
 
 ## Aligning a walk to the reference
 
@@ -30,8 +30,8 @@ split:
 | Two nodes alternating, 20,000 against 10,000 | 7.7 s     | 3 ms    |
 | The 3,200/3,000 loop with its flanks swapped | 680 ms    | 400 ms  |
 
-The trim helps least in the swapped-flank case, a pattern absent from every HPRC
-locus we queried.
+The trim helps least in the swapped-flank case, and no HPRC locus we queried has
+that pattern.
 
 ## Walking from an anchor
 
@@ -57,8 +57,9 @@ Output hashes are identical before and after at every locus.
 
 ## The compact output format
 
-`toCompactSubgraph` packs only the step lists into typed arrays, since packing
-pays off only for long fields. `structuredClone` times on a 200 kb chr20 window:
+`toCompactSubgraph` packs only the step lists into typed arrays, because packing
+saves time only on long fields. `structuredClone` times on a 200 kb chr20
+window:
 
 | field  | size                 | packed  | strings |
 | ------ | -------------------- | ------- | ------- |
