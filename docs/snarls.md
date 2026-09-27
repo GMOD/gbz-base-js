@@ -46,9 +46,9 @@ query returns each haplotype as one walk.
 A snarl can be far larger than the window, so pair `overlapping` with `limit`.
 
 `getSubgraphForRange` and the lower-level `subgraphInInterval`,
-`subgraphAtOffset` and `subgraphAroundNodes` take `snarls`. A query restricted
-to chosen haplotypes with `keep` ignores `snarls` on the anchored route, which
-walks those haplotypes whole.
+`subgraphAtOffset` and `subgraphAroundNodes` take `snarls`. A query that uses
+the `keep` option ignores `snarls` on the anchored route, because that route
+walks the chosen haplotypes whole.
 
 ## Between two boundary nodes
 

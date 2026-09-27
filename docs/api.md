@@ -55,8 +55,8 @@ return.
 `haplotypes: 'distinct'` merges identical walks into one record with a `weight`.
 `getAlignmentsForRange` accepts `all` and `distinct`.
 
-With `keep`, the query returns the reference, the walks whose name passes the
-predicate, and the nodes those walks visit
+A query that uses the `keep` option returns the reference, the walks whose name
+passes the predicate, and the nodes those walks visit
 ([haplotype-index.md](haplotype-index.md#querying-a-subset-of-the-haplotypes)).
 
 `getAlignmentsForRange` covers every path fragment the window overlaps.

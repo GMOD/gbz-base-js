@@ -6,8 +6,8 @@ The source is [dataflow.dot](img/dataflow.dot); see
 [CONTRIBUTING.md](../CONTRIBUTING.md#the-data-flow-diagram) to re-render it.
 
 `getAlignmentsForRange` runs every step below. `getSubgraphForRange` stops after
-step 7 and returns the `Subgraph`. A query with `keep` takes the anchored route,
-which replaces steps 3 to 7 with walks from an anchor node
+step 7 and returns the `Subgraph`. A query that uses the `keep` option takes the
+anchored route, which replaces steps 3 to 7 with walks from an anchor node
 ([haplotype-index.md](haplotype-index.md#querying-a-subset-of-the-haplotypes)).
 
 1. **`pathFragmentsForRange`** finds the path fragments overlapping the window.
