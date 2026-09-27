@@ -57,7 +57,7 @@ haplotype index.
 
 With `keep`, the query reduces the window to the reference, the chosen walks and
 the nodes they visit
-([haplotype-index.md](haplotype-index.md#keeping-a-set-of-haplotypes)).
+([haplotype-index.md](haplotype-index.md#choosing-haplotypes-at-query-time-with-keep)).
 
 `getAlignmentsForRange` covers every path fragment the window overlaps.
 `getSubgraphForRange` returns the subgraph for the first one, or `undefined`

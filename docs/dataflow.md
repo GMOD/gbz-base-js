@@ -9,7 +9,7 @@ The source is [dataflow.dot](img/dataflow.dot); see
 naming and returns the `Subgraph`. A query restricted to chosen haplotypes with
 `keep` can take the anchored route, which replaces steps 3 to 7 with walks from
 an anchor
-([haplotype-index.md](haplotype-index.md#keeping-a-set-of-haplotypes)).
+([haplotype-index.md](haplotype-index.md#choosing-haplotypes-at-query-time-with-keep)).
 
 1. **`pathFragmentsForRange`** finds the path fragments overlapping the window.
    A contig can be stored as several fragments with gaps between them.
