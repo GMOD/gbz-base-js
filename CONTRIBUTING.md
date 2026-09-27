@@ -24,8 +24,8 @@ npm trust github gbz-base --file publish.yml --repo GMOD/gbz-base-js
 
 ## The data-flow diagram
 
-`docs/img/dataflow.svg` is rendered from `docs/img/dataflow.dot` and committed.
-Re-render it whenever you edit the `.dot`:
+Whenever you edit `docs/img/dataflow.dot`, render `docs/img/dataflow.svg` from
+it and commit both:
 
 ```sh
 dot -Tsvg docs/img/dataflow.dot -o docs/img/dataflow.svg
@@ -33,13 +33,13 @@ dot -Tsvg docs/img/dataflow.dot -o docs/img/dataflow.svg
 
 ## Test data
 
-`test/data/*.gbz.db` are built by upstream `gbz-base`
+Upstream `gbz-base` builds `test/data/*.gbz.db`
 (`cargo install --git https://github.com/jltsiren/gbz-base`).
 `test/data/oracle/` holds upstream's output for the queries in `queries.txt`;
 `test/oracle.test.ts` compares against it, and `generate.sh` regenerates it with
 `gbz-base` on your PATH. Commit the regenerated files.
 
-Two fixtures are built from GFA files, `split-contig.gfa` (a contig stored as
+`vg` builds two fixtures from GFA files, `split-contig.gfa` (a contig stored as
 two path fragments) and `looping-walk.gfa` (walks that loop through or reorder
 the reference). `quay.io/vgteam/vg` is the easiest `vg` on a Mac.
 
@@ -53,7 +53,7 @@ gbz-haplotype-index --interval 200 --output split-contig.haplotype-index.db spli
 
 ## Scripts
 
-- `scripts/measure-windows.mjs` times a set of windows: requests, bytes and the
-  naming route.
+- `scripts/measure-windows.mjs` times a set of windows and reports the requests,
+  bytes and naming route of each.
 - `scripts/time-phases.mjs` splits one query into phases.
 - `scripts/chains-dump.mjs` and `scripts/verify-chr20.ts` debug naming.

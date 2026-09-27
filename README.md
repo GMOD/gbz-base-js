@@ -108,22 +108,18 @@ Design:
 - [Internals](docs/internals.md)
 - [Contributing](CONTRIBUTING.md)
 
-[jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer)
-uses this package for its graph view and haplotype lanes. The project started
-from ideas at MemPanG 26.
+## Used by
+
+- [BandageJS](https://github.com/cmdcolin/BandageJS) draws the graph with
+  Bandage's layout and can fetch data with gbz-base.
+- A [sequenceTubeMap fork](https://github.com/cmdcolin/sequenceTubeMap) can
+  fetch data with gbz-base.
+- [jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer)
+  uses gbz-base for a graph view like BandageJS's, inside a genome browser, and
+  for haplotype lanes.
+
+The project started from ideas at MemPanG 26.
 
 ## License
 
 MIT © [Colin Diesh](https://github.com/cmdcolin)
-
-## Usage
-
-This module is currently used by
-
-- BandageJS https://github.com/cmdcolin/BandageJS (uses Bandage graph layout,
-  can fetch data with gbz-base)
-- sequenceTubeMap fork https://github.com/cmdcolin/sequenceTubeMap (modified
-  sequenceTubeMap, can fetch data with gbz-base)
-- jbrowse-plugin-graphgenomeviewer
-  https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer (similar to BandageJS
-  but has genome browser integration)
