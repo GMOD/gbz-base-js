@@ -1,18 +1,13 @@
-import path from 'node:path'
-
-import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { GBZBase } from '../src/db.ts'
+import { openSampled } from './fixtures.ts'
 import { parsePathName } from '../src/pathName.ts'
 import { SubgraphLimitError } from '../src/subgraph.ts'
 
-const dataDir = path.join(import.meta.dirname, 'data')
-const micb = path.join(dataDir, 'micb-kir3dl1.gbz.db')
 const chr6 = 'GRCh38#0#chr6'
 
 function openMicb() {
-  return GBZBase.open(new LocalFile(micb))
+  return openSampled('micb-kir3dl1.gbz.db')
 }
 
 describe('parsePathName', () => {

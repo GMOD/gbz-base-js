@@ -17,11 +17,8 @@ describe('sqlite reader', () => {
         'Paths',
         'ReferenceIndex',
         'Tags',
-        'HaplotypeSamples',
-        'HaplotypeLengths',
         'sqlite_autoindex_ReferenceIndex_1',
         'sqlite_autoindex_Tags_1',
-        'sqlite_autoindex_HaplotypeSamples_1',
       ].sort(),
     )
   })

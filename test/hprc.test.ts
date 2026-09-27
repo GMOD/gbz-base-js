@@ -78,7 +78,7 @@ describe.skipIf(!available(companion))('the published HPRC v2.1 graph', () => {
     expect(scans.length).toBe(5)
     expect(windowSamples).toBeLessThan(10000)
     expect(chains.reduce((n, c) => n + c.fragments, 0)).toBe(1912)
-    expect(db.index.pager.bytesFetched).toBeLessThan(4 * 1024 * 1024)
+    expect(db.index?.pager.bytesFetched).toBeLessThan(4 * 1024 * 1024)
     for (const alignment of alignments) {
       if (alignment.resolved) {
         let query = 0

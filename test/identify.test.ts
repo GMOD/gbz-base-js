@@ -3,6 +3,7 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
+import { openSampled } from './fixtures.ts'
 import { cigarConsumption, walkBack } from './walkBack.ts'
 import { ForwardOnlyIndexError, GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode } from '../src/gbwt/node.ts'
@@ -18,7 +19,7 @@ async function checkIdentities(
   end: number,
   context: number,
 ) {
-  const db = await GBZBase.open(new LocalFile(path.join(dataDir, file)))
+  const db = await openSampled(file)
   const subgraph = await subgraphInInterval(
     db,
     { contig, ...(sample === undefined ? {} : { sample }) },
@@ -168,15 +169,15 @@ describe('companion haplotype index', () => {
     return subgraph.alignments().map(a => ({ ...a, start: undefined }))
   }
 
-  it('names haplotypes exactly as the embedded tables do', async () => {
-    const embedded = await GBZBase.open(new LocalFile(graph))
+  it('names haplotypes the same with or without anchors', async () => {
+    const sampled = await openSampled('micb-kir3dl1.gbz.db')
     const withCompanion = await GBZBase.open(new LocalFile(graph), {
       haplotypeIndex: new LocalFile(companion),
     })
     expect(withCompanion.hasHaplotypeIndex).toBe(true)
     expect(await withCompanion.haplotypeSampleInterval()).toBe(1000)
     expect(await alignmentsWith(withCompanion)).toEqual(
-      await alignmentsWith(embedded),
+      await alignmentsWith(sampled),
     )
   })
 
@@ -213,9 +214,7 @@ function parseSteps(body: string) {
 
 describe('named walks in output', () => {
   it('list every resolved W line and JSON path in the haplotype direction', async () => {
-    const db = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
-    )
+    const db = await openSampled('micb-kir3dl1.gbz.db')
     const subgraph = await subgraphInInterval(
       db,
       { sample: 'GRCh38', contig: 'chr6' },
@@ -283,9 +282,7 @@ describe('a forward-only haplotype index', () => {
 
 describe('keepHaplotypes', () => {
   it('keeps the reference and the wanted walks with only the nodes they visit', async () => {
-    const db = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
-    )
+    const db = await openSampled('micb-kir3dl1.gbz.db')
     const subgraph = await subgraphInInterval(
       db,
       { sample: 'GRCh38', contig: 'chr6' },

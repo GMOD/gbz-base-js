@@ -2,11 +2,10 @@ import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it, vi } from 'vitest'
 
+import { openSampled, sampledCompanion } from './fixtures.ts'
 import { main } from '../src/cli.ts'
-import { GBZBase } from '../src/db.ts'
 import { encodeNode } from '../src/gbwt/node.ts'
 import { reverseComplement } from '../src/gbwt/sequence.ts'
 import { pairAlignments, pairCigar } from '../src/pairAlignment.ts'
@@ -365,9 +364,7 @@ describe('pairAlignments inside a large private stretch', () => {
 
 describe('Subgraph.pairAlignments', () => {
   const micbWindow = async () => {
-    const db = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
-    )
+    const db = await openSampled('micb-kir3dl1.gbz.db')
     const subgraph = await subgraphInInterval(
       db,
       { sample: 'GRCh38', contig: 'chr6' },
@@ -503,6 +500,8 @@ describe('gbz-base-query --stack', () => {
     try {
       await main([
         path.join(dataDir, 'micb-kir3dl1.gbz.db'),
+        '--haplotype-index',
+        sampledCompanion('micb-kir3dl1.gbz.db'),
         '--sample',
         'GRCh38',
         '--contig',

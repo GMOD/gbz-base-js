@@ -3,6 +3,7 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it, vi } from 'vitest'
 
+import { openSampled } from './fixtures.ts'
 import { checkResolvedRecord, walkBack } from './walkBack.ts'
 import { GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode, nodeId } from '../src/gbwt/node.ts'
@@ -153,10 +154,8 @@ describe('anchor rows in the companion', () => {
     expect(await micb.haplotypeAnchorSpacing()).toBe(2500)
     const split = await openSplit()
     expect(await split.haplotypeAnchorSpacing()).toBe(300)
-    const embedded = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
-    )
-    expect(await embedded.haplotypeAnchorSpacing()).toBeUndefined()
+    const sampled = await openSampled('micb-kir3dl1.gbz.db')
+    expect(await sampled.haplotypeAnchorSpacing()).toBeUndefined()
   })
 
   it('name the first node and the most visited node before every multiple of the spacing on each indexed path, one row per visit in both orientations', async () => {
@@ -474,10 +473,8 @@ describe('the anchored walk', () => {
       31501000,
       { keep },
     )
-    const embedded = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
-    )
-    const plain = await embedded.getSubgraphForRange(
+    const sampled = await openSampled('micb-kir3dl1.gbz.db')
+    const plain = await sampled.getSubgraphForRange(
       chr6Name,
       31500000,
       31501000,

@@ -40,7 +40,7 @@ const subgraph = await db.getSubgraphForRange(
 Coordinates are 0-based half-open offsets along the path. The path is a PanSN
 `sample#haplotype#contig` string, a bare contig, or
 `{ sample, haplotype, contig }`. `getAlignmentsForRange` and
-`getSubgraphForRange` name the walks when the database has a haplotype index.
+`getSubgraphForRange` name the walks when opened with a haplotype index.
 
 | option       | description                                                          |
 | ------------ | -------------------------------------------------------------------- |

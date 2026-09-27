@@ -68,9 +68,9 @@ equivalent.
 ## Haplotype index
 
 Without a haplotype index, a query returns each walk unnamed. Build one with
-`gbz-haplotype-index`, into the database or into a companion file
-([naming haplotypes](docs/haplotype-index.md)). With an index, `keep` restricts
-a query to chosen haplotypes.
+`gbz-haplotype-index` (`cargo install gbz-haplotype-index`) as a companion file
+beside the database ([naming haplotypes](docs/haplotype-index.md)). With an
+index, `keep` restricts a query to chosen haplotypes.
 
 ```ts
 const db = await GBZBase.open(new RemoteFile(graphUrl), {

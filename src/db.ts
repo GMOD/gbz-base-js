@@ -192,12 +192,15 @@ export class GBZBase {
   private tagCache: Promise<Map<string, string>> | undefined
   private pathCache: Promise<GbzPath[]> | undefined
   private pathMapCache: Promise<Map<number, GbzPath>> | undefined
-  private indexTags: Map<string, string> | undefined
+  private indexTags = new Map<string, string>()
 
   readonly sqlite: SqliteDatabase
-  readonly index: SqliteDatabase
+  readonly index: SqliteDatabase | undefined
 
-  private constructor(sqlite: SqliteDatabase, index: SqliteDatabase) {
+  private constructor(
+    sqlite: SqliteDatabase,
+    index: SqliteDatabase | undefined,
+  ) {
     this.sqlite = sqlite
     this.index = index
   }
@@ -210,13 +213,13 @@ export class GBZBase {
     }
     const index = haplotypeIndex
       ? await SqliteDatabase.open(haplotypeIndex, pagerOptions)
-      : sqlite
+      : undefined
     const db = new GBZBase(sqlite, index)
     const version = await db.tag('version')
     if (version !== SCHEMA_VERSION) {
       throw new SchemaVersionError(version)
     }
-    if (haplotypeIndex) {
+    if (index) {
       for (const table of ['Tags', 'HaplotypeSamples', 'HaplotypeLengths']) {
         index.rootPage(table)
       }
@@ -235,12 +238,7 @@ export class GBZBase {
           `haplotype index was built for a graph with ${indexedNodes} nodes but this one has ${nodes}`,
         )
       }
-    }
-    if (db.hasHaplotypeIndex) {
-      const orientations = await db.haplotypeIndexTag(
-        'haplotype_index_orientations',
-      )
-      if (orientations === 'forward') {
+      if (db.indexTags.get('haplotype_index_orientations') === 'forward') {
         throw new ForwardOnlyIndexError()
       }
     }
@@ -487,25 +485,25 @@ export class GBZBase {
   }
 
   get hasHaplotypeIndex() {
-    return (
-      this.index.has('HaplotypeSamples') && this.index.has('HaplotypeLengths')
-    )
+    return this.index !== undefined
   }
 
-  private async haplotypeIndexTag(key: string) {
-    return this.indexTags ? this.indexTags.get(key) : await this.tag(key)
+  private get companion() {
+    if (!this.index) {
+      throw new Error('no haplotype index was opened with this database')
+    }
+    return this.index
   }
 
   async haplotypeSampleInterval() {
-    const value = await this.haplotypeIndexTag('haplotype_index_interval')
+    const value = this.indexTags.get('haplotype_index_interval')
     return value === undefined ? undefined : Number(value)
   }
 
   async haplotypeAnchorSpacing() {
-    const value =
-      this.hasHaplotypeIndex && this.index.has('HaplotypeAnchors')
-        ? await this.haplotypeIndexTag('haplotype_index_anchor_spacing')
-        : undefined
+    const value = this.index?.has('HaplotypeAnchors')
+      ? this.indexTags.get('haplotype_index_anchor_spacing')
+      : undefined
     return value === undefined ? undefined : Number(value)
   }
 
@@ -513,13 +511,13 @@ export class GBZBase {
     pathHandle: number,
     anchorOffset: number,
   ): Promise<HaplotypeAnchor | undefined> {
-    const key = await this.index.indexSeekLE('HaplotypeAnchors', [
+    const key = await this.companion.indexSeekLE('HaplotypeAnchors', [
       pathHandle,
       anchorOffset,
     ])
     const row =
       key?.[0] === pathHandle && key[1] === anchorOffset
-        ? await this.index.byRowid(
+        ? await this.companion.byRowid(
             'HaplotypeAnchors',
             num(key[2], 'HaplotypeAnchors rowid'),
           )
@@ -551,7 +549,7 @@ export class GBZBase {
 
   async haplotypeSamplesInRange(minHandle: number, maxHandle: number) {
     const samples: HaplotypeSample[] = []
-    for await (const key of this.index.indexScanFrom('HaplotypeSamples', [
+    for await (const key of this.companion.indexScanFrom('HaplotypeSamples', [
       minHandle,
       0,
     ])) {
@@ -559,7 +557,7 @@ export class GBZBase {
       if (node > maxHandle) {
         break
       }
-      const row = await this.index.byRowid(
+      const row = await this.companion.byRowid(
         'HaplotypeSamples',
         num(key[2], 'HaplotypeSamples rowid'),
       )
@@ -571,11 +569,14 @@ export class GBZBase {
   }
 
   async haplotypeSampleAt(node: number, offset: number) {
-    const key = await this.index.indexSeekLE('HaplotypeSamples', [node, offset])
+    const key = await this.companion.indexSeekLE('HaplotypeSamples', [
+      node,
+      offset,
+    ])
     if (key?.[0] !== node || key[1] !== offset) {
       return undefined
     }
-    const row = await this.index.byRowid(
+    const row = await this.companion.byRowid(
       'HaplotypeSamples',
       num(key[2], 'HaplotypeSamples rowid'),
     )
@@ -583,7 +584,7 @@ export class GBZBase {
   }
 
   async haplotypeLength(pathHandle: number) {
-    const row = await this.index.byRowid('HaplotypeLengths', pathHandle)
+    const row = await this.companion.byRowid('HaplotypeLengths', pathHandle)
     return row ? num(row[1], 'HaplotypeLengths.length') : undefined
   }
 

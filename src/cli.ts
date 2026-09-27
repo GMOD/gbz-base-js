@@ -473,10 +473,9 @@ export async function main(argv: string[]) {
   }
   if (args.stats) {
     const { fetches, bytesFetched } = db.sqlite.pager
-    const index =
-      db.index === db.sqlite
-        ? ''
-        : ` (haplotype index: ${db.index.pager.fetches} fetches, ${db.index.pager.bytesFetched} bytes)`
+    const index = db.index
+      ? ` (haplotype index: ${db.index.pager.fetches} fetches, ${db.index.pager.bytesFetched} bytes)`
+      : ''
     const {
       orderedAlignments,
       lcsAlignments,

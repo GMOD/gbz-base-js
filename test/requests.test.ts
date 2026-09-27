@@ -3,6 +3,7 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
+import { sampledCompanion } from './fixtures.ts'
 import { GBZBase } from '../src/db.ts'
 import { subgraphInInterval } from '../src/query.ts'
 
@@ -33,7 +34,10 @@ describe('request pattern', () => {
         path.join(import.meta.dirname, 'data', 'micb-kir3dl1.gbz.db'),
       ),
     )
-    const db = await GBZBase.open(source, { blockSize: 16384 })
+    const db = await GBZBase.open(source, {
+      blockSize: 16384,
+      haplotypeIndex: new LocalFile(sampledCompanion('micb-kir3dl1.gbz.db')),
+    })
     expect(source.requests).toEqual([[0, 16384]])
     const subgraph = await subgraphInInterval(
       db,
