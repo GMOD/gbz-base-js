@@ -59,7 +59,7 @@ and leaves a subgraph of nodes and edges.
 `keep` narrows the window to the reference walk, the walks the predicate
 accepts, and the nodes those walks visit, so the result contains that set's
 private sequence and no other. It throws without a haplotype index. On a
-companion with anchors it takes a faster route
+companion with anchors, the reader reads only the kept haplotypes
 ([haplotype-index.md](haplotype-index.md#the-anchored-walk)).
 
 `context` does not change how many records `getAlignmentsForRange` returns,
@@ -80,15 +80,15 @@ concatenates the records, which is safe because a record's `refStart` and
 `refEnd` are offsets on the whole path.
 
 `getSubgraphForRange` returns a `Subgraph`, and two disjoint fragments do not
-merge into one graph, so it answers for the first fragment overlapping the
-window, clamped to it. It returns `undefined` when the path is unknown or no
-fragment overlaps the window. `subgraph.referenceInterval` is the reference walk
-the subgraph holds; it runs to node boundaries and through `context`, so it is
-wider than the window on both sides. `pathFragmentsForRange` returns the
-fragment bounds, and `hasPath` checks whether a path exists.
+merge into one graph, so it returns the subgraph for the first fragment
+overlapping the window, clamped to it. It returns `undefined` when the path is
+unknown or no fragment overlaps the window. `subgraph.referenceInterval` is the
+reference walk the subgraph holds; it runs to node boundaries and through
+`context`, so it is wider than the window on both sides. `pathFragmentsForRange`
+returns the fragment bounds, and `hasPath` checks whether a path exists.
 
-A path that exists but was never indexed for random access throws, because the
-database needs rebuilding to answer it.
+A query on a path that exists but was never indexed for random access throws,
+because the database needs rebuilding to answer it.
 
 ## Pair alignments
 
@@ -123,8 +123,8 @@ line requires.
 
 `toSubgraphJson` writes upstream's format field for field, the output of
 `gbz-base query --format json`, and the
-[oracle tests](internals.md#fidelity-to-upstream) hold it to that. Use it when
-something downstream already parses the format.
+[oracle tests](internals.md#fidelity-to-upstream) fail if it differs. Use it
+when something downstream already parses the format.
 
 `toCompactSubgraph` writes this package's own format, the same subgraph as typed
 arrays:
@@ -261,11 +261,11 @@ reference, which is about half the contigs in a graph like HPRC's, so `open`
 throws `ForwardOnlyIndexError` instead of returning half-named results. Rebuild
 the companion without `--forward-only`.
 
-`SubgraphLimitError` carries the `limit` it hit and, for an interval query, the
-`windowBp` requested and the `walkedBp` covered before it stopped. A caller can
-use them to tell a limit set slightly too low from one hit early in a window
-inside a huge snarl. Raise `limit`, or use `snarls: 'contained'` in place of
-`'overlapping'`.
+`SubgraphLimitError` carries the `limit` the query reached and, for an interval
+query, the `windowBp` requested and the `walkedBp` covered before it stopped. A
+caller can use them to tell a limit set slightly too low from one hit early in a
+window inside a huge snarl. Raise `limit`, or use `snarls: 'contained'` in place
+of `'overlapping'`.
 
 Other failures throw a plain `Error` with a message: a path name that matches
 nothing, a path that exists but was never indexed for random access, `keep`

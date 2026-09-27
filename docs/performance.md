@@ -46,8 +46,8 @@ routes.
 
 `context` is the graph context in bp past the window, 100 by default. It does
 not change how many records come back, because the reader joins the pieces of a
-walk that leaves the subgraph, so it trades nodes read against pieces to
-identify and join.
+walk that leaves the subgraph. A larger value reads more nodes and leaves fewer
+pieces to identify and join.
 
 A window inside a snarl much larger than itself, such as MHC class II on the
 HPRC graph, comes back as 1.1M pieces at `context: 0` and as 464 walks at
@@ -97,9 +97,9 @@ The 200 kb chr20 window, with latency added to each read:
 | 80 ms        | 897 ms | 1049 ms |
 
 Of the nine requests, `(897 − 465) / 50 ≈ 8.6` are serial. At a realistic
-round-trip time, about two thirds of the query waits on the network, so cutting
-round trips saves more than faster decoding would. The block size and the
-reference-walk prefetch exist to cut round trips.
+round-trip time, the query spends about two thirds of its time waiting on the
+network, so cutting round trips saves more than faster decoding would. The block
+size and the reference-walk prefetch exist to cut round trips.
 
 ## Windows at cohort scale
 
@@ -120,7 +120,7 @@ one process so that the second run makes no requests:
 | total                   | 13.18 s | 5.49 s           |
 
 `extractPaths` and `alignments` take 87% of the warm query and make no requests,
-so no window costs less than they do.
+so caching cannot bring this window below the 4.76 s they take.
 
 The warm column re-runs the identical window, which a user panning never does. A
 window the session has not visited still fetches:
@@ -156,13 +156,13 @@ Warm, at the same locus, all 464 haplotypes, `context: 1000`, contained snarls:
 | 90 kb  | 464       | 0.10 s   | 0            | 0 / 0                    | 95 kb           |
 | 180 kb | 464       | 0.55 s   | 0            | 0 / 0                    | 166 kb          |
 
-Below about 45 kb the walks arrive in pieces, up to 1,130 fragments for 464
-haplotypes, and most pieces are shorter than the companion's sampling interval
-of 16,384 bp. Such a piece holds no sample, so naming it falls back to scanning
-the index and walking to a sample. From 45 kb up the reader joins the pieces,
-the median fragment is 76 kb or longer, and every fragment contains a sample, so
-`identifyPaths` makes no seek, walks no step and runs an order of magnitude
-faster.
+Below about 45 kb the reader extracts the walks in pieces, up to 1,130 fragments
+for 464 haplotypes, and most pieces are shorter than the companion's sampling
+interval of 16,384 bp. Such a piece holds no sample, so naming it falls back to
+scanning the index and walking to a sample. From 45 kb up the reader joins the
+pieces, the median fragment is 76 kb or longer, and every fragment contains a
+sample, so `identifyPaths` makes no seek, walks no step and runs an order of
+magnitude faster.
 
 The threshold applies to the fragment, not the window: a 20 kb window is longer
 than the interval, but its median fragment is 4.5 kb, so it is still slow. The

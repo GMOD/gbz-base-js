@@ -30,7 +30,7 @@ interval. Fragments the haplotype index could not name also stay separate.
 
 | field                 | meaning                                                                  |
 | --------------------- | ------------------------------------------------------------------------ |
-| `refStart` / `refEnd` | the record's span on the reference path, running to node boundaries      |
+| `refStart` / `refEnd` | the record's span on the reference path                                  |
 | `cigar`               | the alignment to the reference                                           |
 | `strand`              | `-` when the haplotype crosses the window against the reference          |
 | `path`                | the walk as node handles, in subgraph order                              |
@@ -46,9 +46,7 @@ common subsequence of the two walks' nodes, with the diverging stretches scored
 using vg's match, mismatch and gap parameters. The CIGAR compares no bases: vg's
 scoring sizes the `M` for the stretch between two shared nodes.
 
-`strand` is `-` when the haplotype runs through the window in the opposite
-direction to the reference, so a pair of paths reports the same strand whichever
-of the two is the reference.
+A pair of paths reports the same `strand` whichever of the two is the reference.
 
 For a joined record, `path` is the pieces concatenated without the private
 stretch between them, so it is not a contiguous walk through the graph.
@@ -108,13 +106,14 @@ walks of node handles, and takes a `minMatch` option in addition.
 A stretch of nodes both walks visit is a run of `=`. A record is the
 best-scoring collinear chain of those stretches, found the way minimap2 chains
 its seeds. The next record is the best chain over what no accepted record uses
-on either haplotype, so a second copy of a repeat finds its target taken and an
-inversion finds its target free.
+on either haplotype. A second copy of a repeat therefore cannot align to target
+bases an earlier record used, and an inversion can align to bases the forward
+record left unused.
 
-A chain pays for the gap it spans out of the bases it matches, so by default
-only the window bounds how far a record reaches. `maxGap` caps the private bp a
-record skips on either walk, which bounds the work on a wide window. A record
-matching fewer than 100 bases is dropped.
+The chain score subtracts the cost of each gap from the bases matched, so by
+default only the window limits how far a record reaches. `maxGap` caps the
+private bp a record skips on either walk, which bounds the work on a wide
+window. A record matching fewer than 100 bases is dropped.
 
 ### Comparing bases between shared nodes
 
@@ -135,7 +134,7 @@ cannot hold one.
 
 Between a walk's first and last visit to a node it visits more than once, no
 shared node anchors the alignment. A graph folds the copies of a tandem repeat
-onto shared nodes, and that folding does not say which copy in one haplotype
+onto shared nodes, and the folding does not record which copy in one haplotype
 pairs with which copy in the other, so the reader decides from the bases,
 through the 15-mer chain. Pairing the copies as the graph does instead would
 pair a 169 kb insertion with a 169 kb deletion inside one record of the HPRC
@@ -145,11 +144,11 @@ amylase window, where the copies line up one array apart.
 
 A base aligns in one record at most. In a tandem array whose copies run both
 ways, one query copy can align forward to one target copy and inverted to
-another, and both are homology. Where two records align the same bases, the one
-scoring higher over the shared stretch keeps them, and the other gives them up
-as an insertion and a deletion. In the HPRC amylase window that stretch is
-58,204 query bases of NA18608#2 against HG00232#1, where the inverted record
-scores 93,009 and the forward one 6,271.
+another, and both are homology. Where two records align the same bases, the
+reader assigns them to the record that scores higher over the shared stretch,
+and rewrites them in the other as an insertion and a deletion. In the HPRC
+amylase window that stretch is 58,204 query bases of NA18608#2 against
+HG00232#1, where the inverted record scores 93,009 and the forward one 6,271.
 
 A tie goes to the record with more bases on shared nodes. Ties arise at an
 inversion that a walk takes through shared nodes, because `pairAlignments` also
@@ -166,8 +165,8 @@ PAF tag `ns:i:`.
 
 `queryStart`/`queryEnd` and `targetStart`/`targetEnd` are in each haplotype's
 own coordinates. The CIGAR of a `-` record reads along the target, as minimap2
-writes one. A haplotype the window holds as several walks gives records per
-walk, and no record spans two walks.
+writes one. When the window holds a haplotype as several walks, the reader
+aligns each walk separately, and no record spans two walks.
 
 ### Without comparing bases
 
@@ -200,5 +199,5 @@ gbz-base-query graph.gbz.db --haplotype-index index.db --sample GRCh38 --contig 
 
 A window holds no contig lengths. `--contig-lengths` reads PAF columns 2 and 7
 from a chrom.sizes or `.fai` file, keyed by contig or by
-`sample#haplotype#contig`. Without it, each record's own end fills those
+`sample#haplotype#contig`. Without it, the CLI writes each record's end in those
 columns.

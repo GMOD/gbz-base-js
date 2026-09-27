@@ -20,14 +20,13 @@ narrow fix: explicit `u64` fields in the header `Payload` structs, so they
 serialize at the same width everywhere. The maintainer replied that every use of
 `usize` in the crate is a potential bug of the same kind, and that a 32-bit
 gbz-base handling human-scale graphs would need more than type changes to be
-trustworthy. The PR was closed unmerged in May 2026. The objection is fair:
-patching the structs that one PR found would give a build that reads the test
-fixtures and misreads the next field someone adds.
+trustworthy. The PR was closed unmerged in May 2026. Patching only the structs
+that one PR found would give a build that reads the test fixtures and misreads
+the next field someone adds, so the objection holds.
 
-The 4 GB address space of `wasm32` raises the same concern from the other side.
-This reader never holds a whole graph in memory, but a port whose offsets are
-all 32-bit has no headroom for anything that would, and the HPRC v2.1 databases
-are 5-10 GB on disk.
+The 4 GB address space of `wasm32` is a second obstacle. This reader never holds
+a whole graph in memory, but a port whose offsets are all 32-bit has no headroom
+for anything that would, and the HPRC v2.1 databases are 5-10 GB on disk.
 
 ## wasm64 and SQLite
 
@@ -58,7 +57,7 @@ JavaScript numbers cover the values these files hold. It also gives:
   binary to ship or instantiate, and a stack trace that points into readable
   code when a database is malformed.
 - **Unmodified upstream.** Stock `gbz-base construct` builds the databases, and
-  the [oracle tests](internals.md#fidelity-to-upstream) hold the output to
+  the [oracle tests](internals.md#fidelity-to-upstream) compare the output with
   upstream's byte for byte.
 
 The cost is a reimplementation: a change to the upstream format has to be
@@ -68,8 +67,8 @@ followed by hand, and the oracle tests fail when one is missed.
 
 Some GMOD packages, such as bgzf-filehandle and bbi-js, ship a small
 hand-written wasm kernel for inflate. The benchmarks here rule that out, because
-no routine is large enough to repay the call boundary. The two routines shaped
-like a kernel, timed over the 200 kb chr20 window in
+no routine takes enough time to outweigh the cost of calling into wasm. The two
+routines shaped like a kernel, timed over the 200 kb chr20 window in
 [performance.md](performance.md#where-a-windows-time-goes), are `decodeSequence`
 at 6.9 ms for 408,976 bases and `GbwtRecord.decompressArrays` at 19.9 ms for
 693,986 entries: 27 ms of a ~400 ms query, spread across 11,886 separate

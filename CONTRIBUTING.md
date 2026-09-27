@@ -8,69 +8,74 @@ pnpm test
 pnpm build
 ```
 
-Use `pnpm version patch/minor/major` to release — it runs lint, format, types,
-tests and build, regenerates CHANGELOG.md with git-cliff, then pushes the
-version tag which triggers the publish workflow.
+`pnpm test` runs vitest in watch mode; `pnpm test --run` runs the suite once.
+
+## Releasing
+
+`pnpm version patch`, `minor` or `major` runs lint, the format check, the type
+check, the tests and the build, regenerates CHANGELOG.md with git-cliff, and
+pushes the version tag. The tag triggers the publish workflow.
+
+The workflow publishes to npm with trusted publishing (OIDC, no stored token),
+which needs `id-token: write` permission. To set up trusted publishing for the
+package, run
+`npm trust github gbz-base --file publish.yml --repo GMOD/gbz-base-js`, which
+requires npm 11.10.0 or later and 2FA.
+
+After the npm publish succeeds, the `release` job creates the GitHub release for
+the tag, with notes taken from that version's CHANGELOG.md section by
+`scripts/release-notes.sh`. Run the script with a version to preview the notes.
+
+## The data-flow diagram
 
 `docs/img/dataflow.svg` is generated from `docs/img/dataflow.dot` and committed,
-since GitHub does not render DOT. If you edit the `.dot`, re-render it in the
-same commit:
+because GitHub does not render DOT. Re-render it in the same commit as any edit
+to the `.dot`:
 
 ```sh
 dot -Tsvg docs/img/dataflow.dot -o docs/img/dataflow.svg
 ```
 
-Nothing checks this — graphviz is not a dependency and different versions emit
-different SVG bytes, so a staleness check would fail on toolchain drift rather
-than on a stale diagram.
+No check enforces this. Graphviz is not a dependency, and different versions
+emit different SVG bytes, so a staleness check would fail whenever the toolchain
+changed.
 
 ## Test data
 
-`test/data/*.gbz.db` are real gbz-base databases built by the upstream Rust
-`gbz-base` tool, and `test/data/oracle/` holds that tool's own output for a
-fixed set of queries — `test/oracle.test.ts` asserts this reader agrees with it
-byte for byte. `test/data/oracle/generate.sh` regenerates those files, and needs
-the Rust tool on your PATH; nothing in CI runs it, so a regeneration has to be
-committed.
+`test/data/*.gbz.db` are databases built by the upstream Rust `gbz-base` tool.
+`test/data/oracle/` holds that tool's output for a fixed set of queries, and
+`test/oracle.test.ts` requires this reader's output to match it byte for byte.
+`test/data/oracle/generate.sh` regenerates the oracle and needs the Rust tool on
+your PATH. CI never runs it, so commit a regenerated oracle.
 
-`test/data/split-contig.gfa` is the source of the one fixture whose reference
-contig is stored as two path fragments with a gap between them. Its database is
-`vg gbwt -G split-contig.gfa --gbz-format -g split-contig.gbz` followed by
-`gbz-base construct split-contig.gbz -o split-contig.gbz.db`, and its companion
-is
-`gbz-haplotype-index --interval 200 --output split-contig.haplotype-index.db split-contig.gbz split-contig.gbz.db`.
+Install upstream with
+`cargo install --git https://github.com/jltsiren/gbz-base`. On a Mac, the
+`quay.io/vgteam/vg` container is the easiest way to get `vg`.
 
-`test/data/looping-walk.gfa` is the source of the fixture whose haplotype walks
-loop through or reorder a reference segment, so their CIGARs come from the
-weighted LCS rather than from ordered matching. Its database is built with the
-same two commands, and it has no companion. Upstream builds with
-`cargo install --git https://github.com/jltsiren/gbz-base`, and
-`quay.io/vgteam/vg` is the easiest `vg` on a Mac.
+Two fixtures come from GFA files in `test/data/`:
 
-`tools/haplotype-index/` is the Rust helper that writes the haplotype index some
-of those databases carry. It is shipped in the npm tarball as source only —
-nothing here builds it.
+- `split-contig.gfa` has a reference contig stored as two path fragments with a
+  gap between them. Build its database and companion with:
+
+  ```sh
+  vg gbwt -G split-contig.gfa --gbz-format -g split-contig.gbz
+  gbz-base construct split-contig.gbz -o split-contig.gbz.db
+  gbz-haplotype-index --interval 200 --output split-contig.haplotype-index.db split-contig.gbz split-contig.gbz.db
+  ```
+
+- `looping-walk.gfa` has haplotype walks that loop through or reorder a
+  reference segment, so their CIGARs come from the weighted LCS instead of from
+  ordered matching. Build its database with the same `vg` and `gbz-base`
+  commands; it has no companion.
+
+`tools/haplotype-index/` is the Rust tool that writes the haplotype index. The
+npm tarball includes it as source, and nothing in this repo builds it.
 
 ## Measuring
 
 `scripts/measure-windows.mjs` times a set of windows against a database and
-reports requests, bytes and the route each query took; `scripts/time-phases.mjs`
-splits one query into its phases. The tables in
-[docs/performance.md](docs/performance.md) come from them, and `--stats` on
-`gbz-base-query` reports the same counters for a single query.
-`scripts/chains-dump.mjs` and `scripts/verify-chr20.ts` are debugging aids for
-identification.
-
-## Publishing
-
-Releases publish automatically via GitHub Actions using npm trusted publishing
-(OIDC, no stored token). The workflow requires `id-token: write` permissions.
-
-To set up trusted publishing for this package:
-`npm trust github gbz-base --file publish.yml --repo GMOD/gbz-base-js` (requires
-npm >=11.10.0 and 2FA).
-
-Once npm publish succeeds, the `release` job creates the GitHub release for the
-tag, taking its notes from that version's CHANGELOG.md section — which
-`scripts/release-notes.sh` extracts, so run that with a version to preview the
-notes a release will carry.
+reports requests, bytes and the route each query took. `scripts/time-phases.mjs`
+splits one query into its phases. Together they produced the tables in
+[docs/performance.md](docs/performance.md), and `gbz-base-query --stats` reports
+the same counters for a single query. `scripts/chains-dump.mjs` and
+`scripts/verify-chr20.ts` help debug identification.

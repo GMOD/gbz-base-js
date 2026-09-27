@@ -16,11 +16,12 @@ with `--keep`, `--cigar` and `--stats`.
 
 `editsAgainst` first matches each shared node to its earliest usable occurrence
 on the reference walk. That takes linear time and is weight-optimal whenever
-every shared node can be placed in order. Only a walk that visits shared nodes
-out of reference order falls back to `weightedLcs`, a node-length-weighted
-longest common subsequence. On the HPRC graph only AMY1 reaches the fallback:
-keeping all 231 samples sends 100 of 957 records to it. KIV-2, RHD and CYP2D6
-send none, and neither do MHC class II and SMN1/2 with 14 samples kept.
+every shared node can be placed in order. Only for a walk that visits shared
+nodes out of reference order does it fall back to `weightedLcs`, a
+node-length-weighted longest common subsequence. On the HPRC graph only AMY1
+needs the fallback: with all 231 samples kept, 100 of its 957 records use it.
+KIV-2, RHD and CYP2D6 have none, and neither do MHC class II and SMN1/2 with 14
+samples kept.
 
 ### Chaining shared pairs in linear space
 
@@ -37,9 +38,9 @@ the best column at which to cut the second, Hirschberg-style, so memory stays
 linear in the walks. The AMY1 fragments of both haplotypes align in 3-8 ms, and
 the whole query peaks at 230-294 MB.
 
-Two alternatives lost on the same fragments. A linear-space Hirschberg DP took
-419 and 155 ms. Anchoring on nodes unique to both walks left a gap of 11,375 by
-850 steps still to align.
+Two alternatives did worse on the same fragments. A linear-space Hirschberg DP
+took 419 and 155 ms. Anchoring on nodes unique to both walks left a gap of
+11,375 by 850 steps still to align.
 
 The chaining search and upstream's Myers search are both weight-optimal, but
 they can pick different alignments of equal weight. The `looping-walk` fixture's
@@ -92,17 +93,18 @@ output identical and took the walks phase from 8.2 to 6.6 s and CPU from 9.2 to
 `extractPaths` reads a successor on every step. Held as an `Int32Array` per
 node, forty thousand separate buffers for a large window, each read chases a
 pointer into scattered memory. Held as one flat pair of arrays indexed by
-`rowStart[node] + offset`, each read is an add and a load. `orderedMatches` had
-allocated a closure per step for `Array.find` and a two-element array per match,
-and scanned each reference node's occurrence list from the front, which a repeat
-locus makes long. Both now avoid those costs.
+`rowStart[node] + offset`, each read is an add and a load. Before the change,
+`orderedMatches` allocated a closure per step for `Array.find` and a two-element
+array per match, and scanned each reference node's occurrence list from the
+front, which a repeat locus makes long. It now allocates neither the closure nor
+the array.
 
 Measured warm on the five tutorial loci, both files hosted, `context: 1000`,
 contained snarls. The benchmark opens both builds in one process and alternates
-them, taking the median of five runs each; runs in separate processes credited
-the change with machine load and reported 1.4-2.1x. Absolute times are higher
-than in a single-build run because the two databases share the process's page
-cache.
+them, taking the median of five runs each; timing the builds in separate
+processes attributed machine load to the change and reported 1.4-2.1x. Absolute
+times are higher than in a single-build run because the two databases share the
+process's page cache.
 
 | Window       | Nodes  | Walks | Steps | Before   | After   | Ratio |
 | ------------ | ------ | ----- | ----- | -------- | ------- | ----- |
@@ -140,8 +142,8 @@ window from [performance.md](performance.md#where-a-windows-time-goes):
 Node sequences pack 2.86x smaller, but a consumer drawing the graph wants the
 string for every node anyway. CIGARs packed into one `Int32Array` per path clone
 more slowly than the strings, because 178 small typed arrays cost more to clone
-than 178 strings. So `nodeSequences` and `cigar` stay strings. The CIGAR phase
-spends 103 ms computing edits and 2 ms building the string, so its
+than 178 strings. `nodeSequences` and `cigar` therefore stay strings. The CIGAR
+phase spends 103 ms computing edits and 2 ms building the string, so its
 representation does not matter.
 
 ## What is left
@@ -161,12 +163,12 @@ The locus rows were measured with the visited set still in `walkFromRow`.
 
 SMN1/2 is the slow outlier, at 35 s and 754 MB with only 14 samples kept. One
 haplotype's anchored walk passes its bp bound inside the inverted segmental
-duplication, so the whole query falls back to the sampled route and identifies
-paths across 18,534 samples. A walk able to cross that inversion would avoid the
-fallback; nobody has tried one yet.
+duplication, so the reader falls back to the sampled route for the whole query
+and identifies paths across 18,534 samples. A walk able to cross that inversion
+would avoid the fallback; nobody has tried one yet.
 
 A fragment shorter than the companion's sampling interval holds no sample, and
-identifying it scans the index and misses 99.91% of the time
+the index scans to identify such fragments miss 99.91% of the time
 ([performance.md](performance.md#why-a-small-window-is-not-a-cheap-one)).
 Skipping the scan for such a fragment and walking directly would remove that
 cost, and needs a change to this reader only.

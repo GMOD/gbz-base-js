@@ -16,8 +16,8 @@ the window, since a contig can be stored as several path fragments with gaps
 between them. `getAlignmentsForRange` concatenates the records from each.
 
 **`pathPosition`** finds the path row and seeks `ReferenceIndex` for the GBWT
-position at the window's start, where the reference walk begins. A path that
-exists but was never indexed for random access throws here.
+position at the window's start, where the reference walk begins. A query on a
+path that exists but was never indexed for random access throws here.
 
 **Prefetching the reference walk** makes one range request per run of nearby
 node ids, instead of one per node record the walk is about to read. A reference
@@ -41,9 +41,9 @@ of one haplotype into a record ([alignments.md](alignments.md)).
 
 ## The two naming routes
 
-The diagram branches in the middle, where the reader names the walks. The
-sampled route reads the whole graph in the window, and the anchored route reads
-only a chosen set of haplotypes.
+The diagram branches in the middle, where the reader names the walks. On the
+sampled route the reader names every walk in the window, and on the anchored
+route it reads only a chosen set of haplotypes.
 
 - **Sampled.** `identifyPaths` scans `HaplotypeSamples` for the window's nodes,
   one scan per run of consecutive node ids, and chains each haplotype's
@@ -54,10 +54,10 @@ only a chosen set of haplotypes.
   and walks only the kept paths forward from it. Nothing else is extracted or
   named, so the query's cost follows the size of the set.
 
-The anchored route falls back to the sampled one for the whole window when a
-walk cannot be completed, and `--stats` reports which route ran and why it fell
-back. [haplotype-index.md](haplotype-index.md#the-sampled-walk) describes both
-routes, and [performance.md](performance.md#keeping-a-set-of-haplotypes)
+When a walk on the anchored route cannot be completed, the reader falls back to
+the sampled route for the whole window, and `--stats` reports which route ran
+and why. [haplotype-index.md](haplotype-index.md#the-sampled-walk) describes
+both routes, and [performance.md](performance.md#keeping-a-set-of-haplotypes)
 measures them.
 
 ## Storage
@@ -69,8 +69,8 @@ layer above the pager distinguishes a local file from 10 GB on a server.
 The graph database and the haplotype companion each get a separate pager and
 source, so `--stats` reports their requests and bytes separately.
 
-A query reads a few hundred KB of pages out of a multi-gigabyte database, so
-sequential request latency takes most of its wall-clock time. That latency is
-the reason for the prefetch step, and the reason the numbers in
-[performance.md](performance.md) improve so much once a window's pages are
-cached.
+A window of a few thousand nodes reads a few hundred KB of pages out of a
+multi-gigabyte database, so sequential request latency takes most of its
+wall-clock time. Request latency is the reason for the prefetch step, and the
+reason the numbers in [performance.md](performance.md) improve so much once a
+window's pages are cached.

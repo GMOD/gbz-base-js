@@ -10,7 +10,7 @@ reads.
 
 A pager reads the file in fixed blocks, 64 KiB by default, and caches them, so
 the b-tree descents and index seeks of one query share a handful of range
-requests instead of making one per page. [dataflow.md](dataflow.md) draws the
+requests instead of making one per page. [dataflow.md](dataflow.md) shows the
 path from the query call down to the range request.
 
 ## Fidelity to upstream
