@@ -1,3 +1,25 @@
+## [3.0.0](https://github.com/GMOD/gbz-base-js/compare/v2.8.0...v3.0.0) (2026-09-27)
+
+### Other Changes
+
+- WASM note ([987b0a7](https://github.com/GMOD/gbz-base-js/commit/987b0a725b329ff203bf7e6a5ef4a000e5d0d7a6))
+- Reorganize and tighten the docs ([d17998b](https://github.com/GMOD/gbz-base-js/commit/d17998b2d39905de0b8d03c20123cd02207e48b0))
+- Second prose pass, and CONTRIBUTING ([2ac7f26](https://github.com/GMOD/gbz-base-js/commit/2ac7f262ad748d5d812158a10bdc2e161f0bcf8e))
+- Cut every page to what a reader needs ([591147c](https://github.com/GMOD/gbz-base-js/commit/591147c17dfaf53693b6da5cb99199c0abfa804a))
+- Separate the library from the command line ([f49b74c](https://github.com/GMOD/gbz-base-js/commit/f49b74ccaf3c1c8039ce7d72a23b46c27a7bebdf))
+- Second tropes pass; fix truncated --haplotypes error ([6c18d8a](https://github.com/GMOD/gbz-base-js/commit/6c18d8af773b8d90c6dbbd7359d27506b67c620f))
+- We withdrew gbwt-rs#14; fix the CHM13 chr20 region and HPRC read size ([070cd1b](https://github.com/GMOD/gbz-base-js/commit/070cd1b039f6da95e304cb3a296a6f37ddac39e2))
+- State the gbwt-rs#14 outcome without narrating who said what ([ffcf40a](https://github.com/GMOD/gbz-base-js/commit/ffcf40a3f6063c9d219a1aa87f09500b9e107da4))
+- Cut why-not-wasm to the usize problem and the reader's advantages ([51ccf47](https://github.com/GMOD/gbz-base-js/commit/51ccf47fdcbfa94c80af07418d663e21988d4de0))
+- Simplify why-not-wasm further ([89e3200](https://github.com/GMOD/gbz-base-js/commit/89e3200c7a97e134d8c36b53d445fa3389bdaf84))
+- Fold why-not-wasm into internals ([c66373f](https://github.com/GMOD/gbz-base-js/commit/c66373fa7c00d9114faad82ac47be5ccaee42f9d))
+- Wasm misreads files built on 64-bit machines ([b0d33d9](https://github.com/GMOD/gbz-base-js/commit/b0d33d99e60dc36474d8ff9be140046ee556c9af))
+- Bump deps ([16c3c40](https://github.com/GMOD/gbz-base-js/commit/16c3c40885c900d748859d43a71eaf634daff05c))
+- Upstream names the query path, only the other walks are unknown ([41c13dc](https://github.com/GMOD/gbz-base-js/commit/41c13dcdb007190291ca32939373fd08ff6db521))
+- Haplotype index is a companion file only ([069346f](https://github.com/GMOD/gbz-base-js/commit/069346f90fb6ee006ed54b3b09d771b29ba0165b))
+- HPRC companion build time and memory ([a5c1dea](https://github.com/GMOD/gbz-base-js/commit/a5c1dea01e6011c3c1bd85f0377d55f23d688334))
+- Format the crate README ([a3da15e](https://github.com/GMOD/gbz-base-js/commit/a3da15e912b576ee578e0a9b7241953966ddc31c))
+
 ## [2.8.0](https://github.com/GMOD/gbz-base-js/compare/v2.7.0...v2.8.0) (2026-09-26)
 
 ### Other Changes
