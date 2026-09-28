@@ -362,6 +362,113 @@ describe('a query that uses the keep option', () => {
     }
   })
 
+  // Hides one path's rows at the given anchor nodes of the inversion fixture,
+  // as if the path bypassed those nodes.
+  async function hidingRows(
+    db: GBZBase,
+    pathHandle: number,
+    multiples: number[],
+  ) {
+    const hidden = new Set<number>()
+    for (const k of multiples) {
+      hidden.add(nodeId((await db.haplotypeAnchor(0, k * 65536))!.node))
+    }
+    const original = db.haplotypeSamplesInRange.bind(db)
+    Object.defineProperty(db, 'haplotypeSamplesInRange', {
+      value: (min: number, max: number) =>
+        original(min, max).then(rows =>
+          rows.filter(
+            row =>
+              row.pathHandle !== pathHandle || !hidden.has(nodeId(row.node)),
+          ),
+        ),
+    })
+    return db
+  }
+  const straight = { handle: 2, name: 'HG001#2' }
+  const keepStraight = (name: PathName) =>
+    name.sample === 'HG001' && name.haplotype === 2
+  const inversionWindow = [66800, 68200] as const
+
+  it('walks a chosen path seen at a wider anchor when it bypasses both near ones', async () => {
+    const db = await hidingRows(await openInversion(), straight.handle, [1, 2])
+    for (const context of [0, 1000]) {
+      const { kept, alignments } = await expectParity(
+        db,
+        { sample: 'GRCh38', contig: 'chr1' },
+        ...inversionWindow,
+        { keep: keepStraight, context },
+      )
+      expect(kept.stats.keep?.widerAnchors).toBe(2)
+      expect(
+        alignments.some(a => a.resolved && a.pathHandle === straight.handle),
+      ).toBe(true)
+    }
+  })
+
+  it('pairs a visit to one near anchor with a visit to a wider one on the other side', async () => {
+    const db = await hidingRows(await openInversion(), straight.handle, [1])
+    const { kept, alignments } = await expectParity(
+      db,
+      { sample: 'GRCh38', contig: 'chr1' },
+      ...inversionWindow,
+      { keep: keepStraight, context: 0 },
+    )
+    expect(kept.stats.keep?.fallback).toBeUndefined()
+    expect(kept.stats.keep?.walks['interval: past the far anchor']).toBe(1)
+    expect(alignments.length).toBe(1)
+  })
+
+  it('identifies every walk when a one-sided walk runs on past the stretch', async () => {
+    const db = await hidingRows(await openInversion(), straight.handle, [2])
+    const { kept } = await expectParity(
+      db,
+      { sample: 'GRCh38', contig: 'chr1' },
+      ...inversionWindow,
+      { keep: keepStraight, context: 0 },
+    )
+    expect(kept.stats.keep?.fallback).toMatch(/runs on past the stretch/)
+  })
+
+  it('walks a chosen contig whole when it has a sample in the window and no anchor visit', async () => {
+    const db = await hidingRows(
+      await openInversion(),
+      straight.handle,
+      [0, 1, 2],
+    )
+    const { kept, alignments } = await expectParity(
+      db,
+      { sample: 'GRCh38', contig: 'chr1' },
+      ...inversionWindow,
+      { keep: keepStraight, context: 1000 },
+    )
+    expect(kept.stats.keep?.fallback).toBeUndefined()
+    expect(kept.stats.keep?.walks['whole: endmarker']).toBe(1)
+    expect(alignments.length).toBeGreaterThan(0)
+    expect(
+      alignments.every(a => a.resolved && a.pathHandle === straight.handle),
+    ).toBe(true)
+  })
+
+  it('identifies every walk when a path with no anchor visit is too long to lie between the anchors', async () => {
+    const db = await hidingRows(
+      await openInversion(),
+      straight.handle,
+      [0, 1, 2],
+    )
+    Object.defineProperty(db, 'haplotypeLength', {
+      value: (pathHandle: number) =>
+        Promise.resolve(pathHandle === straight.handle ? 10_000_000 : 138_500),
+    })
+    const { kept } = await expectParity(
+      db,
+      { sample: 'GRCh38', contig: 'chr1' },
+      ...inversionWindow,
+      { keep: name => name.sample === 'HG002', context: 1000 },
+    )
+    expect(kept.stats.keep?.fallback).toMatch(/no visit to the anchors/)
+  })
+
   it('follows a contig off the reference’s end and one that starts after the anchor', async () => {
     const db = await openSplit()
     const chr1 = { sample: 'GRCh38', contig: 'chr1' }

@@ -64,7 +64,7 @@ export type KeepWalkEnd =
 export interface KeepStats {
   spacing: number | undefined
   anchors: [number, number] | undefined
-  // How many anchors out the query looked for paths absent at these two.
+  // How many anchors out the query read on each side of these two.
   widerAnchors: number
   chosenPaths: number
   scans: [number, number][]
@@ -423,9 +423,10 @@ export async function findChosenPieces(input: ChosenPathsInput) {
   }
 
   try {
-    // The anchors on both sides of the window, and every visit to them. A
-    // path with a sample on the subgraph's nodes and no visit to either is
-    // looked for at the next anchors out, up to two on each side.
+    // The anchors on both sides of the window and the next two out on each
+    // side, and every visit to them. A chosen path that bypasses both near
+    // anchor nodes is seen at a wider one, and a path seen at one anchor only
+    // can pair a wider one.
     const spacing = stats.spacing
     if (spacing === undefined) {
       throw new Fallback('the haplotype index has no anchors')
@@ -608,7 +609,12 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       }
       return paired ? 'paired' : 'one-sided'
     }
-    const pathsAtAnchors = new Set([...near, ...far].map(row => row.pathHandle))
+    while (stats.widerAnchors < 2 && (await widenAnchors())) {
+      // keep reading
+    }
+    const pathsAtAnchors = new Set(
+      [...rowsAt.values()].flat().map(row => row.pathHandle),
+    )
     const chosenAtAnchors = [...pathsAtAnchors].filter(chosen)
     stats.chosenPaths = chosenAtAnchors.length
     if (chosenAtAnchors.length > keepTuning.mostChosenPaths) {
@@ -626,7 +632,8 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     // between the outermost ones. A sample elsewhere marks a segmental
     // duplication or a collapsed paralog, where a chosen path can pass the
     // window's nodes without a sample outside every walk. A chosen path with
-    // no visit is walked whole from its start.
+    // no visit is walked whole from its start. A chosen path with no visit
+    // and no sample here stays out of reach.
     const seeds: HaplotypeSample[] = []
     const samples: HaplotypeSample[] = []
     stats.scans = handleRuns([...records.keys()].sort((a, b) => a - b))
@@ -646,17 +653,6 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         .map(s => s.pathHandle)
         .filter(pathHandle => !span.has(pathHandle)),
     )
-    while (
-      unplaced.size > 0 &&
-      stats.widerAnchors < 2 &&
-      (await widenAnchors())
-    ) {
-      for (const pathHandle of unplaced) {
-        if ((await plan(pathHandle)) !== undefined) {
-          unplaced.delete(pathHandle)
-        }
-      }
-    }
     const outerStretch =
       anchorsAfter[anchorsAfter.length - 1]!.pathOffset -
       anchorsBefore[anchorsBefore.length - 1]!.pathOffset
@@ -793,11 +789,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         end !== 'endmarker' &&
         !repaired.has(row.pathHandle)
       ) {
-        let paired = false
-        while (!paired && stats.widerAnchors < 2 && (await widenAnchors())) {
-          paired = (await plan(row.pathHandle, false)) === 'paired'
-        }
-        if (!paired) {
+        if ((await plan(row.pathHandle, false)) !== 'paired') {
           throw new Fallback(
             `chosen path ${row.pathHandle} runs on past the stretch from its visit to one anchor without a visit to the other`,
           )
