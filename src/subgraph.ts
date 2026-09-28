@@ -290,10 +290,10 @@ interface FragmentAlignment {
   weight: number | undefined
   path: number[]
   start: Pos
-  // Indices into the subgraph's paths, in walk order, and the bases each
-  // matched on the reference when aligned alone.
+  // Indices into the subgraph's paths, in walk order, and the bases of each
+  // that the CIGAR aligns when the piece is aligned alone.
   pieces: number[]
-  soloMatched: number[]
+  soloAligned: number[]
   identity:
     | {
         pathHandle: number
@@ -340,7 +340,7 @@ function joinPair(
     path: [...first.path, ...second.path],
     start: first.start,
     pieces: [...first.pieces, ...second.pieces],
-    soloMatched: [...first.soloMatched, ...second.soloMatched],
+    soloAligned: [...first.soloAligned, ...second.soloAligned],
     identity: {
       pathHandle: a.identity!.pathHandle,
       name: a.identity!.name,
@@ -351,12 +351,13 @@ function joinPair(
   }
 }
 
+// Pieces of one path in haplotype order, joined where they are colinear on
+// the reference, and otherwise aligned again as one walk. A piece aligned over
+// less than half its length joins only between two that are.
 function joinSiblings(
   fragments: FragmentAlignment[],
-  alignJointly: (
-    a: FragmentAlignment,
-    b: FragmentAlignment,
-  ) => FragmentAlignment | undefined,
+  mostlyAligned: (fragment: FragmentAlignment) => boolean,
+  alignJointly: (parts: FragmentAlignment[]) => FragmentAlignment | undefined,
 ) {
   if (fragments.some(f => f.weight !== undefined)) {
     return fragments
@@ -381,20 +382,33 @@ function joinSiblings(
     )
     let head = siblings[0]!
     let current = fragments[head]!
+    let between: number[] = []
     for (const index of siblings.slice(1)) {
       const next = fragments[index]!
-      const gap = joinable(current, next)
-      const joint = gap
-        ? joinPair(current, next, gap)
-        : alignJointly(current, next)
+      const gap = between.length === 0 ? joinable(current, next) : undefined
+      if (gap) {
+        current = joinPair(current, next, gap)
+        consumed.add(index)
+        continue
+      }
+      if (!mostlyAligned(next)) {
+        between.push(index)
+        continue
+      }
+      const joint = mostlyAligned(current)
+        ? alignJointly([current, ...between.map(i => fragments[i]!), next])
+        : undefined
       if (joint) {
         current = joint
-        consumed.add(index)
+        for (const i of [...between, index]) {
+          consumed.add(i)
+        }
       } else {
         joined.set(head, current)
         head = index
         current = next
       }
+      between = []
     }
     joined.set(head, current)
   }
@@ -1722,7 +1736,7 @@ export class Subgraph {
       edits: Edit[],
       strand: '+' | '-',
       pieces: number[],
-      soloMatched: number[],
+      soloAligned: number[],
     ): FragmentAlignment => {
       const trimmed = trimEnds(edits)
       const first = this.paths[pieces[0]!]!
@@ -1739,7 +1753,7 @@ export class Subgraph {
         path: pieces.flatMap(index => this.paths[index]!.path),
         start: pathPosition(first, 0),
         pieces,
-        soloMatched,
+        soloAligned,
         identity:
           identity === undefined
             ? undefined
@@ -1755,26 +1769,36 @@ export class Subgraph {
     // A walk that leaves the subgraph and comes back is two pieces here, and a
     // piece whose tail touches reference nodes past where the next piece
     // aligns cannot be joined after the fact. Aligned as one walk, with the
-    // bases outside the subgraph as an insertion between the pieces, the two
-    // read as the detour they are. A piece that shares no node with the
-    // reference, such as a pass hundreds of kb away that the context reached
-    // through a rare edge, stays a record of its own, and so does a piece that
-    // loses more than half its matched bases in the joint alignment, as the
-    // second pass of a collapsed paralog does.
-    const alignJointly = (a: FragmentAlignment, b: FragmentAlignment) => {
-      const walkForward = a.identity!.walkForward
+    // bases outside the subgraph as an insertion between the pieces, they read
+    // as the detour they are. Each end of the join must be aligned over at
+    // least half its length alone, which keeps out a pass hundreds of kb away
+    // that the context reached through a rare edge, and must keep at least half
+    // its aligned bases jointly, which keeps out the second pass of a collapsed
+    // paralog. Pieces between the ends, often most of the detour, join with
+    // them whatever their alignment.
+    const aligned = (f: FragmentAlignment) =>
+      f.soloAligned.reduce((sum, bases) => sum + bases, 0)
+    const length = (f: FragmentAlignment) =>
+      f.pieces.reduce((sum, index) => sum + this.paths[index]!.len, 0)
+    const mostlyAligned = (f: FragmentAlignment) => 2 * aligned(f) >= length(f)
+    const alignJointly = (parts: FragmentAlignment[]) => {
+      const first = parts[0]!
+      const last = parts[parts.length - 1]!
+      const walkForward = first.identity!.walkForward
       if (
-        a.strand !== b.strand ||
-        walkForward !== b.identity!.walkForward ||
-        b.identity!.hapStart < a.identity!.hapEnd ||
-        [...a.soloMatched, ...b.soloMatched].includes(0)
+        parts.some(
+          (part, k) =>
+            part.strand !== first.strand ||
+            part.identity!.walkForward !== walkForward ||
+            (k > 0 && part.identity!.hapStart < parts[k - 1]!.identity!.hapEnd),
+        )
       ) {
         return undefined
       }
-      const [first, second] = walkForward ? [a, b] : [b, a]
-      const pieces = [...first.pieces, ...second.pieces]
-      const soloMatched = [...first.soloMatched, ...second.soloMatched]
-      const flipped = (a.strand === '+') !== walkForward
+      const inWalkOrder = walkForward ? parts : [...parts].reverse()
+      const pieces = inWalkOrder.flatMap(part => part.pieces)
+      const soloAligned = inWalkOrder.flatMap(part => part.soloAligned)
+      const flipped = (first.strand === '+') !== walkForward
       const infos = pieces.map(index => this.paths[index]!)
       const gaps = infos.slice(1).map((info, k) => {
         const before = infos[k]!.identity!
@@ -1782,38 +1806,39 @@ export class Subgraph {
           ? info.identity!.hapStart - before.hapEnd
           : before.hapStart - info.identity!.hapEnd
       })
-      const aligned = flipped ? [...infos].reverse() : infos
+      const alignedInfos = flipped ? [...infos].reverse() : infos
       const alignedGaps = flipped ? [...gaps].reverse() : gaps
-      const alignedSolo = flipped ? [...soloMatched].reverse() : soloMatched
-      const steps = aligned.flatMap(info =>
+      const steps = alignedInfos.flatMap(info =>
         flipped ? flipPath(info.path) : info.path,
       )
-      const { edits, matches } = this.editsAgainst(steps, ref)
-      const matchedByPiece = aligned.map(() => 0)
-      let piece = 0
-      let pieceEnd = aligned[0]!.path.length
-      for (let m = 0; m < matches.count; m++) {
-        const at = matches.pathAt[m]!
-        while (at >= pieceEnd) {
-          piece += 1
-          pieceEnd += aligned[piece]!.path.length
-        }
-        matchedByPiece[piece]! += this.record(steps[at]!).sequenceLen
-      }
-      if (matchedByPiece.some((matched, k) => 2 * matched < alignedSolo[k]!)) {
+      const { edits } = this.editsAgainst(steps, ref)
+      const keptInOrder = alignedIn(
+        edits,
+        alignedInfos.map(info => info.len),
+      )
+      const kept = new Map(
+        (flipped ? [...pieces].reverse() : pieces).map((index, k) => [
+          index,
+          keptInOrder[k]!,
+        ]),
+      )
+      const keeps = (part: FragmentAlignment) =>
+        2 * part.pieces.reduce((sum, index) => sum + kept.get(index)!, 0) >=
+        aligned(part)
+      if (!keeps(first) || !keeps(last)) {
         return undefined
       }
       const insertions: [number, number][] = []
       let walked = 0
-      aligned.slice(0, -1).forEach((info, k) => {
+      alignedInfos.slice(0, -1).forEach((info, k) => {
         walked += info.len
         insertions.push([walked, alignedGaps[k]!])
       })
       return fragment(
         spliceInsertions(edits, insertions),
-        a.strand,
+        first.strand,
         pieces,
-        soloMatched,
+        soloAligned,
       )
     }
     const fragments: FragmentAlignment[] = []
@@ -1821,17 +1846,22 @@ export class Subgraph {
       if (index === this.refId) {
         return
       }
-      const { edits, matched, flipped } = this.alignment(index)!
+      const { edits, flipped } = this.alignment(index)!
       const identity = info.identity
       const alongReference = identity
         ? (identity.orientation === 'forward') !== flipped
         : !flipped
       fragments.push(
-        fragment(edits, alongReference ? '+' : '-', [index], [matched]),
+        fragment(
+          edits,
+          alongReference ? '+' : '-',
+          [index],
+          alignedIn(edits, [info.len]),
+        ),
       )
     })
-    return joinSiblings(fragments, alignJointly).map(joined => {
-      const { edits, identity, pieces, soloMatched, ...rest } = joined
+    return joinSiblings(fragments, mostlyAligned, alignJointly).map(joined => {
+      const { edits, identity, pieces, soloAligned, ...rest } = joined
       const span: AlignmentSpan = { ...rest, cigar: cigarOf(edits) }
       return identity
         ? {
@@ -2295,6 +2325,34 @@ function trimEnds(edits: Edit[]) {
   }
   appendEdit(trimmed, 'I', tail.inserted)
   return { edits: trimmed, leading: head.deleted, trailing: tail.deleted }
+}
+
+// The bases the CIGAR aligns within each of consecutive stretches of the walk.
+function alignedIn(edits: Edit[], lengths: number[]) {
+  const aligned = lengths.map(() => 0)
+  const last = lengths.length - 1
+  let piece = 0
+  let pieceEnd = lengths[0]!
+  let walked = 0
+  for (const [op, len] of edits) {
+    if (op === 'D') {
+      continue
+    }
+    let rest = len
+    while (rest > 0) {
+      while (piece < last && walked >= pieceEnd) {
+        piece += 1
+        pieceEnd += lengths[piece]!
+      }
+      const step = piece < last ? Math.min(rest, pieceEnd - walked) : rest
+      if (op === 'M') {
+        aligned[piece]! += step
+      }
+      walked += step
+      rest -= step
+    }
+  }
+  return aligned
 }
 
 // Insertions at walk offsets, after any deletions that end at the same offset.
