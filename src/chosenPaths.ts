@@ -522,7 +522,9 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     // there, so its window pass lies past the far anchor or before the near
     // one, and the walk covers that stretch too. A path seen at one anchor
     // only ends between the anchors or skips the other one, and is walked
-    // from its visit through the stretch to where the other anchor would be.
+    // from its visit through the stretch to where the other anchor would be;
+    // a walk that runs on past that point without the contig ending is
+    // trusted only once the next anchors out pair the visit.
     const span = new Map<number, [number, number]>()
     const widen = (pathHandle: number, offset: number) => {
       const s = span.get(pathHandle)!
@@ -531,11 +533,11 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     }
     const walks: Walk[] = []
     const walkedPaths = new Set<number>()
-    const plan = async (pathHandle: number) => {
+    const plan = async (pathHandle: number, oneSided = true) => {
       const before = rowsOf(anchorsBefore, pathHandle)
       const after = rowsOf(anchorsAfter, pathHandle)
       if (!before && !after) {
-        return false
+        return undefined
       }
       const nearRows = before?.rows ?? []
       const farRows = after?.rows ?? []
@@ -589,6 +591,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         for (const row of [...nearRows, ...farRows]) {
           if (
             isChosen &&
+            oneSided &&
             (row.node === nearAnchor.node ||
               row.node === flipNode(farAnchor.node))
           ) {
@@ -603,7 +606,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
           }
         }
       }
-      return true
+      return paired ? 'paired' : 'one-sided'
     }
     const pathsAtAnchors = new Set([...near, ...far].map(row => row.pathHandle))
     const chosenAtAnchors = [...pathsAtAnchors].filter(chosen)
@@ -649,7 +652,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       (await widenAnchors())
     ) {
       for (const pathHandle of unplaced) {
-        if (await plan(pathHandle)) {
+        if ((await plan(pathHandle)) !== undefined) {
           unplaced.delete(pathHandle)
         }
       }
@@ -716,6 +719,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       anchorAfter.pathOffset + 1,
     )
     const cap = 8 * spacing + 2 * (input.window.end - input.window.start)
+    const repaired = new Set<number>()
     for (const { row, stopAt, back, kind } of walks) {
       const orientation = row.orientation
       const toward = (from: number, to: number) =>
@@ -783,6 +787,22 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         throw new Fallback(
           `the walk of path ${row.pathHandle} between the anchors reached its cap of ${cap} bp`,
         )
+      }
+      if (
+        kind === 'one-sided' &&
+        end !== 'endmarker' &&
+        !repaired.has(row.pathHandle)
+      ) {
+        let paired = false
+        while (!paired && stats.widerAnchors < 2 && (await widenAnchors())) {
+          paired = (await plan(row.pathHandle, false)) === 'paired'
+        }
+        if (!paired) {
+          throw new Fallback(
+            `chosen path ${row.pathHandle} runs on past the stretch from its visit to one anchor without a visit to the other`,
+          )
+        }
+        repaired.add(row.pathHandle)
       }
       let reach =
         firstLanding === undefined
