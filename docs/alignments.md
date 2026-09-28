@@ -14,7 +14,7 @@ for (const alignment of alignments) {
 
 | field                 | meaning                                                                             |
 | --------------------- | ----------------------------------------------------------------------------------- |
-| `refStart` / `refEnd` | span on the reference, extended to node boundaries                                  |
+| `refStart` / `refEnd` | span on the reference, from the first aligned base to the last                      |
 | `cigar`               | alignment to the reference                                                          |
 | `strand`              | `-` when the haplotype runs opposite to the reference                               |
 | `path`                | the walk as node handles                                                            |
@@ -28,11 +28,20 @@ A resolved record also has `name` (a `PathName`), `label` (such as
 
 ## Joined pieces
 
-A haplotype can leave the window and come back, for example through an
-insertion. The library joins the two pieces into one record when they are
-consecutive, on the same strand and in order on both paths, and writes the
-sequence between them as an insertion and a deletion. When an inversion or a
-repeat lies between the pieces, the library keeps them as separate records.
+A haplotype can leave the subgraph and come back, for example through an
+insertion longer than `context`. The library joins the two pieces into one
+record when they are consecutive, on the same strand and in order on both paths,
+and writes the sequence between them as an insertion and a deletion.
+
+Pieces that overlap on the reference are aligned again as one walk, with the
+haplotype's bases outside the subgraph as an insertion between them. They
+overlap when the first piece's tail passes a node that the reference visits past
+the point where the second piece aligns. At GSTM1 on HPRC v2.1, HG03041#2
+replaces 18,445 bp of GRCh38 with an 18,445 bp copy of GSTM1, and at `context`
+1000 the library returns that as one record with the deletion and the insertion.
+The library keeps the pieces as separate records when an inversion lies between
+them, or when a piece keeps less than half of its matched bases in the joint
+alignment, as the second pass of a collapsed repeat does.
 
 ## The CIGAR
 
