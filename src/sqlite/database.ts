@@ -85,14 +85,20 @@ export class SqliteDatabase {
     return object.rootPage
   }
 
+  // The b-tree keyed by a table's primary key: its automatic index, or the
+  // table itself when it is WITHOUT ROWID.
   indexOn(tableName: string) {
     const index = [...this.objects.values()].find(
       o => o.type === 'index' && o.tableName === tableName,
     )
-    if (!index) {
-      throw new Error(`SQLite table ${tableName} has no index`)
+    if (index) {
+      return index.rootPage
     }
-    return index.rootPage
+    const table = this.objects.get(tableName)
+    if (table?.type === 'table' && /without\s+rowid/i.test(table.sql)) {
+      return table.rootPage
+    }
+    throw new Error(`SQLite table ${tableName} has no index`)
   }
 
   byRowid(table: string, rowid: number) {
