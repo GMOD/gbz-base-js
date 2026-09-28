@@ -528,9 +528,9 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     // only ends between the anchors or skips the other one, and is walked
     // from its visit through the stretch to where the other anchor would be;
     // a walk that runs on past that point without the contig ending is
-    // trusted only once the next anchors out pair the visit. A path whose
-    // visits leave a stretch between them that no pair covers passes the
-    // anchors from two copies of the region, and the walk from one copy does
+    // trusted only once the next anchors out pair the visit. A path with a
+    // visit more than CHAIN_BOUND outside the stretches its pairs cover passes
+    // the anchors from two copies of the region, and a walk from one copy does
     // not reach a pass of the other over the window's nodes.
     const span = new Map<number, [number, number]>()
     const walks: Walk[] = []
@@ -586,11 +586,13 @@ export async function findChosenPieces(input: ChosenPathsInput) {
           walkedPaths.add(pathHandle)
         }
       }
+      const extraVisits = new Map<number, HaplotypeSample>()
       for (const row of [...nearRows, ...farRows]) {
         if (!paired) {
           loci.push([row.pathOffset - stretch, row.pathOffset + stretch])
         } else if (!pairedVisits.has(row.pathOffset)) {
           loci.push([row.pathOffset, row.pathOffset])
+          extraVisits.set(row.pathOffset, row)
         }
       }
       const merged = mergeRanges(loci, CHAIN_BOUND)
@@ -600,6 +602,14 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         )
       }
       span.set(pathHandle, merged[0]!)
+      // A visit no pair used, within CHAIN_BOUND of the stretch the pairs
+      // cover, as a tandem copy of an anchor node gives, is walked
+      // CHAIN_BOUND to each side.
+      if (isChosen) {
+        for (const row of extraVisits.values()) {
+          walks.push({ row, stopAt: row.pathOffset, back: 0, kind: 'interval' })
+        }
+      }
       if (!paired) {
         // lf from the near anchor's own handle, or from the far anchor's
         // flipped one, heads toward the window.
