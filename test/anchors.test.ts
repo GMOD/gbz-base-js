@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest'
 
 import { openSampled } from './fixtures.ts'
 import { checkResolvedRecord, walkBack } from './walkBack.ts'
+import { keepTuning } from '../src/chosenPaths.ts'
 import { GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode, nodeId } from '../src/gbwt/node.ts'
-import { keepTuning } from '../src/chosenPaths.ts'
 import { subgraphForHaplotypes, subgraphInInterval } from '../src/query.ts'
 
 import type { HaplotypeSample } from '../src/db.ts'
@@ -28,6 +28,9 @@ const openMicb = () =>
 
 const openSplit = () =>
   openWithCompanion('split-contig.gbz.db', 'split-contig.haplotype-index.db')
+
+const openInversion = () =>
+  openWithCompanion('inversion.gbz.db', 'inversion.haplotype-index.db')
 
 async function forwardSteps(db: GBZBase, pathHandle: number) {
   const gbzPath = await db.getPath(pathHandle)
@@ -300,10 +303,64 @@ describe('a query that uses the keep option', () => {
     } finally {
       keepTuning.mostChosenPaths = saved
     }
-    console.log(routes)
     expect(walks).toBeGreaterThan(5000)
     expect(routes.get('keep')).toBeGreaterThan(250)
   }, 300000)
+
+  // inversion.gfa: a 138.5 kb reference with anchors at 64,572 and 128,696 bp,
+  // two haplotypes that follow it, and two with an inversion that covers one
+  // anchor. HG001#1 passes the far anchor flipped and its pass through the
+  // window lies 60 kb beyond that visit; HG002#1 passes the near anchor
+  // flipped and its pass lies before that visit. Neither pass holds a sample,
+  // so only the walk can find them.
+  it('walks the reversed stretch of an inversion that covers one anchor', async () => {
+    const db = await openInversion()
+    const chr1 = { sample: 'GRCh38', contig: 'chr1' }
+    const inverted = ['HG001#1', 'HG002#1']
+    const sets: [string, (name: PathName) => boolean][] = [
+      ['every haplotype', name => name.sample !== 'GRCh38'],
+      ['HG001#1', name => name.sample === 'HG001' && name.haplotype === 1],
+      ['HG002#1', name => name.sample === 'HG002' && name.haplotype === 1],
+      ['HG001', name => name.sample === 'HG001'],
+    ]
+    const windows: [number, number][] = [
+      [66800, 68200],
+      [66000, 67000],
+    ]
+    for (const [start, end] of windows) {
+      for (const context of [0, 100, 1000]) {
+        for (const snarls of ['none', 'contained'] as const) {
+          for (const [, keep] of sets) {
+            const { kept, alignments } = await expectParity(
+              db,
+              chr1,
+              start,
+              end,
+              { keep, context, snarls },
+            )
+            const stats = kept.stats.keep!
+            expect(stats.fallback).toBeUndefined()
+            expect(stats.anchors).toEqual([64572, 128696])
+            const names = alignments.map(a =>
+              a.resolved ? `${a.name.sample}#${a.name.haplotype}` : '',
+            )
+            const chosen = inverted.filter(h =>
+              keep({
+                sample: h.slice(0, 5),
+                haplotype: Number(h.at(-1)),
+                contig: 'ctg1',
+              } as PathName),
+            )
+            expect(chosen.every(h => names.includes(h))).toBe(true)
+            expect(
+              Object.keys(stats.walks).filter(k => k.startsWith('inversion:'))
+                .length > 0,
+            ).toBe(chosen.length > 0)
+          }
+        }
+      }
+    }
+  })
 
   it('follows a contig off the reference’s end and one that starts after the anchor', async () => {
     const db = await openSplit()

@@ -6,7 +6,12 @@ import {
   pathEndsAreCanonical,
 } from './gbwt/node.ts'
 
-import type { GBZBase, GbzRecord, HaplotypeSample } from './db.ts'
+import type {
+  GBZBase,
+  GbzRecord,
+  HaplotypeAnchor,
+  HaplotypeSample,
+} from './db.ts'
 import type { Orientation } from './gbwt/node.ts'
 import type { Pos } from './gbwt/record.ts'
 import type { PathName } from './pathName.ts'
@@ -59,6 +64,8 @@ export type KeepWalkEnd =
 export interface KeepStats {
   spacing: number | undefined
   anchors: [number, number] | undefined
+  // How many anchors out the query looked for paths absent at these two.
+  widerAnchors: number
   chosenPaths: number
   scans: [number, number][]
   scanRows: number
@@ -119,6 +126,13 @@ class PositionIndex {
 
 class Fallback extends Error {}
 
+interface Walk {
+  row: HaplotypeSample
+  stopAt: number
+  back: number
+  kind: string
+}
+
 function forwardLeft(
   orientation: Orientation,
   left: number,
@@ -170,6 +184,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
   const stats: KeepStats = {
     spacing: await db.haplotypeAnchorSpacing(),
     anchors: undefined,
+    widerAnchors: 0,
     chosenPaths: 0,
     scans: [],
     scanRows: 0,
@@ -408,7 +423,9 @@ export async function findChosenPieces(input: ChosenPathsInput) {
   }
 
   try {
-    // The anchors on both sides of the window, and every visit to them.
+    // The anchors on both sides of the window, and every visit to them. A
+    // path with a sample on the subgraph's nodes and no visit to either is
+    // looked for at the next anchors out, up to two on each side.
     const spacing = stats.spacing
     if (spacing === undefined) {
       throw new Fallback('the haplotype index has no anchors')
@@ -417,33 +434,38 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     // so the one for the multiple at or before the window's start lies before
     // it, and the first anchor after the window's end is that of the multiple
     // past the end, or of the next.
+    const beforeMultiple = Math.floor(input.window.start / spacing)
     const multiple = Math.ceil(input.window.end / spacing)
     const [anchorBefore, ...candidates] = await Promise.all([
-      db.haplotypeAnchor(
-        input.referenceHandle,
-        Math.floor(input.window.start / spacing) * spacing,
-      ),
+      db.haplotypeAnchor(input.referenceHandle, beforeMultiple * spacing),
       db.haplotypeAnchor(input.referenceHandle, multiple * spacing),
       db.haplotypeAnchor(input.referenceHandle, (multiple + 1) * spacing),
     ])
-    const anchorAfter = candidates.find(
+    const afterIndex = candidates.findIndex(
       anchor => anchor !== undefined && anchor.pathOffset >= input.window.end,
     )
+    const anchorAfter = candidates[afterIndex]
     if (!anchorBefore) {
       throw new Fallback('the haplotype index has no anchor before the window')
     }
     if (!anchorAfter) {
       throw new Fallback('the haplotype index has no anchor after the window')
     }
+    const afterMultiple = multiple + afterIndex
     stats.anchors = [anchorBefore.pathOffset, anchorAfter.pathOffset]
     const visitsAt = (node: number) => {
       const handle = node - (node % 2)
       return db.haplotypeSamplesInRange(handle, handle + 1)
     }
+    const rowsAt = new Map<HaplotypeAnchor, HaplotypeSample[]>()
+    const anchorsBefore = [anchorBefore]
+    const anchorsAfter = [anchorAfter]
     const [near, far] = await Promise.all([
       visitsAt(anchorBefore.node),
       visitsAt(anchorAfter.node),
     ])
+    rowsAt.set(anchorBefore, near)
+    rowsAt.set(anchorAfter, far)
     if (
       !near.some(
         row =>
@@ -456,90 +478,237 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         `The haplotype index has no anchor row for the reference path ${input.referenceHandle} at offset ${anchorBefore.pathOffset} (node ${nodeId(anchorBefore.node)}); it does not match this graph`,
       )
     }
-    const span = new Map<number, [number, number]>()
-    for (const row of [...near, ...far]) {
-      const s = span.get(row.pathHandle)
-      span.set(
-        row.pathHandle,
-        s
-          ? [Math.min(s[0], row.pathOffset), Math.max(s[1], row.pathOffset)]
-          : [row.pathOffset, row.pathOffset],
-      )
-    }
-    // A walk for every visit of a chosen path to the anchor before the window
-    // that the path follows to a visit to the anchor after it.
-    const walks: { row: HaplotypeSample; stopAt: number }[] = []
-    const walkedPaths = new Set<number>()
-    const chosenAtAnchors = new Set(
-      [...span.keys()].filter(pathHandle => chosen(pathHandle)),
-    )
-    stats.chosenPaths = chosenAtAnchors.size
-    if (chosenAtAnchors.size > keepTuning.mostChosenPaths) {
-      throw new Fallback(
-        `${chosenAtAnchors.size} chosen paths pass the anchors, more than ${keepTuning.mostChosenPaths}`,
-      )
-    }
-    for (const row of near) {
-      if (chosenAtAnchors.has(row.pathHandle)) {
-        const ahead = far
-          .filter(
-            f =>
-              f.pathHandle === row.pathHandle &&
-              (row.orientation === 'forward'
-                ? f.pathOffset > row.pathOffset
-                : f.pathOffset < row.pathOffset),
-          )
-          .map(f => f.pathOffset)
-        if (ahead.length > 0) {
-          walks.push({
-            row,
-            stopAt:
-              row.orientation === 'forward'
-                ? Math.min(...ahead)
-                : Math.max(...ahead),
-          })
-          walkedPaths.add(row.pathHandle)
+    const widenAnchors = async () => {
+      stats.widerAnchors += 1
+      const before = beforeMultiple - stats.widerAnchors
+      const [a, b] = await Promise.all([
+        before >= 0
+          ? db.haplotypeAnchor(input.referenceHandle, before * spacing)
+          : undefined,
+        db.haplotypeAnchor(
+          input.referenceHandle,
+          (afterMultiple + stats.widerAnchors) * spacing,
+        ),
+      ])
+      for (const [anchor, list] of [
+        [a, anchorsBefore],
+        [b, anchorsAfter],
+      ] as const) {
+        if (anchor) {
+          rowsAt.set(anchor, await visitsAt(anchor.node))
+          list.push(anchor)
         }
       }
+      return a !== undefined || b !== undefined
     }
-    for (const pathHandle of chosenAtAnchors) {
-      if (!walkedPaths.has(pathHandle)) {
-        throw new Fallback(
-          `chosen path ${pathHandle} has no walk from the anchor before the window to the anchor after it`,
-        )
+    const rowsOf = (anchors: HaplotypeAnchor[], pathHandle: number) => {
+      for (const anchor of anchors) {
+        const rows = rowsAt
+          .get(anchor)!
+          .filter(row => row.pathHandle === pathHandle)
+        if (rows.length > 0) {
+          return { anchor, rows }
+        }
       }
+      return undefined
     }
 
-    // Every sample on the subgraph's nodes must lie within CHAIN_BOUND of the
-    // stretch between its path's anchor visits.
+    // Where a path can lie, from its visits to the nearest anchor on each
+    // side, and a walk for each visit when the path is chosen. A path that
+    // passes both anchors is walked from its visit to the one before the
+    // window to its visit to the one after it. A path that passes one anchor
+    // on the flipped handle carries an inversion covering that anchor and
+    // traverses the reference's stretch between the anchors backward from
+    // there, so its window pass lies past the far anchor or before the near
+    // one, and the walk covers that stretch too. A path seen at one anchor
+    // only ends between the anchors or skips the other one, and is walked
+    // from its visit through the stretch to where the other anchor would be.
+    const span = new Map<number, [number, number]>()
+    const widen = (pathHandle: number, offset: number) => {
+      const s = span.get(pathHandle)!
+      s[0] = Math.min(s[0], offset)
+      s[1] = Math.max(s[1], offset)
+    }
+    const walks: Walk[] = []
+    const walkedPaths = new Set<number>()
+    const plan = async (pathHandle: number) => {
+      const before = rowsOf(anchorsBefore, pathHandle)
+      const after = rowsOf(anchorsAfter, pathHandle)
+      if (!before && !after) {
+        return false
+      }
+      const nearRows = before?.rows ?? []
+      const farRows = after?.rows ?? []
+      const offsets = [...nearRows, ...farRows].map(row => row.pathOffset)
+      span.set(pathHandle, [Math.min(...offsets), Math.max(...offsets)])
+      const nearAnchor = before?.anchor ?? anchorBefore
+      const farAnchor = after?.anchor ?? anchorAfter
+      const stretch = farAnchor.pathOffset - nearAnchor.pathOffset
+      const isChosen = chosen(pathHandle)
+      let paired = false
+      for (const row of nearRows) {
+        const sign = row.orientation === 'forward' ? 1 : -1
+        const stop = farRows
+          .filter(
+            f =>
+              f.orientation === row.orientation &&
+              (f.pathOffset - row.pathOffset) * sign > 0,
+          )
+          .sort((a, b) => (a.pathOffset - b.pathOffset) * sign)[0]
+        if (!stop) {
+          continue
+        }
+        const nearAlong = row.node === nearAnchor.node
+        const farAlong = stop.node === farAnchor.node
+        let stopAt = stop.pathOffset
+        let back = 0
+        if (nearAlong && !farAlong) {
+          stopAt += sign * ((await record(stop.node)).sequenceLen + stretch)
+        } else if (!nearAlong && farAlong) {
+          back = stretch
+        }
+        widen(pathHandle, stopAt)
+        widen(pathHandle, row.pathOffset - sign * back)
+        paired = true
+        if (isChosen) {
+          walks.push({
+            row,
+            stopAt,
+            back,
+            kind: nearAlong === farAlong ? 'interval' : 'inversion',
+          })
+          walkedPaths.add(pathHandle)
+        }
+      }
+      if (!paired) {
+        const s = span.get(pathHandle)!
+        widen(pathHandle, s[0] - stretch)
+        widen(pathHandle, s[1] + stretch)
+        // lf from the near anchor's own handle, or from the far anchor's
+        // flipped one, heads toward the window.
+        for (const row of [...nearRows, ...farRows]) {
+          if (
+            isChosen &&
+            (row.node === nearAnchor.node ||
+              row.node === flipNode(farAnchor.node))
+          ) {
+            const sign = row.orientation === 'forward' ? 1 : -1
+            walks.push({
+              row,
+              stopAt: row.pathOffset + sign * stretch,
+              back: 0,
+              kind: 'one-sided',
+            })
+            walkedPaths.add(pathHandle)
+          }
+        }
+      }
+      return true
+    }
+    const pathsAtAnchors = new Set([...near, ...far].map(row => row.pathHandle))
+    const chosenAtAnchors = [...pathsAtAnchors].filter(chosen)
+    stats.chosenPaths = chosenAtAnchors.length
+    if (chosenAtAnchors.length > keepTuning.mostChosenPaths) {
+      throw new Fallback(
+        `${chosenAtAnchors.length} chosen paths pass the anchors, more than ${keepTuning.mostChosenPaths}`,
+      )
+    }
+    for (const pathHandle of pathsAtAnchors) {
+      await plan(pathHandle)
+    }
+
+    // Every sample on the subgraph's nodes must lie where its path can:
+    // within CHAIN_BOUND of the region its anchor visits allow, or on a path
+    // with no visit to any anchor read that is short enough to start and end
+    // between the outermost ones. A sample elsewhere marks a segmental
+    // duplication or a collapsed paralog, where a chosen path can pass the
+    // window's nodes without a sample outside every walk. A chosen path with
+    // no visit is walked whole from its start.
     const seeds: HaplotypeSample[] = []
+    const samples: HaplotypeSample[] = []
     stats.scans = handleRuns([...records.keys()].sort((a, b) => a - b))
     for (const [first, last] of stats.scans) {
       for (const sample of await db.haplotypeSamplesInRange(first, last)) {
         stats.scanRows += 1
         if (records.has(sample.node)) {
-          const s = span.get(sample.pathHandle)
-          if (
-            !s ||
-            sample.pathOffset < s[0] - CHAIN_BOUND ||
-            sample.pathOffset > s[1] + CHAIN_BOUND
-          ) {
-            throw new Fallback(
-              `path ${sample.pathHandle} has a sample on the window's nodes ${s ? 'far from its anchor visits' : 'and no visit to the anchors'}`,
-            )
-          }
+          samples.push(sample)
           if (chosen(sample.pathHandle)) {
             seeds.push(sample)
           }
         }
       }
     }
+    const unplaced = new Set(
+      samples
+        .map(s => s.pathHandle)
+        .filter(pathHandle => !span.has(pathHandle)),
+    )
+    while (
+      unplaced.size > 0 &&
+      stats.widerAnchors < 2 &&
+      (await widenAnchors())
+    ) {
+      for (const pathHandle of unplaced) {
+        if (await plan(pathHandle)) {
+          unplaced.delete(pathHandle)
+        }
+      }
+    }
+    const outerStretch =
+      anchorsAfter[anchorsAfter.length - 1]!.pathOffset -
+      anchorsBefore[anchorsBefore.length - 1]!.pathOffset
+    for (const pathHandle of unplaced) {
+      const length =
+        (await db.haplotypeLength(pathHandle)) ?? Number.POSITIVE_INFINITY
+      if (length > outerStretch + 2 * CHAIN_BOUND) {
+        throw new Fallback(
+          `path ${pathHandle} of ${length} bp has a sample on the window's nodes and no visit to the anchors`,
+        )
+      }
+      if (chosen(pathHandle)) {
+        const start = (await db.getPath(pathHandle))?.fwStart
+        if (!start) {
+          throw new Error(`Path ${pathHandle} is missing from the database`)
+        }
+        walks.push({
+          row: {
+            node: start.node,
+            offset: start.offset,
+            pathHandle,
+            orientation: 'forward',
+            pathOffset: 0,
+          },
+          stopAt: length,
+          back: 0,
+          kind: 'whole',
+        })
+      }
+    }
+    for (const pathHandle of span.keys()) {
+      if (chosen(pathHandle) && !walkedPaths.has(pathHandle)) {
+        throw new Fallback(
+          `chosen path ${pathHandle} has no walk from its visits to the anchors`,
+        )
+      }
+    }
+    for (const sample of samples) {
+      const s = span.get(sample.pathHandle)
+      if (
+        s &&
+        (sample.pathOffset < s[0] - CHAIN_BOUND ||
+          sample.pathOffset > s[1] + CHAIN_BOUND)
+      ) {
+        throw new Fallback(
+          `path ${sample.pathHandle} has a sample at ${sample.pathOffset} on the window's nodes far from its anchor visits at ${s[0]}-${s[1]}`,
+        )
+      }
+    }
     stats.ms.scan = lap()
 
     // Interval walks. A walk jumps over the pieces it lands in and ends
-    // CHAIN_BOUND past the last piece or the far anchor, whichever is later,
-    // then goes back from the near anchor as far as CHAIN_BOUND before the
-    // first piece.
+    // CHAIN_BOUND past the last piece or its stop, whichever is later, then
+    // goes back from the near anchor as far as CHAIN_BOUND before the first
+    // piece, or the stretch an inversion puts before the near anchor.
     const walkedRanges = new Map<number, [number, number][]>()
     await input.prefetchReferenceRange(
       input.referenceHandle,
@@ -547,7 +716,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       anchorAfter.pathOffset + 1,
     )
     const cap = 8 * spacing + 2 * (input.window.end - input.window.start)
-    for (const { row, stopAt } of walks) {
+    for (const { row, stopAt, back, kind } of walks) {
       const orientation = row.orientation
       const toward = (from: number, to: number) =>
         orientation === 'forward' ? to - from : from - to
@@ -609,7 +778,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       if (!pos && end !== 'cap') {
         end = 'endmarker'
       }
-      countWalk('interval', end)
+      countWalk(kind, end)
       if (end === 'cap') {
         throw new Fallback(
           `the walk of path ${row.pathHandle} between the anchors reached its cap of ${cap} bp`,
@@ -624,7 +793,8 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         left: row.pathOffset,
       }
       let behind = 0
-      while (reach > 0) {
+      let must = back
+      while (reach > 0 || must > 0) {
         signal?.throwIfAborted()
         const earlier = await previous(cursor.pos)
         if (!earlier) {
@@ -648,12 +818,14 @@ export async function findChosenPieces(input: ChosenPathsInput) {
           hi = Math.max(hi, piece.hapEnd)
           reach = CHAIN_BOUND
           behind = 0
+          must -= piece.len
         } else {
           const len = (await record(earlier.node)).sequenceLen
           behind += len
-          if (behind > reach) {
+          if (behind > reach && must <= 0) {
             break
           }
+          must -= len
           cursor = { pos: earlier, left: earlierLeft }
           lo = Math.min(lo, earlierLeft)
           hi = Math.max(hi, earlierLeft + len)

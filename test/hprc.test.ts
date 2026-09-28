@@ -100,12 +100,16 @@ describe.skipIf(!available(anchoredCompanion))(
     it('returns the sampled route’s walks for the tutorial’s eight haplotypes at KIV-2, AMY1 and MHC class II', async () => {
       const db = await openHprc(anchoredCompanion)
       expect(await db.haplotypeAnchorSpacing()).toBeDefined()
-      const windows: [string, number, number][] = [
-        ['chr6', 160616002, 160646753],
-        ['chr1', 103690000, 103780000],
-        ['chr6', 32510000, 32600000],
+      // At AMY1, HG01243#2's contig JAHEOX020000063.1 starts inside the window
+      // and passes the stretch between the anchors again in reverse 500 kb
+      // later, so the keep route reports a duplication and identifies every
+      // walk instead.
+      const windows: [string, number, number, boolean][] = [
+        ['chr6', 160616002, 160646753, true],
+        ['chr1', 103690000, 103780000, false],
+        ['chr6', 32510000, 32600000, true],
       ]
-      for (const [contig, start, end] of windows) {
+      for (const [contig, start, end, certified] of windows) {
         const query = { sample: 'GRCh38', contig }
         const opts = {
           context: 1000,
@@ -119,8 +123,10 @@ describe.skipIf(!available(anchoredCompanion))(
           end,
           opts,
         )
-        expect(subgraph.stats.keep?.fallback).toBeUndefined()
-        expect(subgraph.stats.identification.chains).toEqual([])
+        if (certified) {
+          expect(subgraph.stats.keep?.fallback).toBeUndefined()
+          expect(subgraph.stats.identification.chains).toEqual([])
+        }
         const sampled = await subgraphInInterval(db, query, start, end, opts)
         await sampled.identifyPaths()
         sampled.keepHaplotypes(keepEight)
