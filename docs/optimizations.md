@@ -94,11 +94,19 @@ Node sequences and CIGARs stay strings.
   the route, which ran its walks and chains alone, returned every chosen piece
   outside LCR22 and IGL over 2,880 runs on 58 windows of HPRC chr22, and in
   those nine windows missed 2% of the chosen pieces, short passes 41 kb to 2.6
-  Mb from the haplotype's other pieces. The reference passes the nodes of 94% of
-  them again elsewhere on the chromosome. A table of the reference's
-  self-overlaps, written by `gbz-haplotype-index`, would let the query walk the
-  chosen haplotypes at those loci too; given those loci, the prototype's misses
-  fell from 1,077 to 64 over 22 runs at 1.6 to 2.2 times its time.
+  Mb from the haplotype's other pieces. At `context` 100, 1,889 of the 1,907
+  missed passes lay on stretches that GRCh38 passes far from the window, where
+  an index built with `--reference-interval` contains GRCh38 samples, and at
+  `context` 1000, 1,594 of 1,653 did
+  ([haplotype-index.md](haplotype-index.md#keep)). The other passes lie on nodes
+  GRCh38 does not visit, and only a sample of the haplotype can mark them; all
+  220 at `context` 0, in one LCR22A window, are of that kind. GRCh38 visits each
+  node of the chr22 graph once, so a table of the reference's self-overlaps
+  would be empty. Given the stretches from the sampled route, walking the chosen
+  haplotypes there cut the prototype's misses from 1,077 to 64 over 22 runs, at
+  1.6 to 2.2 times its time. A query that takes the stretches from reference
+  samples would still miss the passes on nodes GRCh38 does not visit, 35% of the
+  missed passes at LCR22B, so it would still need the fallback.
 - Identifying a walk piece shorter than the sampling interval scans the
   haplotype index, and 99.91% of those scans miss
   ([performance.md](performance.md#small-windows-at-the-same-locus)). Following
