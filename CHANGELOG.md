@@ -1,3 +1,38 @@
+## [4.0.0](https://github.com/GMOD/gbz-base-js/compare/v3.0.0...v4.0.0) (2026-09-28)
+
+### Other Changes
+
+- Say what the two naming routes mean for a query ([574e67e](https://github.com/GMOD/gbz-base-js/commit/574e67efa828976bd36a88ddfbc2ef380ad253fe))
+- Pare down haplotype naming, fix writing tropes ([bd185a3](https://github.com/GMOD/gbz-base-js/commit/bd185a37b5b787ba6b2410ef864c396c8328fefb))
+- One name for the haplotype index, fix fragments and vague counts ([34f4f20](https://github.com/GMOD/gbz-base-js/commit/34f4f20dcad50ad5ff7b8a893ec8cfa6c42d36c0))
+- Explain keep and the two naming routes, add a route diagram ([8b9bcd7](https://github.com/GMOD/gbz-base-js/commit/8b9bcd76025e9bb77fd58aceb4b2f5400e6ced5f))
+- Draw where the naming routes walk, tighten the claims ([b6aa8b1](https://github.com/GMOD/gbz-base-js/commit/b6aa8b1a7ab699ec33793815643ea39049a2093b))
+- Move the programs table below the examples, drop two columns ([cc30ebe](https://github.com/GMOD/gbz-base-js/commit/cc30ebe010e1ec8eb9b332e662171cde2366a84c))
+- Explain what a haplotype sample is and why the index samples ([3734678](https://github.com/GMOD/gbz-base-js/commit/373467874817c96b44ad4afb91c754b075ee04b0))
+- Let diagrams take the page width instead of fixed pixel widths ([1f22ec3](https://github.com/GMOD/gbz-base-js/commit/1f22ec3494f63c5e06f7928f967722eb1bc83191))
+- Simplify the haplotype index page and its two diagrams ([c969ef6](https://github.com/GMOD/gbz-base-js/commit/c969ef6968120633731ddfd9a0eeff58ddc3edf3))
+- Shorten the haplotype index page, fix route details from review ([2c97a0f](https://github.com/GMOD/gbz-base-js/commit/2c97a0faae25f41550e38b92b3105367847146f4))
+- Say "identify" and "haplotype index" plainly, introduce keep where used ([1fb7f06](https://github.com/GMOD/gbz-base-js/commit/1fb7f0612248dbaac4ef86b91391b310187eccd3))
+- Show where the naming-route diagrams read their data ([ded1914](https://github.com/GMOD/gbz-base-js/commit/ded1914943ecc3a099a45b6bf60a1d07f108ee9f))
+- Give the naming-routes flowchart a legend for its data sources ([883a167](https://github.com/GMOD/gbz-base-js/commit/883a1678f4045a0ee904049d1a281af1dd5e7d83))
+- Stack the naming-routes legends in a box, top right ([5ab38f5](https://github.com/GMOD/gbz-base-js/commit/5ab38f574877dc8322a2124f3c9686994cba1bf0))
+- Redraw the naming-route diagrams, say when keep applies ([f3580b7](https://github.com/GMOD/gbz-base-js/commit/f3580b7495968215d4351d8dfc9a1d1c0ca00f94))
+- Name the actor and the file on every page ([97df439](https://github.com/GMOD/gbz-base-js/commit/97df439baf6e1ac0d4f4aa15a423d6edeb0b9914))
+- Spell out the keep option in the naming-route diagrams ([4286901](https://github.com/GMOD/gbz-base-js/commit/4286901491f7f4adfb02ba3944b3b8f810ad360d))
+- Split the naming-route decision into keep and anchor checks ([3018d09](https://github.com/GMOD/gbz-base-js/commit/3018d0900251dc708c2f04d456bf91add65b7dbf))
+- Say "a query that uses the keep option", add docs/CLAUDE.md ([c8e75a2](https://github.com/GMOD/gbz-base-js/commit/c8e75a24a5d62d7c00943f19c0dd1212db7224ae))
+- Draw what graph.gbz.db stores and what samples add ([0414c81](https://github.com/GMOD/gbz-base-js/commit/0414c818c954f6e3ff46233cf45305670fc6bc5e))
+- Draw where anchors sit on chr6, say why keep starts from one ([c7e675c](https://github.com/GMOD/gbz-base-js/commit/c7e675c0dfc34b028989846fd99f1d70857b999f))
+- Index builder: anchor one reference sample, break ties toward the multiple ([4bbfe6c](https://github.com/GMOD/gbz-base-js/commit/4bbfe6cf5aab8cf6232f80b9cda4eb294f56437a))
+- The keep route returns the sampled route's walks, found from the index ([3fea39c](https://github.com/GMOD/gbz-base-js/commit/3fea39c6dda670c07fe51fed53c4275c7bf5c2e3))
+- The keep route certifies its walks and otherwise identifies every walk ([7e2ce29](https://github.com/GMOD/gbz-base-js/commit/7e2ce29605496e9e565c6c6b28ee7ad8046e4f91))
+- The keep route places every path from its anchor visits before it trusts a walk ([8d65000](https://github.com/GMOD/gbz-base-js/commit/8d65000be8410ffdf432f2da20c52a79250d24eb))
+- A one-sided walk is trusted when the contig ends, or a wider anchor pairs it ([bd0ed92](https://github.com/GMOD/gbz-base-js/commit/bd0ed9232acbe9971f20362411ab3095afd82817))
+- The keep route's checks, its measured limit, and the tutorial timings ([ec2b502](https://github.com/GMOD/gbz-base-js/commit/ec2b502cba914421e0781002b381bac553dd065e))
+- The keep route reads two anchors out on each side for every query ([bfab963](https://github.com/GMOD/gbz-base-js/commit/bfab963ce3bf6163bd5829a90703a49d63431c77))
+- The keep route reads its anchors in two rounds and falls back when it sees no chosen path ([a195785](https://github.com/GMOD/gbz-base-js/commit/a1957857d9d453c813e04325a5f4a2c2a1564ced))
+- Parity and timings for the route that reads six anchors ([0489898](https://github.com/GMOD/gbz-base-js/commit/0489898756c6ed4e5ffa655fa9c05cc446ec276e))
+
 ## [3.0.0](https://github.com/GMOD/gbz-base-js/compare/v2.8.0...v3.0.0) (2026-09-27)
 
 ### Other Changes
