@@ -21,7 +21,7 @@
     }
   },
   "bin": {
-    "gbz-base-query": "./bin/query.js"
+    "gbz-base-query": "bin/query.js"
   },
   "files": [
     "dist",
