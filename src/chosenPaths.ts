@@ -18,6 +18,20 @@ import type { PathName } from './pathName.ts'
 
 const SCAN_GAP = 4096
 
+// Ranges merged where they overlap or lie within `gap` of each other.
+export function mergeRanges(ranges: [number, number][], gap: number) {
+  const merged: [number, number][] = []
+  for (const [lo, hi] of [...ranges].sort((a, b) => a[0] - b[0])) {
+    const last = merged[merged.length - 1]
+    if (last && lo <= last[1] + gap) {
+      last[1] = Math.max(last[1], hi)
+    } else {
+      merged.push([lo, hi])
+    }
+  }
+  return merged
+}
+
 // Runs of sorted handles close enough to read the haplotype index samples on
 // them with one scan each.
 export function handleRuns(sortedHandles: number[]) {
@@ -37,6 +51,11 @@ export function handleRuns(sortedHandles: number[]) {
 // farthest echo of a collapsed repeat that a walk reached on HPRC chr22 lay 30
 // kb from the window.
 export const CHAIN_BOUND = 32768
+
+// How far past the region its anchor visits allow a sample may lie. Walks cover
+// CHAIN_BOUND past that region in each chosen path's coordinates, and half of
+// it leaves room for an indel between two paths' coordinates.
+const SAMPLE_BAND = CHAIN_BOUND / 2
 
 // Above this many chosen paths at the anchors, extracting and identifying
 // every walk took less time than walking the chosen ones, on HPRC chr22 windows
@@ -509,13 +528,11 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     // only ends between the anchors or skips the other one, and is walked
     // from its visit through the stretch to where the other anchor would be;
     // a walk that runs on past that point without the contig ending is
-    // trusted only once the next anchors out pair the visit.
+    // trusted only once the next anchors out pair the visit. A path whose
+    // visits leave a stretch between them that no pair covers passes the
+    // anchors from two copies of the region, and the walk from one copy does
+    // not reach a pass of the other over the window's nodes.
     const span = new Map<number, [number, number]>()
-    const widen = (pathHandle: number, offset: number) => {
-      const s = span.get(pathHandle)!
-      s[0] = Math.min(s[0], offset)
-      s[1] = Math.max(s[1], offset)
-    }
     const walks: Walk[] = []
     const walkedPaths = new Set<number>()
     const plan = async (pathHandle: number) => {
@@ -526,8 +543,8 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       }
       const nearRows = before?.rows ?? []
       const farRows = after?.rows ?? []
-      const offsets = [...nearRows, ...farRows].map(row => row.pathOffset)
-      span.set(pathHandle, [Math.min(...offsets), Math.max(...offsets)])
+      const loci: [number, number][] = []
+      const pairedVisits = new Set<number>()
       const nearAnchor = before?.anchor ?? anchorBefore
       const farAnchor = after?.anchor ?? anchorAfter
       const stretch = farAnchor.pathOffset - nearAnchor.pathOffset
@@ -554,8 +571,10 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         } else if (!nearAlong && farAlong) {
           back = stretch
         }
-        widen(pathHandle, stopAt)
-        widen(pathHandle, row.pathOffset - sign * back)
+        const from = row.pathOffset - sign * back
+        loci.push([Math.min(from, stopAt), Math.max(from, stopAt)])
+        pairedVisits.add(row.pathOffset)
+        pairedVisits.add(stop.pathOffset)
         paired = true
         if (isChosen) {
           walks.push({
@@ -567,10 +586,21 @@ export async function findChosenPieces(input: ChosenPathsInput) {
           walkedPaths.add(pathHandle)
         }
       }
+      for (const row of [...nearRows, ...farRows]) {
+        if (!paired) {
+          loci.push([row.pathOffset - stretch, row.pathOffset + stretch])
+        } else if (!pairedVisits.has(row.pathOffset)) {
+          loci.push([row.pathOffset, row.pathOffset])
+        }
+      }
+      const merged = mergeRanges(loci, CHAIN_BOUND)
+      if (merged.length > 1) {
+        throw new Fallback(
+          `path ${pathHandle} visits the anchors from ${merged.length} copies of the region, at ${merged.map(([lo, hi]) => `${lo}-${hi}`).join(', ')}`,
+        )
+      }
+      span.set(pathHandle, merged[0]!)
       if (!paired) {
-        const s = span.get(pathHandle)!
-        widen(pathHandle, s[0] - stretch)
-        widen(pathHandle, s[1] + stretch)
         // lf from the near anchor's own handle, or from the far anchor's
         // flipped one, heads toward the window.
         for (const row of [...nearRows, ...farRows]) {
@@ -607,7 +637,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     }
 
     // Every sample on the subgraph's nodes must lie where its path can:
-    // within CHAIN_BOUND of the region its anchor visits allow, or on a path
+    // within SAMPLE_BAND of the region its anchor visits allow, or on a path
     // with no visit to any anchor read that is short enough to start and end
     // between the outermost ones. A sample elsewhere marks a segmental
     // duplication or a collapsed paralog, where a chosen path can pass the
@@ -645,12 +675,55 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     const outerStretch =
       anchorsAfter[anchorsAfter.length - 1]!.pathOffset -
       anchorsBefore[anchorsBefore.length - 1]!.pathOffset
-    for (const pathHandle of unplaced) {
+    // A contig split into fragments stores each fragment as a path, and a
+    // fragment that lies between the anchors has no row, and no sample on the
+    // window's nodes unless one of its sparse samples lands there. Its name
+    // gives its offset in the contig, so a chosen fragment whose contig range
+    // meets the region its placed siblings allow is walked whole too.
+    const contigOf = (name: PathName) =>
+      `${name.sample}#${name.haplotype}#${name.contig}`
+    const siblingRegion = new Map<string, [number, number]>()
+    for (const [pathHandle, [lo, hi]] of span) {
+      const name = pathsByHandle.get(pathHandle)?.name
+      if (name && chosen(pathHandle)) {
+        const key = contigOf(name)
+        const from = name.fragment + lo - CHAIN_BOUND
+        const to = name.fragment + hi + CHAIN_BOUND
+        const region = siblingRegion.get(key)
+        siblingRegion.set(
+          key,
+          region
+            ? [Math.min(region[0], from), Math.max(region[1], to)]
+            : [from, to],
+        )
+      }
+    }
+    const fragments: number[] = []
+    for (const [pathHandle, path] of pathsByHandle) {
+      const region = siblingRegion.get(contigOf(path.name))
+      if (
+        region &&
+        !span.has(pathHandle) &&
+        !unplaced.has(pathHandle) &&
+        input.keep(path.name)
+      ) {
+        const length = (await db.haplotypeLength(pathHandle)) ?? 0
+        if (
+          path.name.fragment < region[1] &&
+          path.name.fragment + length > region[0]
+        ) {
+          fragments.push(pathHandle)
+        }
+      }
+    }
+    for (const pathHandle of [...unplaced, ...fragments]) {
       const length =
         (await db.haplotypeLength(pathHandle)) ?? Number.POSITIVE_INFINITY
       if (length > outerStretch + 2 * CHAIN_BOUND) {
         throw new Fallback(
-          `path ${pathHandle} of ${length} bp has a sample on the window's nodes and no visit to the anchors`,
+          unplaced.has(pathHandle)
+            ? `path ${pathHandle} of ${length} bp has a sample on the window's nodes and no visit to the anchors`
+            : `chosen fragment ${pathHandle} of ${length} bp lies beside its contig's visits to the anchors without a visit of its own`,
         )
       }
       if (chosen(pathHandle)) {
@@ -683,8 +756,8 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       const s = span.get(sample.pathHandle)
       if (
         s &&
-        (sample.pathOffset < s[0] - CHAIN_BOUND ||
-          sample.pathOffset > s[1] + CHAIN_BOUND)
+        (sample.pathOffset < s[0] - SAMPLE_BAND ||
+          sample.pathOffset > s[1] + SAMPLE_BAND)
       ) {
         throw new Fallback(
           `path ${sample.pathHandle} has a sample at ${sample.pathOffset} on the window's nodes far from its anchor visits at ${s[0]}-${s[1]}`,
@@ -693,15 +766,16 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     }
     stats.ms.scan = lap()
 
-    // Interval walks. A walk jumps over the pieces it lands in and ends
-    // CHAIN_BOUND past the last piece or its stop, whichever is later, then
-    // goes back from the near anchor as far as CHAIN_BOUND before the first
-    // piece, or the stretch an inversion puts before the near anchor.
+    // Interval walks. A walk jumps over the pieces it lands in and ends once it
+    // is CHAIN_BOUND past both its stop and the last piece, then goes back from
+    // the near anchor CHAIN_BOUND past both the visit and the first piece, or
+    // through the stretch an inversion puts before the near anchor. So a walk
+    // covers every offset the sample check allows its path.
     const walkedRanges = new Map<number, [number, number][]>()
     await input.prefetchReferenceRange(
       input.referenceHandle,
-      anchorBefore.pathOffset,
-      anchorAfter.pathOffset + 1,
+      Math.max(0, anchorBefore.pathOffset - CHAIN_BOUND),
+      anchorAfter.pathOffset + CHAIN_BOUND + 1,
     )
     const cap = 8 * spacing + 2 * (input.window.end - input.window.start)
     for (const { row, stopAt, back, kind } of walks) {
@@ -710,24 +784,22 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         orientation === 'forward' ? to - from : from - to
       let lo = row.pathOffset
       let hi = row.pathOffset
-      let firstLanding: number | undefined
       let pos: Pos | undefined = { node: row.node, offset: row.offset }
       let left = row.pathOffset
-      let passed = false
+      let beyond = false
       let sinceLast = 0
       let outsideBp = 0
       let end: KeepWalkEnd = 'past the far anchor'
       while (pos) {
         signal?.throwIfAborted()
-        if (!passed && toward(left, stopAt) <= 0) {
-          passed = true
+        if (!beyond && toward(left, stopAt) <= -CHAIN_BOUND) {
+          beyond = true
         }
-        if (passed && sinceLast > CHAIN_BOUND) {
+        if (beyond && sinceLast > CHAIN_BOUND) {
           break
         }
         let len: number
         if (records.has(pos.node)) {
-          firstLanding ??= left
           const piece = await pieceAtOrThrough(
             { pos, left },
             row.pathHandle,
@@ -777,10 +849,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
           `chosen path ${row.pathHandle} runs on past the stretch from its visit to one anchor without a visit to the other`,
         )
       }
-      let reach =
-        firstLanding === undefined
-          ? 0
-          : CHAIN_BOUND - toward(row.pathOffset, firstLanding)
+      let reach = CHAIN_BOUND
       let cursor: Cursor = {
         pos: { node: row.node, offset: row.offset },
         left: row.pathOffset,

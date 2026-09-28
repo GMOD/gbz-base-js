@@ -418,12 +418,12 @@ describe('a query that uses the keep option', () => {
       { keep: keepStraight, context: 0 },
     )
     expect(kept.stats.keep?.fallback).toBeUndefined()
-    expect(kept.stats.keep?.walks['interval: past the far anchor']).toBe(1)
+    expect(kept.stats.keep?.walks['interval: endmarker']).toBe(1)
     expect(alignments.length).toBe(1)
   })
 
   it('identifies every walk when a one-sided walk runs on past the stretch', async () => {
-    const db = await hidingRows(await openInversion(), straight.handle, [2])
+    const db = await hidingRows(await openInversion(), straight.handle, [0, 1])
     const { kept } = await expectParity(
       db,
       { sample: 'GRCh38', contig: 'chr1' },
@@ -431,6 +431,18 @@ describe('a query that uses the keep option', () => {
       { keep: keepStraight, context: 0 },
     )
     expect(kept.stats.keep?.fallback).toMatch(/runs on past the stretch/)
+  })
+
+  it('trusts a one-sided walk that reaches the end of the contig', async () => {
+    const db = await hidingRows(await openInversion(), straight.handle, [2])
+    const { kept } = await expectParity(
+      db,
+      { sample: 'GRCh38', contig: 'chr1' },
+      ...inversionWindow,
+      { keep: keepStraight, context: 0 },
+    )
+    expect(kept.stats.keep?.fallback).toBeUndefined()
+    expect(kept.stats.keep?.walks['one-sided: endmarker']).toBe(1)
   })
 
   it('walks a chosen contig whole when it has a sample in the window and no anchor visit', async () => {
