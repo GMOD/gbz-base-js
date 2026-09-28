@@ -399,7 +399,10 @@ describe('a query that uses the keep option', () => {
         ...inversionWindow,
         { keep: keepStraight, context },
       )
-      expect(kept.stats.keep?.widerAnchors).toBe(2)
+      expect(kept.stats.keep?.anchorsRead).toBe(3)
+      if (context === 1000) {
+        expect(kept.stats.keep?.fallback).toBeUndefined()
+      }
       expect(
         alignments.some(a => a.resolved && a.pathHandle === straight.handle),
       ).toBe(true)
@@ -467,6 +470,22 @@ describe('a query that uses the keep option', () => {
       { keep: name => name.sample === 'HG002', context: 1000 },
     )
     expect(kept.stats.keep?.fallback).toMatch(/no visit to the anchors/)
+  })
+
+  it('identifies every walk when no chosen path passes any anchor or has a sample in the window', async () => {
+    const db = await hidingRows(
+      await openInversion(),
+      straight.handle,
+      [0, 1, 2],
+    )
+    const { kept, alignments } = await expectParity(
+      db,
+      { sample: 'GRCh38', contig: 'chr1' },
+      ...inversionWindow,
+      { keep: keepStraight, context: 0 },
+    )
+    expect(kept.stats.keep?.fallback).toMatch(/no chosen path/)
+    expect(alignments.length).toBe(1)
   })
 
   it('follows a contig off the reference’s end and one that starts after the anchor', async () => {
