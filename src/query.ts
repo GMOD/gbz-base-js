@@ -112,7 +112,12 @@ export async function subgraphForHaplotypes(
   const haplotypes = opts.haplotypes ?? 'all'
   if (
     haplotypes !== 'all' ||
-    !(await subgraph.extractChosenPaths(reference, end - start, opts.keep))
+    !(await subgraph.extractChosenPaths(
+      reference,
+      end - start,
+      opts.keep,
+      opts.context ?? 100,
+    ))
   ) {
     subgraph.extractPaths(reference, haplotypes)
     await subgraph.identifyPaths()

@@ -33,8 +33,14 @@ async function routes(
   fixture: string,
   windows: [number, number][],
   keepSets: string[][],
+  strays: boolean,
 ) {
   const db = await open(fixture)
+  if (!strays) {
+    Object.defineProperty(db, 'haplotypeStrayContext', {
+      value: () => undefined,
+    })
+  }
   const chr1 = { sample: 'GRCh38', contig: 'chr1' }
   const fallbacks: (string | undefined)[] = []
   for (const [start, end] of windows) {
@@ -63,36 +69,51 @@ async function routes(
 }
 
 describe('the keep route', () => {
-  it('identifies every walk when a path visits an anchor from two copies of the region', async () => {
-    const fallbacks = await routes(
+  const twoCopies = (strays: boolean) =>
+    routes(
       'two-copies',
       [
         [36000, 40000],
         [37000, 39000],
       ],
       [['HG001#2'], ['HG002#1'], ['HG002#2'], ['HG001#2', 'HG002#1']],
+      strays,
     )
+
+  it('identifies every walk when a path visits an anchor from two copies of the region', async () => {
+    const fallbacks = await twoCopies(false)
     expect(fallbacks.every(f => f?.includes('copies of the region'))).toBe(true)
   })
 
-  it('walks as far past each visit as the sample check allows', async () => {
-    const fallbacks = await routes(
-      'far-pass',
-      [
-        [36000, 40000],
-        [37000, 39000],
-      ],
-      [['HG001#1'], ['HG002#2'], ['HG004#1'], ['HG001#1', 'HG004#1']],
-    )
+  it('walks both copies of the region from the stray rows', async () => {
+    const fallbacks = await twoCopies(true)
     expect(fallbacks.every(f => f === undefined)).toBe(true)
   })
 
+  it('walks as far past each visit as the sample check allows', async () => {
+    for (const strays of [false, true]) {
+      const fallbacks = await routes(
+        'far-pass',
+        [
+          [36000, 40000],
+          [37000, 39000],
+        ],
+        [['HG001#1'], ['HG002#2'], ['HG004#1'], ['HG001#1', 'HG004#1']],
+        strays,
+      )
+      expect(fallbacks.every(f => f === undefined)).toBe(true)
+    }
+  })
+
   it('walks a fragment of a chosen contig that lies between the anchors', async () => {
-    const fallbacks = await routes(
-      'far-pass',
-      [[55000, 56500]],
-      [['HG005#1'], ['HG005#1', 'HG002#2']],
-    )
-    expect(fallbacks.every(f => f === undefined)).toBe(true)
+    for (const strays of [false, true]) {
+      const fallbacks = await routes(
+        'far-pass',
+        [[55000, 56500]],
+        [['HG005#1'], ['HG005#1', 'HG002#2']],
+        strays,
+      )
+      expect(fallbacks.every(f => f === undefined)).toBe(true)
+    }
   })
 })

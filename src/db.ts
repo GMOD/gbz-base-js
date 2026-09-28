@@ -77,6 +77,21 @@ export interface HaplotypeAnchor {
   pathOffset: number
 }
 
+// A row of HaplotypeStrays: visits of one path, between pathStart and pathEnd
+// along it, to nodes with loci between referenceStart and referenceEnd on a
+// reference path, that the walks from its anchor visits do not reach. The walk
+// over them starts at the GBWT position of the first, in the path's forward
+// orientation.
+export interface HaplotypeStray {
+  pathHandle: number
+  pathStart: number
+  pathEnd: number
+  referenceStart: number
+  referenceEnd: number
+  node: number
+  offset: number
+}
+
 export interface GbzPath {
   handle: number
   fwStart: Pos
@@ -505,6 +520,48 @@ export class GBZBase {
       ? this.indexTags.get('haplotype_index_anchor_spacing')
       : undefined
     return value === undefined ? undefined : Number(value)
+  }
+
+  // The largest context HaplotypeStrays covers, or undefined without the table.
+  haplotypeStrayContext() {
+    const value = this.index?.has('HaplotypeStrays')
+      ? this.indexTags.get('haplotype_index_stray_context')
+      : undefined
+    return value === undefined ? undefined : Number(value)
+  }
+
+  // The HaplotypeStrays rows on one reference path whose loci meet [from, to].
+  async haplotypeStraysInRange(
+    referenceHandle: number,
+    from: number,
+    to: number,
+  ) {
+    const chunk = Number(this.indexTags.get('haplotype_index_stray_chunk') ?? 0)
+    const rows: HaplotypeStray[] = []
+    for await (const key of this.companion.indexScanFrom('HaplotypeStrays', [
+      referenceHandle,
+      Math.max(0, from - chunk),
+    ])) {
+      if (
+        key[0] !== referenceHandle ||
+        num(key[1], 'HaplotypeStrays.reference_start') > to
+      ) {
+        break
+      }
+      const referenceEnd = num(key[2], 'HaplotypeStrays.reference_end')
+      if (referenceEnd >= from) {
+        rows.push({
+          referenceStart: num(key[1], 'HaplotypeStrays.reference_start'),
+          referenceEnd,
+          pathHandle: num(key[3], 'HaplotypeStrays.path_handle'),
+          pathStart: num(key[4], 'HaplotypeStrays.path_start'),
+          pathEnd: num(key[5], 'HaplotypeStrays.path_end'),
+          node: num(key[6], 'HaplotypeStrays.node_handle'),
+          offset: num(key[7], 'HaplotypeStrays.node_offset'),
+        })
+      }
+    }
+    return rows
   }
 
   async haplotypeAnchor(

@@ -23,6 +23,13 @@ function openWithCompanion(graph: string, companion: string) {
   })
 }
 
+// The index as a reader sees it without HaplotypeStrays, the format through
+// 4.1.0.
+function withoutStrays(db: GBZBase) {
+  Object.defineProperty(db, 'haplotypeStrayContext', { value: () => undefined })
+  return db
+}
+
 const openMicb = () =>
   openWithCompanion('micb-kir3dl1.gbz.db', 'micb-kir3dl1.haplotype-index.db')
 
@@ -314,7 +321,15 @@ describe('a query that uses the keep option', () => {
   // flipped and its pass lies before that visit. Neither pass holds a sample,
   // so only the walk can find them.
   it('walks the reversed stretch of an inversion that covers one anchor', async () => {
-    const db = await openInversion()
+    for (const strays of [false, true]) {
+      await reversedStretch(
+        strays ? await openInversion() : withoutStrays(await openInversion()),
+        strays,
+      )
+    }
+  })
+
+  async function reversedStretch(db: GBZBase, strays: boolean) {
     const chr1 = { sample: 'GRCh38', contig: 'chr1' }
     const inverted = ['HG001#1', 'HG002#1']
     const sets: [string, (name: PathName) => boolean][] = [
@@ -340,7 +355,6 @@ describe('a query that uses the keep option', () => {
             )
             const stats = kept.stats.keep!
             expect(stats.fallback).toBeUndefined()
-            expect(stats.anchors).toEqual([64572, 128696])
             const names = alignments.map(a =>
               a.resolved ? `${a.name.sample}#${a.name.haplotype}` : '',
             )
@@ -352,23 +366,29 @@ describe('a query that uses the keep option', () => {
               } as PathName),
             )
             expect(chosen.every(h => names.includes(h))).toBe(true)
-            expect(
-              Object.keys(stats.walks).filter(k => k.startsWith('inversion:'))
-                .length > 0,
-            ).toBe(chosen.length > 0)
+            if (!strays) {
+              expect(stats.anchors).toEqual([64572, 128696])
+              expect(
+                Object.keys(stats.walks).filter(k => k.startsWith('inversion:'))
+                  .length > 0,
+              ).toBe(chosen.length > 0)
+            }
           }
         }
       }
     }
-  })
+  }
 
   // Hides one path's rows at the given anchor nodes of the inversion fixture,
-  // as if the path bypassed those nodes.
+  // as if the path bypassed those nodes. Hidden rows contradict the stray rows
+  // the index built from the real ones, so the index reads without
+  // HaplotypeStrays.
   async function hidingRows(
     db: GBZBase,
     pathHandle: number,
     multiples: number[],
   ) {
+    withoutStrays(db)
     const hidden = new Set<number>()
     for (const k of multiples) {
       hidden.add(nodeId((await db.haplotypeAnchor(0, k * 65536))!.node))
@@ -507,9 +527,11 @@ describe('a query that uses the keep option', () => {
   // 65,536 bp, so only the reference's samples every 1,024 bp
   // (--reference-interval) fall on the stretch.
   it('identifies every walk when the context reaches the reference far from the anchors', async () => {
-    const db = await openWithCompanion(
-      'far-stretch.gbz.db',
-      'far-stretch.haplotype-index.db',
+    const db = withoutStrays(
+      await openWithCompanion(
+        'far-stretch.gbz.db',
+        'far-stretch.haplotype-index.db',
+      ),
     )
     const chr1 = { sample: 'GRCh38', contig: 'chr1' }
     const keep = (name: PathName) =>
@@ -526,6 +548,24 @@ describe('a query that uses the keep option', () => {
     expect(far.kept.stats.keep?.fallback).toMatch(
       /^path 0 has a sample at 5024 on the window's nodes far from its anchor visits/,
     )
+  })
+
+  it('answers from the stray rows when the context reaches the reference far from the anchors', async () => {
+    const db = await openWithCompanion(
+      'far-stretch.gbz.db',
+      'far-stretch.haplotype-index.db',
+    )
+    const keep = (name: PathName) =>
+      name.sample === 'HG001' && name.haplotype === 1
+    const far = await expectParity(
+      db,
+      { sample: 'GRCh38', contig: 'chr1' },
+      66500,
+      70000,
+      { keep, context: 1000 },
+    )
+    expect(far.kept.stats.keep?.fallback).toBeUndefined()
+    expect(far.kept.stats.keep?.strays?.rows).toBeGreaterThan(0)
   })
 
   it('follows a contig off the reference’s end and one that starts after the anchor', async () => {

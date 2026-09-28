@@ -1212,6 +1212,7 @@ export class Subgraph {
     reference: ReferencePath,
     len: number,
     keep: (name: PathName) => boolean,
+    context: number,
   ) {
     this.clearPaths()
     const start = reference.position.seqOffset
@@ -1225,6 +1226,7 @@ export class Subgraph {
       },
       referenceLeft: start - reference.position.nodeOffset,
       window: { start, end: start + len },
+      context,
       keep,
       signal: this.signal,
       prefetchReferenceRange: (pathHandle, fromOffset, toOffset) =>
