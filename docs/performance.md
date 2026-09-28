@@ -18,21 +18,21 @@ window elsewhere; "cached" has the window's pages in memory.
 
 | Window       | Haplotypes | Route      | Nodes  | First  | Cached |
 | ------------ | ---------- | ---------- | ------ | ------ | ------ |
-| KIV-2 30 kb  | 8          | keep       | 15,808 | 2.30 s | 0.55 s |
-| KIV-2 30 kb  | 464        | sampled    | 21,721 | 2.41 s | 1.23 s |
-| KIV-2 130 kb | 8          | keep       | 19,920 | 2.88 s | 0.81 s |
-| KIV-2 130 kb | 464        | sampled    | 27,438 | 3.97 s | 2.32 s |
-| AMY1         | 8          | every walk | 8,224  | 6.37 s | 1.82 s |
-| AMY1         | 464        | sampled    | 12,240 | 6.46 s | 2.42 s |
-| MHC class II | 8          | keep       | 39,421 | 3.68 s | 1.47 s |
-| MHC class II | 463        | sampled    | 43,540 | 6.95 s | 5.25 s |
+| KIV-2 30 kb  | 8          | keep       | 15,808 | 2.11 s | 0.52 s |
+| KIV-2 30 kb  | 464        | sampled    | 21,721 | 2.27 s | 1.10 s |
+| KIV-2 130 kb | 8          | keep       | 19,920 | 2.28 s | 0.60 s |
+| KIV-2 130 kb | 464        | sampled    | 27,438 | 3.17 s | 1.93 s |
+| AMY1         | 8          | every walk | 8,224  | 4.92 s | 1.10 s |
+| AMY1         | 464        | sampled    | 12,240 | 5.68 s | 1.93 s |
+| MHC class II | 8          | keep       | 39,421 | 3.44 s | 1.41 s |
+| MHC class II | 463        | sampled    | 43,540 | 5.49 s | 3.63 s |
 
-Each time is the mean of two runs of `scripts/measure-windows.mjs`. At AMY1 the
-keep route identifies every walk, because one contig starts inside the window
-and passes the stretch between the anchors again 500 kb later
+Each time is the faster of two runs of `scripts/measure-windows.mjs`. At AMY1
+the keep route identifies every walk, because one contig starts inside the
+window and passes the stretch between the anchors again 500 kb later
 ([haplotype-index.md](haplotype-index.md#keep)).
 
-A first query makes 20-56 range requests and reads 2.2-5.3 MB across both files.
+A first query makes 16-56 range requests and reads 2.2-5.7 MB across both files.
 
 ## Context
 
