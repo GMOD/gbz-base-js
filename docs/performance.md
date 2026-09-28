@@ -6,7 +6,7 @@ and aligning steps, and that is where `keep` saves the most time, because the
 library then walks and aligns only the haplotypes you asked for.
 `gbz-base-query --stats` reports the counters for one query, and
 `scripts/measure-windows.mjs` and `scripts/time-phases.mjs` produced the tables
-below. The tables predate the
+below. The tables after the first predate the
 [step-loop change](optimizations.md#the-step-loops), which made warm queries
 1.3-1.8x faster.
 
@@ -16,18 +16,23 @@ We queried the HPRC v2.1 graph and its hosted haplotype index over HTTPS, with
 `context: 1000` and contained snarls. "First" is a fresh open after one warm-up
 window elsewhere; "cached" has the window's pages in memory.
 
-| Window       | Haplotypes | Route    | Nodes  | First  | Cached |
-| ------------ | ---------- | -------- | ------ | ------ | ------ |
-| KIV-2 30 kb  | 8          | anchored | 3,140  | 3.08 s | 0.38 s |
-| KIV-2 30 kb  | 464        | sampled  | 21,721 | 3.75 s | 2.17 s |
-| KIV-2 130 kb | 8          | anchored | 7,383  | 2.87 s | 0.51 s |
-| KIV-2 130 kb | 464        | sampled  | 27,438 | 4.80 s | 3.74 s |
-| AMY1         | 8          | anchored | 8,164  | 6.11 s | 0.48 s |
-| AMY1         | 464        | sampled  | 12,240 | 8.43 s | 3.00 s |
-| MHC class II | 8          | anchored | 31,008 | 5.46 s | 0.97 s |
-| MHC class II | 464        | sampled  | 43,540 | 9.59 s | 9.16 s |
+| Window       | Haplotypes | Route      | Nodes  | First  | Cached |
+| ------------ | ---------- | ---------- | ------ | ------ | ------ |
+| KIV-2 30 kb  | 8          | keep       | 15,808 | 2.30 s | 0.55 s |
+| KIV-2 30 kb  | 464        | sampled    | 21,721 | 2.41 s | 1.23 s |
+| KIV-2 130 kb | 8          | keep       | 19,920 | 2.88 s | 0.81 s |
+| KIV-2 130 kb | 464        | sampled    | 27,438 | 3.97 s | 2.32 s |
+| AMY1         | 8          | every walk | 8,224  | 6.37 s | 1.82 s |
+| AMY1         | 464        | sampled    | 12,240 | 6.46 s | 2.42 s |
+| MHC class II | 8          | keep       | 39,421 | 3.68 s | 1.47 s |
+| MHC class II | 463        | sampled    | 43,540 | 6.95 s | 5.25 s |
 
-A first query makes 16-46 range requests and reads 2.2-4.7 MB across both files.
+Each time is the mean of two runs of `scripts/measure-windows.mjs`. At AMY1 the
+keep route identifies every walk, because one contig starts inside the window
+and passes the stretch between the anchors again 500 kb later
+([haplotype-index.md](haplotype-index.md#keep)).
+
+A first query makes 20-56 range requests and reads 2.2-5.3 MB across both files.
 
 ## Context
 

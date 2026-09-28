@@ -41,9 +41,10 @@ gbz-base-query https://host/graph.gbz.db \
 | `--against` or `--stack` | [PAF](alignments.md#paf-output), one line per alignment   |
 
 `--stats` writes request and byte counts to stderr, with how many walks the
-library identified and how many it could not, and on the anchored route the
-outcome of each walk and the reason for any fallback. On an error,
-`gbz-base-query` prints the message to stderr and exits with status 1.
+library identified and how many it could not. For a query that uses the `keep`
+option it also prints what each step of the keep route found and read, and
+whether the result is complete. On an error, `gbz-base-query` prints the message
+to stderr and exits with status 1.
 
 ## Flags
 

@@ -42,7 +42,7 @@ digraph gbzbasejs {
   walk     [label="aroundInterval\nreference walk + context" fillcolor="#fff8c5" color="#9a6700"]
   snarls   [label="extractSnarls"]
   extract  [label="extractPaths\ndecode GBWT records"]
-  anchored [label="walkHaplotypesFromAnchor\nHaplotypeAnchors" fillcolor="#dafbe1" color="#1a7f37"]
+  keep     [label="extractChosenPaths\nHaplotypeAnchors, HaplotypeSamples" fillcolor="#dafbe1" color="#1a7f37"]
   sampled  [label="identifyPaths\nHaplotypeSamples" fillcolor="#dafbe1" color="#1a7f37"]
   align    [label="alignments()"]
   out      [label="HaplotypeAlignment[]" fillcolor="#ddf4ff" color="#0969da"]
@@ -57,11 +57,12 @@ digraph gbzbasejs {
   walk -> snarls [style=dashed label=" snarls "]
   walk -> extract
   snarls -> extract
-  extract -> anchored [style=dashed label=" { keep: name => … } " weight=6]
-  extract -> sampled [style=dashed label=" otherwise " weight=6]
-  anchored -> align
+  walk -> keep [style=dashed label=" { keep: name => … } "]
+  snarls -> keep [style=dashed]
+  extract -> sampled [weight=6]
+  keep -> align
   sampled -> align
-  anchored -> sampled [style=dashed label=" a walk never reaches the window "]
+  keep -> extract [style=dashed label=" the samples cannot show that the walks are complete " constraint=false]
   align -> out [weight=10]
   extract -> gfa [style=dashed label=" Subgraph " weight=0]
 

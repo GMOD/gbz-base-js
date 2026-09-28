@@ -47,8 +47,8 @@ A snarl can be far larger than the window, so pair `overlapping` with `limit`.
 
 `getSubgraphForRange` and the lower-level `subgraphInInterval`,
 `subgraphAtOffset` and `subgraphAroundNodes` take `snarls`. A query that uses
-the `keep` option ignores `snarls` on the anchored route, because that route
-walks the chosen haplotypes whole.
+the `keep` option takes it too, and returns the walks of the same subgraph for
+the chosen haplotypes.
 
 ## Between two boundary nodes
 

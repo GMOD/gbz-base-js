@@ -33,12 +33,26 @@ split:
 The trim helps least in the swapped-flank case, and no HPRC locus we queried has
 that pattern.
 
-## Walking from an anchor
+## The keep route
 
-`walkFromRow` keeps no visited set. `lf()` is a permutation of GBWT positions,
-so a walk over valid data is loop-free, and a bp limit on each walk stops one
-over corrupt data. Dropping the set took AMY1 (231 samples, 5M steps) from 8.2
-to 6.6 s.
+We compared the keep route record for record with the sampled route on the same
+subgraph, over 58 windows of the HPRC chr22 graph at `context` 0 and 1000 with
+`snarls` none and contained, and over the HPRC v2.1 tutorial windows. Three
+choices in the route came from those runs.
+
+- **Walks between the anchors.** Chains that stop at a fixed distance outside
+  the subgraph lost 109 of 1,561 pieces of eight haplotypes at KIV-2 with
+  `context: 0`, at 32 kb and at 64 kb, because the copies of the repeat lie up
+  to 105 kb apart along each haplotype. Walking each haplotype from its visit to
+  the anchor before the window to its visit to the anchor after found all 1,561.
+- **32 kb past the anchors.** A collapsed repeat puts a short second piece of
+  every haplotype 30 kb from the window at IGL and 16 kb from it at GSTT. Chains
+  that stopped when they reached the reference beside the subgraph lost every
+  one of those pieces.
+- **The twin from the other orientation.** In an 8 kb window at `context: 0`,
+  the samples and chains reached all 43 pieces of eight haplotypes in the
+  orientation `extractPaths` drops. Reading the samples of the other orientation
+  by coordinate completed every twin tried, 85 of 85 over the chr22 runs.
 
 ## The step loops
 
@@ -73,9 +87,18 @@ Node sequences and CIGARs stay strings.
 
 ## Open problems
 
-- SMN1/2 takes 35 s with 14 samples kept. One anchored walk reaches the bp limit
-  inside the inverted segmental duplication, and the library falls back to the
-  sampled route for the whole window.
+- A pass of a chosen haplotype through the subgraph can lie outside every walk
+  and between two samples of its path. The query returns the result without it
+  when every sample on the subgraph's nodes lies where its path's anchor visits
+  place it, and identifies every walk when one lies elsewhere. The prototype of
+  the route, which ran its walks and chains alone, returned every chosen piece
+  outside LCR22 and IGL over 2,880 runs on 58 windows of HPRC chr22, and in
+  those nine windows missed 2% of the chosen pieces, short passes 41 kb to 2.6
+  Mb from the haplotype's other pieces. The reference passes the nodes of 94% of
+  them again elsewhere on the chromosome. A table of the reference's
+  self-overlaps, written by `gbz-haplotype-index`, would let the query walk the
+  chosen haplotypes at those loci too; given those loci, the prototype's misses
+  fell from 1,077 to 64 over 22 runs at 1.6 to 2.2 times its time.
 - Identifying a walk piece shorter than the sampling interval scans the
   haplotype index, and 99.91% of those scans miss
   ([performance.md](performance.md#small-windows-at-the-same-locus)). Following
