@@ -39,17 +39,20 @@ Upstream `gbz-base` builds `test/data/*.gbz.db`
 `test/oracle.test.ts` compares against it, and `generate.sh` regenerates it with
 `gbz-base` on your PATH. Commit the regenerated files.
 
-`vg` builds two fixtures from GFA files, `split-contig.gfa` (a contig stored as
-two path fragments) and `looping-walk.gfa` (walks that loop through or reorder
-the reference). `quay.io/vgteam/vg` is the easiest `vg` on a Mac.
+`vg` builds three fixtures from GFA files: `split-contig.gfa` (a contig stored
+as two path fragments), `looping-walk.gfa` (walks that loop through or reorder
+the reference) and `far-stretch.gfa` (a deletion that joins a window to a
+reference stretch far from its anchors). `quay.io/vgteam/vg` is the easiest `vg`
+on a Mac.
 
 ```sh
 vg gbwt -G split-contig.gfa --gbz-format -g split-contig.gbz
 gbz-base construct split-contig.gbz -o split-contig.gbz.db
-gbz-haplotype-index --interval 200 --output split-contig.haplotype-index.db split-contig.gbz split-contig.gbz.db
+gbz-haplotype-index --interval 200 --anchor-spacing 300 split-contig.gbz split-contig.gbz.db split-contig.haplotype-index.db
 ```
 
-`looping-walk` uses the first two commands only.
+`looping-walk` uses the first two commands only. `far-stretch` builds its index
+with `--interval 65536 --anchor-spacing 16384 --reference-interval 1024`.
 
 ## Scripts
 

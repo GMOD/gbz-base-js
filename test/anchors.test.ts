@@ -488,6 +488,34 @@ describe('a query that uses the keep option', () => {
     expect(alignments.length).toBe(1)
   })
 
+  // far-stretch.gfa: a 96 kb reference and four haplotypes. HG002#1 deletes
+  // 6,000-66,000, so its edge joins the stretch at 4,000-6,000 to the window's
+  // first node, and 1 kb of context reaches that stretch, which every other
+  // path passes 60 kb before the anchors. The index samples haplotypes every
+  // 65,536 bp, so only the reference's samples every 1,024 bp
+  // (--reference-interval) fall on the stretch.
+  it('identifies every walk when the context reaches the reference far from the anchors', async () => {
+    const db = await openWithCompanion(
+      'far-stretch.gbz.db',
+      'far-stretch.haplotype-index.db',
+    )
+    const chr1 = { sample: 'GRCh38', contig: 'chr1' }
+    const keep = (name: PathName) =>
+      name.sample === 'HG001' && name.haplotype === 1
+    const near = await expectParity(db, chr1, 66500, 70000, {
+      keep,
+      context: 0,
+    })
+    expect(near.kept.stats.keep?.fallback).toBeUndefined()
+    const far = await expectParity(db, chr1, 66500, 70000, {
+      keep,
+      context: 1000,
+    })
+    expect(far.kept.stats.keep?.fallback).toMatch(
+      /^path 0 has a sample at 5024 on the window's nodes far from its anchor visits/,
+    )
+  })
+
   it('follows a contig off the reference’s end and one that starts after the anchor', async () => {
     const db = await openSplit()
     const chr1 = { sample: 'GRCh38', contig: 'chr1' }
