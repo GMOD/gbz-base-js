@@ -44,8 +44,9 @@ stored as two path fragments), `looping-walk.gfa` (walks that loop through or
 reorder the reference), `far-stretch.gfa` (a deletion that joins a window to a
 reference stretch far from its anchors), `two-copies.gfa` and `far-pass.gfa`
 (haplotypes that pass the window again from far along their own sequence) and
-`detour.gfa` (walks that leave the subgraph and come back). `quay.io/vgteam/vg`
-is the easiest `vg` on a Mac.
+`detour.gfa` (walks that leave the subgraph and come back) and `unplaced.gfa` (a
+contig that visits no anchor and has no sample in the window).
+`quay.io/vgteam/vg` is the easiest `vg` on a Mac.
 
 ```sh
 vg gbwt -G split-contig.gfa --gbz-format -g split-contig.gbz
@@ -58,8 +59,15 @@ with these options:
 
 - `far-stretch`:
   `--interval 65536 --anchor-spacing 16384 --reference-interval 1024`
-- `two-copies`, `far-pass`: `--interval 65536 --anchor-spacing 16384`
+- `two-copies`, `far-pass`, `unplaced`:
+  `--interval 65536 --anchor-spacing 16384`
 - `detour`: `--interval 1000 --anchor-spacing 0`
+
+`inversion` takes `--interval 4096 --anchor-spacing 65536` and `micb-kir3dl1`
+`--interval 1000 --anchor-spacing 2500`, both with `--from-db` on the committed
+`.gbz.db`. Every index with anchors carries stray rows, and the tests of the
+anchor route, which an index without them takes, read the fixture through
+`withoutStrays`.
 
 ## Scripts
 

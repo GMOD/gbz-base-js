@@ -19,6 +19,10 @@ import type { PathName } from '../src/pathName.ts'
 // 31 kb past its visit to the anchor at 49024, and HG004#1 passes 17-20 again,
 // visiting the anchor at 32000 a second time at 80000. HG005#1's contig is
 // three fragments, at 0, 50000 and 62000, and the middle one visits no anchor.
+//
+// unplaced.gfa: HG006#1 has a second contig of 12 kb that runs private node 49,
+// nodes 18-20 and private node 50. It visits no anchor, and its only samples
+// lie on the private nodes, outside a window on nodes 19-20.
 const dataDir = path.join(import.meta.dirname, 'data')
 
 function open(fixture: string) {
@@ -28,6 +32,8 @@ function open(fixture: string) {
     ),
   })
 }
+
+const chr1 = { sample: 'GRCh38', contig: 'chr1' }
 
 async function routes(
   fixture: string,
@@ -41,7 +47,6 @@ async function routes(
       value: () => undefined,
     })
   }
-  const chr1 = { sample: 'GRCh38', contig: 'chr1' }
   const fallbacks: (string | undefined)[] = []
   for (const [start, end] of windows) {
     for (const context of [0, 100, 1000]) {
@@ -115,5 +120,32 @@ describe('the keep route', () => {
       )
       expect(fallbacks.every(f => f === undefined)).toBe(true)
     }
+  })
+
+  it('walks a contig that visits no anchor and has no sample in the window', async () => {
+    const fallbacks = await routes(
+      'unplaced',
+      [
+        [36000, 40000],
+        [37000, 39000],
+      ],
+      [['HG006#1'], ['HG006#1', 'HG002#2']],
+      true,
+    )
+    expect(fallbacks.every(f => f === undefined)).toBe(true)
+  })
+
+  it('drops that contig on the anchor route of an index without stray rows', async () => {
+    const db = await open('unplaced')
+    Object.defineProperty(db, 'haplotypeStrayContext', {
+      value: () => undefined,
+    })
+    const kept = await subgraphForHaplotypes(db, chr1, 36000, 40000, {
+      context: 100,
+      keep: name => name.sample === 'HG006',
+    })
+    const gfa = await kept.toGFA({ names: 'resolved' })
+    expect(gfa).toContain('\tctg1\t')
+    expect(gfa).not.toContain('\tctg2\t')
   })
 })
