@@ -1,3 +1,17 @@
+## [4.1.0](https://github.com/GMOD/gbz-base-js/compare/v4.0.0...v4.1.0) (2026-09-28)
+
+### Other Changes
+
+- Write the bin path as npm normalizes it ([9e0e975](https://github.com/GMOD/gbz-base-js/commit/9e0e975cf6adf79bdfaf86b1a511deecce07e52b))
+- --reference-interval samples the reference paths more densely ([4e9eec4](https://github.com/GMOD/gbz-base-js/commit/4e9eec4f329530e81668fd5510bb83328e881cb1))
+- Test the far-sample fallback on a reference stretch the context reaches ([485f9da](https://github.com/GMOD/gbz-base-js/commit/485f9daa34e8f555b82234f3f1a19fee32fc30ab))
+- --reference-interval, and what puts a sample far from its anchors ([00e98c3](https://github.com/GMOD/gbz-base-js/commit/00e98c3947652f5ba5341b8dc9b6229163d0b79d))
+- The keep route walks as far as its sample check allows, and falls back on two copies ([09c5bd5](https://github.com/GMOD/gbz-base-js/commit/09c5bd59c3484c4533e1cb2cf0604724ab3b40d3))
+- Walk a chosen path's extra anchor visit near its pairs, and correct the keep docs ([665e4bb](https://github.com/GMOD/gbz-base-js/commit/665e4bb609e97508e318037229e9b0694426d555))
+- Keep-route omission modes, what is fixed, and the plan to close the rest ([3c33200](https://github.com/GMOD/gbz-base-js/commit/3c332002522fd7651d0047a59504e0a0113fbb80))
+- Alignment records join a walk that leaves the subgraph and comes back ([4aed986](https://github.com/GMOD/gbz-base-js/commit/4aed98610539e8e8fdd3ad9da484e61bbadc7ced))
+- Joined records count aligned bases, and a detour piece joins between two ends ([61f3125](https://github.com/GMOD/gbz-base-js/commit/61f312521b64ac7358b1becd194d4fe605f1702a))
+
 ## [4.0.0](https://github.com/GMOD/gbz-base-js/compare/v3.0.0...v4.0.0) (2026-09-28)
 
 ### Other Changes
