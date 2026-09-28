@@ -531,12 +531,19 @@ export class GBZBase {
   }
 
   // The HaplotypeStrays rows on one reference path whose loci meet [from, to].
+  // Each row's span holds loci the index kept for nodes with loci up to
+  // haplotype_index_stray_tolerance bp from them, so the lookup widens by that.
   async haplotypeStraysInRange(
     referenceHandle: number,
-    from: number,
-    to: number,
+    start: number,
+    end: number,
   ) {
     const chunk = Number(this.indexTags.get('haplotype_index_stray_chunk') ?? 0)
+    const tolerance = Number(
+      this.indexTags.get('haplotype_index_stray_tolerance') ?? 0,
+    )
+    const from = Math.max(0, start - tolerance)
+    const to = end + tolerance
     const rows: HaplotypeStray[] = []
     for await (const key of this.companion.indexScanFrom('HaplotypeStrays', [
       referenceHandle,
