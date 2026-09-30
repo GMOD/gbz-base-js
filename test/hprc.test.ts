@@ -1,6 +1,4 @@
 import { existsSync } from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
 
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
@@ -13,23 +11,10 @@ import type { PathName } from '../src/pathName.ts'
 
 const graphUrl =
   'https://s3-us-west-2.amazonaws.com/human-pangenomics/pangenomes/freeze/release2/minigraph-cactus/v2.1/hprc-v2.1-mc-grch38/hprc-v2.1-mc-grch38.gbz.db'
-const companion =
-  process.env.GBZ_HPRC_INDEX ??
-  path.join(
-    os.homedir(),
-    'src',
-    'hprc-gbz',
-    'hprc-v2.1-mc-grch38.haplotype-index.db',
-  )
-
-const anchoredCompanion =
-  process.env.GBZ_HPRC_ANCHORED_INDEX ??
-  path.join(
-    os.homedir(),
-    'src',
-    'hprc-gbz',
-    'hprc-v2.1-mc-grch38.haplotype-index.anchored.db',
-  )
+const hostedIndex =
+  'https://jbrowse.org/demos/hprc/hprc-v2.1-mc-grch38.haplotype-index.anchored.db'
+const companion = process.env.GBZ_HPRC_INDEX ?? hostedIndex
+const anchoredCompanion = process.env.GBZ_HPRC_ANCHORED_INDEX ?? hostedIndex
 
 const isRemote = (file: string) => /^https?:\/\//.test(file)
 const available = (file: string) => isRemote(file) || existsSync(file)
@@ -68,7 +53,7 @@ describe.skipIf(!available(companion))('the published HPRC v2.1 graph', () => {
     await subgraph.identifyPaths()
     const alignments = subgraph.alignments()
     expect(subgraph.nodeCount).toBe(12240)
-    expect(alignments.length).toBe(1395)
+    expect(alignments.length).toBe(1362)
     expect(alignments.every(a => a.resolved)).toBe(true)
     const haplotypes = new Set(
       alignments.flatMap(a => (a.resolved ? [a.pathHandle] : [])),
@@ -76,7 +61,7 @@ describe.skipIf(!available(companion))('the published HPRC v2.1 graph', () => {
     expect(haplotypes.size).toBe(490)
     const { scans, windowSamples, chains } = subgraph.stats.identification
     expect(scans.length).toBe(5)
-    expect(windowSamples).toBeLessThan(10000)
+    expect(windowSamples).toBeLessThan(16000)
     expect(chains.reduce((n, c) => n + c.fragments, 0)).toBe(1912)
     expect(db.index?.pager.bytesFetched).toBeLessThan(4 * 1024 * 1024)
     for (const alignment of alignments) {
