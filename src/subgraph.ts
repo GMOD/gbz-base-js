@@ -495,6 +495,7 @@ export class Subgraph {
   private records = new Map<number, GbzRecord>()
   private paths: PathInfo[] = []
   private twinStarts = new Set<string>()
+  private twinDeferred = false
   private refId: number | undefined
   private refPath: PathName | undefined
   private refHandle: number | undefined
@@ -595,6 +596,7 @@ export class Subgraph {
   private clearPaths() {
     this.paths = []
     this.twinStarts.clear()
+    this.twinDeferred = false
     this.refId = undefined
     this.refPath = undefined
     this.refHandle = undefined
@@ -1179,7 +1181,7 @@ export class Subgraph {
       }
     }
     if (output === 'distinct') {
-      this.distinctPaths()
+      this.distinctPaths(true)
     } else if (output === 'reference-only') {
       if (this.refId === undefined) {
         throw new Error('Reference path is required for reference-only output')
@@ -1189,21 +1191,45 @@ export class Subgraph {
     }
   }
 
-  private distinctPaths() {
-    const refPath =
-      this.refId === undefined ? undefined : this.paths[this.refId]!.path
-    this.paths.sort((x, y) => comparePaths(x.path, y.path) || x.len - y.len)
+  // Identical walks become one record whose weight counts them, and the
+  // reference walk stands for its own group, since the outputs read its
+  // offsets and identity. Walks that identification will drop as twins
+  // (dropTwins) stay apart until then, so that the record they would have
+  // merged into keeps a name and a weight of its own: the twin of a reference
+  // walk that is not canonical, which a haplotype stored against the reference
+  // walks handle for handle, and a walk that reads the same in both
+  // orientations, which extractPaths keeps twice.
+  private distinctPaths(deferTwins: boolean) {
+    const refInfo =
+      this.refId === undefined ? undefined : this.paths[this.refId]
+    const refPath = refInfo?.path
+    const referenceTwin =
+      refPath && !pathIsCanonical(refPath) ? flipPath(refPath) : undefined
+    const deferred = (path: number[]) =>
+      (referenceTwin !== undefined &&
+        comparePaths(path, referenceTwin) === 0) ||
+      comparePaths(path, flipPath(path)) === 0
+    const defer = deferTwins && this.db.hasHaplotypeIndex
+    this.twinDeferred = false
+    this.paths.sort(
+      (x, y) =>
+        comparePaths(x.path, y.path) ||
+        x.len - y.len ||
+        (x === refInfo ? -1 : y === refInfo ? 1 : 0),
+    )
     const merged: PathInfo[] = []
     let refId: number | undefined
     for (const info of this.paths) {
       const last = merged[merged.length - 1]
-      if (last && comparePaths(last.path, info.path) === 0) {
-        last.weight = (last.weight ?? 0) + 1
+      const apart = defer && info !== refInfo && deferred(info.path)
+      this.twinDeferred ||= apart
+      if (last && comparePaths(last.path, info.path) === 0 && !apart) {
+        last.weight = (last.weight ?? 1) + (info.weight ?? 1)
       } else {
-        if (refPath && comparePaths(info.path, refPath) === 0) {
+        if (info === refInfo) {
           refId = merged.length
         }
-        merged.push({ ...info, weight: 1 })
+        merged.push({ ...info, weight: info.weight ?? 1 })
       }
     }
     this.paths = merged
@@ -1213,7 +1239,49 @@ export class Subgraph {
   // Merges identical walks into one record with a weight, as extractPaths does
   // for 'distinct'. After keepHaplotypes the weights count kept haplotypes.
   mergeDistinct() {
-    this.distinctPaths()
+    this.distinctPaths(false)
+  }
+
+  // extractPaths keeps the canonical orientation of each walk, and both
+  // orientations are canonical when a walk starts and ends at one node in
+  // opposite orientations, as through a hairpin; the twin of a reference walk
+  // that is not canonical is kept too. Named, a twin is the same stretch of
+  // the same path as another walk, read the other way, and the reverse one
+  // goes.
+  private dropTwins() {
+    const refInfo =
+      this.refId === undefined ? undefined : this.paths[this.refId]
+    const interval = this.refInterval
+    const span = (identity: PathIdentity) =>
+      `${identity.pathHandle}:${identity.hapStart}-${identity.hapEnd}`
+    const forward = new Set<string>()
+    if (refInfo?.identity && interval) {
+      forward.add(
+        span({
+          ...refInfo.identity,
+          hapStart: interval[0],
+          hapEnd: interval[1],
+        }),
+      )
+    }
+    for (const info of this.paths) {
+      if (info !== refInfo && info.identity?.orientation === 'forward') {
+        forward.add(span(info.identity))
+      }
+    }
+    const kept = this.paths.filter(
+      info =>
+        info === refInfo ||
+        info.identity?.orientation !== 'reverse' ||
+        !forward.has(span(info.identity)),
+    )
+    if (kept.length < this.paths.length) {
+      this.paths = kept
+      this.refId = refInfo === undefined ? undefined : kept.indexOf(refInfo)
+    }
+    if (this.twinDeferred) {
+      this.distinctPaths(false)
+    }
   }
 
   // Narrows an identified subgraph to the reference walk and the named walks
@@ -1319,6 +1387,7 @@ export class Subgraph {
     this.refPath = reference.name
     this.refHandle = reference.handle
     this.refInterval = [found.reference.hapStart, found.reference.hapEnd]
+    this.dropTwins()
     return true
   }
 
@@ -1328,7 +1397,7 @@ export class Subgraph {
         'The database has no HaplotypeSamples table; run gbz-haplotype-index on it',
       )
     }
-    const interval = (await this.db.haplotypeSampleInterval()) ?? 4096
+    const interval = (await this.db.haplotypeSampleGap()) ?? 4096
     const runs = handleRuns(this.sortedHandles())
     if (runs.length === 0) {
       return
@@ -1551,6 +1620,7 @@ export class Subgraph {
         }
       }
     }
+    this.dropTwins()
   }
 
   private refIndex(ref: number[]) {
@@ -1756,10 +1826,16 @@ export class Subgraph {
     }
     const ref = this.paths[this.refId]!.path
     let result: { edits: Edit[]; matched: number; flipped: boolean }
-    if (pathIsCanonical(ref)) {
-      // A walk against a canonical reference has nothing to gain from being
-      // flipped, so neither bound is worth the pass over its steps that
-      // measuring one costs.
+    if (
+      pathIsCanonical(ref) &&
+      (info.identity === undefined || !pathIsCanonical(flipPath(info.path)))
+    ) {
+      // A canonical walk against a canonical reference has nothing to gain
+      // from being flipped, so neither bound is worth the pass over its steps
+      // that measuring one costs. A walk through a hairpin is canonical both
+      // ways and either way aligns about half of it; once named, dropTwins
+      // has left one of them, and it takes the better way. Unnamed, both are
+      // walks as upstream prints them, each aligned as it stands.
       result = { ...this.editsAgainst(info.path, ref), flipped: false }
     } else {
       const flippedPath = flipPath(info.path)

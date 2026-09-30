@@ -53,7 +53,9 @@ describe.skipIf(!available(companion))('the published HPRC v2.1 graph', () => {
     await subgraph.identifyPaths()
     const alignments = subgraph.alignments()
     expect(subgraph.nodeCount).toBe(12240)
-    expect(alignments.length).toBe(1362)
+    // 1,362 before dropTwins: the locus holds inverted copies, so walks
+    // through its hairpins came back in both orientations
+    expect(alignments.length).toBe(1213)
     expect(alignments.every(a => a.resolved)).toBe(true)
     const haplotypes = new Set(
       alignments.flatMap(a => (a.resolved ? [a.pathHandle] : [])),

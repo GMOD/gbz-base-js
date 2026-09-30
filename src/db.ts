@@ -531,6 +531,16 @@ export class GBZBase {
     return value === undefined ? undefined : Number(value)
   }
 
+  // The most bp between two samples of any path: the reference paths take
+  // --reference-interval, which can exceed --interval.
+  async haplotypeSampleGap() {
+    const interval = await this.haplotypeSampleInterval()
+    const reference = this.indexTags.get('haplotype_index_reference_interval')
+    return interval === undefined
+      ? undefined
+      : Math.max(interval, reference === undefined ? 0 : Number(reference))
+  }
+
   async haplotypeAnchorSpacing() {
     const value = this.index?.has('HaplotypeAnchors')
       ? this.indexTags.get('haplotype_index_anchor_spacing')
