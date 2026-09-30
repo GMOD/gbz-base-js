@@ -86,7 +86,39 @@ sweep on ada (`runs/strays4`) had 21 wrong queries and 52 dropped pieces in
 
 ## Evidence
 
-RESULTS-PLACEHOLDER
+All on the final code (`9eb3436` for `src/`), index
+`hprc-v2.1-mc-grch38.haplotype-index.bins.db`, local files on ada.
+
+| run (`~/keep-sweep/runs/`) | windows                           | queries | keep route | fallback | wrong |
+| -------------------------- | --------------------------------- | ------: | ---------: | -------: | ----: |
+| `bins2`                    | the 1,500 of 09-28                |   9,000 |      8,986 |       14 |     0 |
+| `bins2-targeted`           | 1,330 aimed at the stray rows     |  15,780 |     15,772 |        8 |     0 |
+| `bins2-tutorial`           | 18 loci, four combos              |     216 |        216 |        0 |     0 |
+| `bins2-all`                | the 1,500, every haplotype kept   |   3,000 |      2,998 |        2 |     0 |
+| `bins2-tutorial-all`       | the 18 loci, every haplotype kept |      72 |         72 |        0 |     0 |
+| TARGETED-ALL-ROW           |
+
+4.1.0 on the first row: 152 wrong, 585 pieces. `strays4` (the branch as found):
+21 wrong, 52 pieces.
+
+- **Truth from the GBZ** (`gbz-truth`): the sampled route matches on all 8,260
+  subgraphs of `bins2` and `bins2-targeted`, 21,653,445 pieces, none missing,
+  added or unnamed. Nothing had checked the sampled route against anything but
+  itself before.
+- **Fuzz** (`test/fuzz`), final code: 18,500 graphs, 582,634 sampled queries and
+  7,322,972 keep queries (6,974,349 on the keep route), no mismatch against the
+  GFA and no difference between the routes. At `29798dd`, before the two fuzzer
+  fixes, 9 keep queries in 4,000 seeds dropped a piece and 24 sampled queries
+  threw.
+- **chr22** (`idx-bins-s32k.db`, 32 kb anchors): 486 queries and 162 keep-all
+  queries, none wrong; truth matched on 162 subgraphs, 86,490 pieces.
+- How often the rows matter: a stray row was walked in 39 of 3,600 random
+  queries, 310 of 1,790 in segmental duplications, 1,670 of 1,800 at unplaced
+  contigs.
+- Timing, local disk, pages cached, median keep against sampled: random 102 and
+  169 ms; segdup 117 and 289; unplaced contigs 144 and 1,404; a window under 3
+  kb beside an anchor or bin boundary 62-93 and 19-25. The keep route walks
+  about 196 kb per chosen haplotype with 131 kb anchors, whatever the window.
 
 ## Tests, from small to large
 
@@ -114,7 +146,27 @@ lasts 8 hours. It is shared: nice 10, about 12 cores.
 
 ## Decisions for the user
 
-NEXT-PLACEHOLDER
+1. **Host the new index.** `bins.db` on ada is validated. 4.1.0 reads it as
+   before, since it ignores the two new tables, so it can replace
+   `hprc-v2.1-mc-grch38.haplotype-index.anchored.db` in place. Until it is
+   hosted, a keep query with the new library identifies every walk: correct, and
+   slower. Rebuild first with the final indexer if the
+   `haplotype_index_tool_version` tag matters; the tables come out the same.
+2. **Release.** npm: the `KeepStats` fields changed (`seeds` and three `ms` keys
+   gone, `strays` added), `keepHaplotypes` throws where it discarded, and `keep`
+   with `distinct` returns different records, so this is a major version by
+   semver, or 4.2.0 if the stats count as diagnostics. crates.io:
+   `gbz-haplotype-index` 0.2.0; the published 0.1.0 writes neither table.
+3. **The plugin** answers its pair view only when `stats.keep.fallback` is
+   `undefined` (`GbzBaseSyntenyAdapter.ts`, `pairFeatures`), from when the
+   anchored route returned whole walks. Both routes have returned the same
+   pieces since 4.0, so that gate can go. With it in place and the old index
+   hosted, the pair view composes through the reference on every query.
+4. **Anchor spacing.** 32 kb anchors would cut the walks four times and make
+   small windows faster; chr22 put the cost at 5.6% of the index for GRCh38
+   alone. Not measured on HPRC with stray rows.
+5. **`snarls: 'overlapping'` with `keep`** falls back. Covering it needs every
+   snarl boundary's visits listed in the other boundary's bins.
 
 ## Pitfalls met
 
