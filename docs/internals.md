@@ -16,8 +16,11 @@ requests through `generic-filehandle2`, like other JBrowse readers.
 ## Tests against upstream
 
 `test/data/oracle/` holds the JSON that upstream `gbz-base query` writes for the
-queries in `queries.txt`. The tests require identical output, CIGARs included.
-`generate.sh` regenerates it with an upstream binary.
+queries in `queries.txt`. The tests require identical output, CIGARs included,
+and the order of the walks, which sets their `unknown#N` names; the inversion
+and stray-end queries hold walks that start on a reverse handle, where the two
+implementations found them in different passes. `generate.sh` regenerates the
+files with an upstream binary.
 
 ## Differences from upstream
 

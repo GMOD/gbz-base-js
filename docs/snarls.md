@@ -11,10 +11,10 @@ chains as links between boundary nodes.
 `context` extends a window by a bp radius. The `snarls` option extends it by
 whole snarls instead, using the stored chains.
 
-| `snarls`      | CLI               | adds                                                                            |
-| ------------- | ----------------- | ------------------------------------------------------------------------------- |
-| `contained`   | `--snarls`        | every top-level snarl with both boundary nodes in view                          |
-| `overlapping` | `--extend-snarls` | also snarls with one boundary in view, or the snarl containing the whole window |
+| `snarls`      | CLI               | adds                                                                                          |
+| ------------- | ----------------- | --------------------------------------------------------------------------------------------- |
+| `contained`   | `--snarls`        | every top-level snarl with both boundary nodes in view                                        |
+| `overlapping` | `--extend-snarls` | also snarls the window enters through one boundary node, or the snarl around the whole window |
 
 A top-level snarl includes every snarl nested inside it.
 
