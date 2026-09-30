@@ -508,6 +508,11 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       )
     }
     for (const fill of fills) {
+      if (fill.inserted > 0 && fill.low === fill.high) {
+        throw new Fallback(
+          `the haplotype index's stray rows leave out the snarl bounded by node ${fill.low} at both ends`,
+        )
+      }
       if (
         fill.inserted > 0 &&
         (strays.snarlNodes === undefined || fill.nodes > strays.snarlNodes)
@@ -538,6 +543,11 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     }
 
     // Every anchor within `bound` of the bins, and one beyond on each side.
+    // The indexer counts a section whose anchor lies exactly `bound` outside
+    // the bins as reaching the visits around it, so the anchor past that one
+    // must be read too, or the section between them is never planned. An
+    // anchor's node can start far before its multiple, so the first read
+    // does not settle it.
     const anchorOf = new Map<number, HaplotypeAnchor>()
     const readAnchor = async (k: number) => {
       const anchor = await db.haplotypeAnchor(
@@ -558,7 +568,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     )
     while (
       lowest > 0 &&
-      (anchorOf.get(lowest)?.pathOffset ?? Number.POSITIVE_INFINITY) >
+      (anchorOf.get(lowest)?.pathOffset ?? Number.POSITIVE_INFINITY) >=
         lo - bound
     ) {
       lowest -= 1
@@ -566,7 +576,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     }
     while (
       anchorOf.has(highest) &&
-      anchorOf.get(highest)!.pathOffset < hi + bound
+      anchorOf.get(highest)!.pathOffset <= hi + bound
     ) {
       highest += 1
       await readAnchor(highest)

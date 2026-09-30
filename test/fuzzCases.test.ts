@@ -59,4 +59,41 @@ describe('cases the fuzzer found', () => {
     expect(spans).toContain('18327-18877')
     expect(spans.length).toBe(4)
   })
+
+  // anchor-at-bound.gfa, hand-written: with 500 bp anchors, bins of 1,000 and
+  // a bound of 2,000, node 7 (600 bp, so the anchor for multiple 13 alone)
+  // starts at 6,000, exactly the bound past the bin of a window in node 4.
+  // The indexer counts HG001#1's visit to node 10, 600 bp along from node 7,
+  // as reached by the section from anchor 13 to 14, so it has no stray row.
+  // The reader used to stop reading anchors at 13 and never planned that
+  // section, and no sample lay on node 10 to show the piece missing.
+  it('reads the anchor past the one that starts exactly `bound` outside the bins', async () => {
+    const db = await GBZBase.open(
+      new LocalFile(path.join(dataDir, 'anchor-at-bound.gbz.db')),
+      {
+        haplotypeIndex: new LocalFile(
+          path.join(dataDir, 'anchor-at-bound.haplotype-index.db'),
+        ),
+      },
+    )
+    const keep = (name: PathName) => name.sample === 'HG001'
+    const kept = await subgraphForHaplotypes(db, chr1, 3800, 3900, {
+      context: 100,
+      keep,
+    })
+    const sampled = await subgraphInInterval(db, chr1, 3800, 3900, {
+      context: 100,
+    })
+    await sampled.identifyPaths()
+    sampled.keepHaplotypes(keep)
+    expect(kept.stats.keep?.fallback).toBeUndefined()
+    expect(kept.stats.keep?.anchorsRead).toBe(14)
+    expect(await kept.toGFA({ names: 'resolved' })).toBe(
+      await sampled.toGFA({ names: 'resolved' }),
+    )
+    const spans = kept
+      .alignments()
+      .map(a => (a.resolved ? `${a.hapStart}-${a.hapEnd}` : ''))
+    expect(spans).toContain('6600-6800')
+  })
 })
