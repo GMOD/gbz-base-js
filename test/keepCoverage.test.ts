@@ -43,8 +43,8 @@ async function routes(
 ) {
   const db = await open(fixture)
   if (!strays) {
-    Object.defineProperty(db, 'haplotypeStrayContext', {
-      value: () => undefined,
+    Object.defineProperty(db, 'haplotypeStrayOptions', {
+      value: () => Promise.resolve(undefined),
     })
   }
   const fallbacks: (string | undefined)[] = []
@@ -137,8 +137,8 @@ describe('the keep route', () => {
 
   it('drops that contig on the anchor route of an index without stray rows', async () => {
     const db = await open('unplaced')
-    Object.defineProperty(db, 'haplotypeStrayContext', {
-      value: () => undefined,
+    Object.defineProperty(db, 'haplotypeStrayOptions', {
+      value: () => Promise.resolve(undefined),
     })
     const kept = await subgraphForHaplotypes(db, chr1, 36000, 40000, {
       context: 100,

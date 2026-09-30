@@ -11,10 +11,12 @@ import type {
   GbzRecord,
   HaplotypeAnchor,
   HaplotypeSample,
+  HaplotypeStrayOptions,
 } from './db.ts'
 import type { Orientation } from './gbwt/node.ts'
 import type { Pos } from './gbwt/record.ts'
 import type { PathName } from './pathName.ts'
+import type { SnarlFill, SnarlOutput } from './subgraph.ts'
 
 const SCAN_GAP = 4096
 
@@ -88,9 +90,12 @@ export interface KeepStats {
   chosenPaths: number
   scans: [number, number][]
   scanRows: number
-  // With HaplotypeStrays: the rows read around the window, those of chosen
-  // paths walked, and the bases all walks took outside the subgraph.
-  strays: { rows: number; walked: number; outsideBp: number } | undefined
+  // With HaplotypeStrays: the bins the window touches, the rows read in them,
+  // those of chosen paths walked, and the bases all walks took outside the
+  // subgraph.
+  strays:
+    | { bins: number; rows: number; walked: number; outsideBp: number }
+    | undefined
   seeds: number
   pieces: number
   sources: Record<ChosenPieceSource, number>
@@ -116,6 +121,8 @@ export interface ChosenPathsInput {
   referenceLeft: number
   window: { start: number; end: number }
   context: number
+  // The snarls the subgraph filled and the nodes those fills added.
+  snarls: { mode: SnarlOutput; fills: SnarlFill[]; inserted: Set<number> }
   keep: (name: PathName) => boolean
   signal: AbortSignal | undefined
   prefetchReferenceRange: (
@@ -1042,73 +1049,138 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     stats.ms.chains = lap()
   }
 
-  // With HaplotypeStrays: every section of a chosen path between its visits
-  // to adjacent anchors near the reference piece is walked CHAIN_BOUND past
-  // both ends, and every stray row of a chosen path whose loci meet the piece
-  // is walked, and the index lists every visit to the subgraph those walks do
-  // not reach. A sample of a chosen path in the subgraph outside every walk
-  // would contradict that, and falls back.
-  const strayRoute = async (strayContext: number) => {
-    if (input.context > strayContext) {
+  // With HaplotypeStrays and HaplotypeBinNodes. The haplotype index lists the
+  // nodes of each bin of the reference path, and for each bin the stretches of
+  // each path whose visits to those nodes the section walks below can miss.
+  // The subgraph is checked against the bins the window touches, so every
+  // visit of a chosen path to it lies on a section walk or in a stray row,
+  // except inside a filled snarl, where the piece through a boundary node runs
+  // on into the snarl, and a path that stays inside the snarl has a row.
+  const strayRoute = async (strays: HaplotypeStrayOptions) => {
+    if (input.context > strays.context) {
       throw new Fallback(
-        `the context of ${input.context} bp exceeds the ${strayContext} bp the haplotype index's stray rows cover`,
+        `the context of ${input.context} bp exceeds the ${strays.context} bp the haplotype index's stray rows cover`,
       )
     }
     const spacing = stats.spacing
     if (spacing === undefined) {
       throw new Fallback('the haplotype index has no anchors')
     }
-    const lo = Math.max(0, reference.hapStart - strayContext)
-    const hi = reference.hapEnd + strayContext
-    const firstMultiple = Math.max(
-      0,
-      Math.floor((lo - CHAIN_BOUND) / spacing) - 1,
-    )
-    const lastMultiple = Math.ceil((hi + CHAIN_BOUND) / spacing) + 1
-    const read = await Promise.all(
-      Array.from(
-        { length: lastMultiple - firstMultiple + 1 },
-        (_, i) => firstMultiple + i,
-      ).map(async k => {
-        const anchor = await db.haplotypeAnchor(
-          input.referenceHandle,
-          k * spacing,
+    const { bin, bound } = strays
+    const { fills, inserted } = input.snarls
+    if (input.snarls.mode === 'overlapping' && fills.length > 0) {
+      throw new Fallback(
+        "the haplotype index's stray rows cover contained snarls only",
+      )
+    }
+    for (const fill of fills) {
+      if (
+        fill.inserted > 0 &&
+        (strays.snarlNodes === undefined || fill.nodes > strays.snarlNodes)
+      ) {
+        throw new Fallback(
+          strays.snarlNodes === undefined
+            ? "the haplotype index's stray rows leave snarls out"
+            : `a snarl of ${fill.nodes} nodes exceeds the ${strays.snarlNodes} the haplotype index's stray rows cover`,
         )
-        return anchor && { k, anchor, rows: await visitsAt(anchor.node) }
-      }),
+      }
+    }
+    const firstBin = Math.floor(input.window.start / bin)
+    const lastBin = Math.floor((input.window.end - 1) / bin)
+    const lo = firstBin * bin
+    const hi = (lastBin + 1) * bin
+    const listed = await db.haplotypeBinNodes(
+      input.referenceHandle,
+      firstBin,
+      lastBin,
     )
-    const anchors = read.filter(a => a !== undefined)
-    const own = anchors[0]
+    for (const handle of records.keys()) {
+      const id = nodeId(handle)
+      if (!isReverse(handle) && !listed(id) && !inserted.has(id)) {
+        throw new Fallback(
+          `the haplotype index lists node ${id} of the subgraph in no bin that the window touches`,
+        )
+      }
+    }
+
+    // Every anchor within `bound` of the bins, and one beyond on each side.
+    const anchorOf = new Map<number, HaplotypeAnchor>()
+    const readAnchor = async (k: number) => {
+      const anchor = await db.haplotypeAnchor(
+        input.referenceHandle,
+        k * spacing,
+      )
+      if (anchor) {
+        anchorOf.set(k, anchor)
+      }
+      return anchor
+    }
+    let lowest = Math.max(0, Math.floor((lo - bound) / spacing) - 1)
+    let highest = Math.ceil((hi + bound) / spacing) + 1
+    await Promise.all(
+      Array.from({ length: highest - lowest + 1 }, (_, i) =>
+        readAnchor(lowest + i),
+      ),
+    )
+    while (
+      lowest > 0 &&
+      (anchorOf.get(lowest)?.pathOffset ?? Number.POSITIVE_INFINITY) >
+        lo - bound
+    ) {
+      lowest -= 1
+      await readAnchor(lowest)
+    }
+    while (
+      anchorOf.has(highest) &&
+      anchorOf.get(highest)!.pathOffset < hi + bound
+    ) {
+      highest += 1
+      await readAnchor(highest)
+    }
+    const multiples = [...anchorOf.keys()].sort((x, y) => x - y)
+    const own = anchorOf.get(multiples[0] ?? -1)
     if (!own) {
       throw new Fallback('the haplotype index has no anchors on this path')
     }
+    const anchorOffset = (k: number) => anchorOf.get(k)!.pathOffset
+    // A node that is the anchor of two multiples ends no section.
+    const multiplesOf = new Map<number, number[]>()
+    for (const k of multiples) {
+      const id = nodeId(anchorOf.get(k)!.node)
+      multiplesOf.set(id, [...(multiplesOf.get(id) ?? []), k])
+    }
+    const anchorNodes = [...multiplesOf.keys()]
+    const anchorRows = await Promise.all(
+      anchorNodes.map(id => visitsAt(2 * id)),
+    )
     if (
-      !own.rows.some(
+      !anchorRows[anchorNodes.indexOf(nodeId(own.node))]!.some(
         row =>
           row.pathHandle === input.referenceHandle &&
           row.orientation === 'forward' &&
-          row.pathOffset === own.anchor.pathOffset,
+          row.pathOffset === own.pathOffset,
       )
     ) {
       throw new Error(
-        `The haplotype index has no anchor row for the reference path ${input.referenceHandle} at offset ${own.anchor.pathOffset} (node ${nodeId(own.anchor.node)}); it does not match this graph`,
+        `The haplotype index has no anchor row for the reference path ${input.referenceHandle} at offset ${own.pathOffset} (node ${nodeId(own.node)}); it does not match this graph`,
       )
     }
-    const offsetOf = new Map(anchors.map(a => [a.k, a.anchor.pathOffset]))
-    const anchorOffset = (k: number) => offsetOf.get(k)!
-    const before = anchors.filter(
-      a => a.anchor.pathOffset <= input.window.start,
-    )
-    const after = anchors.filter(a => a.anchor.pathOffset >= input.window.end)
+    const before = multiples.filter(k => anchorOffset(k) <= input.window.start)
+    const after = multiples.filter(k => anchorOffset(k) >= input.window.end)
     stats.anchors = [
-      (before[before.length - 1] ?? own).anchor.pathOffset,
-      (after[0] ?? anchors[anchors.length - 1]!).anchor.pathOffset,
+      anchorOffset(before[before.length - 1] ?? multiples[0]!),
+      anchorOffset(after[0] ?? multiples[multiples.length - 1]!),
     ]
-    stats.anchorsRead = anchors.length
-    const visits = new Map<number, { k: number; row: HaplotypeSample }[]>()
+    stats.anchorsRead = multiples.length
+    const visits = new Map<
+      number,
+      { k: number | undefined; row: HaplotypeSample }[]
+    >()
     const atAnchors = new Set<number>()
-    for (const { k, rows } of anchors) {
-      for (const row of rows) {
+    anchorNodes.forEach((id, i) => {
+      const ks = multiplesOf.get(id)!
+      const k = ks.length === 1 ? ks[0] : undefined
+      for (const row of anchorRows[i]!) {
         atAnchors.add(row.pathHandle)
         if (row.orientation === 'forward' && chosen(row.pathHandle)) {
           visits.set(row.pathHandle, [
@@ -1117,21 +1189,84 @@ export async function findChosenPieces(input: ChosenPathsInput) {
           ])
         }
       }
-    }
+    })
     stats.chosenPaths = [...atAnchors].filter(chosen).length
     if (stats.chosenPaths > keepTuning.mostChosenPaths) {
       throw new Fallback(
         `${stats.chosenPaths} chosen paths pass the anchors, more than ${keepTuning.mostChosenPaths}`,
       )
     }
-    const found = await db.haplotypeStraysInRange(input.referenceHandle, lo, hi)
-    const strays = found.filter(row => chosen(row.pathHandle))
-    stats.strays = { rows: found.length, walked: 0, outsideBp: 0 }
-    await input.prefetchReferenceRange(
+
+    // A section between visits to adjacent anchors whose span meets the bins
+    // is walked whole, `bound` past both visits. One whose span ends up to
+    // `bound` outside the bins is walked `bound` to each side of the visit at
+    // that end. These are the walks the stray rows count on.
+    interface Plan {
+      pathHandle: number
+      from: HaplotypeSample
+      to: HaplotypeSample | undefined
+    }
+    const plans: Plan[] = []
+    let prefetchLo = Number.POSITIVE_INFINITY
+    let prefetchHi = 0
+    for (const [pathHandle, list] of visits) {
+      list.sort((x, y) => x.row.pathOffset - y.row.pathOffset)
+      for (let i = 0; i + 1 < list.length; i++) {
+        const from = list[i]!
+        const to = list[i + 1]!
+        if (
+          from.k === undefined ||
+          to.k === undefined ||
+          Math.abs(from.k - to.k) !== 1
+        ) {
+          continue
+        }
+        const [low, high] =
+          anchorOffset(from.k) <= anchorOffset(to.k) ? [from, to] : [to, from]
+        const a = anchorOffset(low.k!)
+        const b = anchorOffset(high.k!)
+        if (a < hi && b >= lo) {
+          plans.push({ pathHandle, from: from.row, to: to.row })
+          prefetchLo = Math.min(prefetchLo, a - bound)
+          prefetchHi = Math.max(prefetchHi, b + bound)
+        } else if (a >= hi && a - hi <= bound) {
+          plans.push({ pathHandle, from: low.row, to: undefined })
+          prefetchLo = Math.min(prefetchLo, a - bound)
+          prefetchHi = Math.max(prefetchHi, a + bound)
+        } else if (b < lo && lo - b <= bound) {
+          plans.push({ pathHandle, from: high.row, to: undefined })
+          prefetchLo = Math.min(prefetchLo, b - bound)
+          prefetchHi = Math.max(prefetchHi, b + bound)
+        }
+      }
+    }
+    const filled = new Set(fills.map(fill => `${fill.low}:${fill.high}`))
+    const found = await db.haplotypeStraysInBins(
       input.referenceHandle,
-      Math.max(0, own.anchor.pathOffset - CHAIN_BOUND),
-      anchors[anchors.length - 1]!.anchor.pathOffset + CHAIN_BOUND + 1,
+      firstBin,
+      lastBin,
     )
+    const rows = found
+      .filter(
+        row =>
+          chosen(row.pathHandle) &&
+          (row.snarl === undefined ||
+            filled.has(`${row.snarl[0]}:${row.snarl[1]}`)),
+      )
+      .sort((x, y) => x.pathHandle - y.pathHandle || x.pathStart - y.pathStart)
+    stats.strays = {
+      bins: lastBin - firstBin + 1,
+      rows: found.length,
+      walked: 0,
+      outsideBp: 0,
+    }
+    if (prefetchHi > 0) {
+      await input.prefetchReferenceRange(
+        input.referenceHandle,
+        Math.max(0, prefetchLo),
+        prefetchHi + 1,
+      )
+    }
     stats.ms.scan = lap()
 
     // A cap on each walk's bases outside the subgraph, as on the anchor route.
@@ -1150,7 +1285,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     const walkedRanges = new Map<number, [number, number][]>()
     const covered = (pathHandle: number, from: number, to: number) =>
       (walkedRanges.get(pathHandle) ?? []).some(
-        ([a, b]) => a <= from && to <= b,
+        ([x, y]) => x <= from && to <= y,
       )
     const markWalked = (pathHandle: number, from: number, to: number) => {
       walkedRanges.set(pathHandle, [
@@ -1158,8 +1293,9 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         [from, to],
       ])
     }
-    // Forward along a path from a position until past `until`, jumping over
-    // the pieces it lands in; returns the offset it reached.
+    // Forward along a path from a position through every node that starts at
+    // or before `until`, jumping over the pieces it lands in; returns the
+    // offset it reached.
     const walkForward = async (
       pathHandle: number,
       start: Pos,
@@ -1195,7 +1331,8 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       }
       return reached
     }
-    // Backward from a position until before `until`; returns the offset reached.
+    // Backward from a position through every node that ends after `until`;
+    // returns the offset reached.
     const walkBackward = async (
       pathHandle: number,
       start: Pos,
@@ -1230,77 +1367,36 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       return reached
     }
 
-    // A section whose reference span meets [lo, hi] is walked whole. One that
-    // ends within CHAIN_BOUND of it is walked CHAIN_BOUND to each side of the
-    // visit at that end, the only visits of it the index leaves out.
-    const around = async (pathHandle: number, visit: HaplotypeSample) => {
-      const at = visit.pathOffset
-      if (covered(pathHandle, at - CHAIN_BOUND, at + CHAIN_BOUND)) {
-        return
+    for (const { pathHandle, from, to } of plans) {
+      const start = from.pathOffset
+      const stop = (to ?? from).pathOffset + bound
+      if (covered(pathHandle, start - bound, stop)) {
+        continue
       }
-      const pos = { node: visit.node, offset: visit.offset }
+      const pos = { node: from.node, offset: from.offset }
       walkBp = 0
       const reachedEnd = await walkForward(
         pathHandle,
         pos,
-        at,
-        at + CHAIN_BOUND,
+        start,
+        stop,
         'section',
       )
+      walkBp = 0
       const reachedStart = await walkBackward(
         pathHandle,
         pos,
-        at,
-        at - CHAIN_BOUND,
+        start,
+        start - bound,
       )
-      markWalked(pathHandle, reachedStart, reachedEnd)
-      countWalk('visit', 'bound')
+      markWalked(
+        pathHandle,
+        Math.min(reachedStart, start - bound),
+        Math.max(reachedEnd, stop),
+      )
+      countWalk(to ? 'section' : 'visit', to ? 'past the far anchor' : 'bound')
     }
-    for (const [pathHandle, list] of visits) {
-      list.sort((a, b) => a.row.pathOffset - b.row.pathOffset)
-      for (let i = 0; i + 1 < list.length; i++) {
-        const from = list[i]!
-        const to = list[i + 1]!
-        if (Math.abs(from.k - to.k) !== 1) {
-          continue
-        }
-        const [low, high] =
-          anchorOffset(from.k) <= anchorOffset(to.k) ? [from, to] : [to, from]
-        if (anchorOffset(high.k) < lo) {
-          if (lo - anchorOffset(high.k) <= CHAIN_BOUND) {
-            await around(pathHandle, high.row)
-          }
-          continue
-        }
-        if (anchorOffset(low.k) > hi) {
-          if (anchorOffset(low.k) - hi <= CHAIN_BOUND) {
-            await around(pathHandle, low.row)
-          }
-          continue
-        }
-        const start = from.row.pathOffset
-        const stop = to.row.pathOffset + CHAIN_BOUND
-        if (covered(pathHandle, start - CHAIN_BOUND, stop)) {
-          continue
-        }
-        const pos = { node: from.row.node, offset: from.row.offset }
-        walkBp = 0
-        const reachedEnd = await walkForward(
-          pathHandle,
-          pos,
-          start,
-          stop,
-          'section',
-        )
-        walkBp = 0
-        const reachedStart = covered(pathHandle, start - CHAIN_BOUND, start)
-          ? start
-          : await walkBackward(pathHandle, pos, start, start - CHAIN_BOUND)
-        markWalked(pathHandle, reachedStart, reachedEnd)
-        countWalk('section', 'past the far anchor')
-      }
-    }
-    for (const row of strays) {
+    for (const row of rows) {
       if (covered(row.pathHandle, row.pathStart, row.pathEnd)) {
         continue
       }
@@ -1312,12 +1408,18 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         row.pathEnd,
         'stray',
       )
-      markWalked(row.pathHandle, row.pathStart, reachedEnd)
+      markWalked(
+        row.pathHandle,
+        row.pathStart,
+        Math.max(reachedEnd, row.pathEnd),
+      )
       counted.walked += 1
     }
     stats.ms.intervals = lap()
 
-    stats.scans = handleRuns([...records.keys()].sort((a, b) => a - b))
+    // A sample of a chosen path on the subgraph's nodes outside every piece
+    // would contradict the haplotype index's rows.
+    stats.scans = handleRuns([...records.keys()].sort((x, y) => x - y))
     for (const [first, last] of stats.scans) {
       for (const sample of await db.haplotypeSamplesInRange(first, last)) {
         stats.scanRows += 1
@@ -1457,11 +1559,11 @@ export async function findChosenPieces(input: ChosenPathsInput) {
   }
 
   try {
-    const strayContext = db.haplotypeStrayContext()
-    if (strayContext === undefined) {
+    const strays = await db.haplotypeStrayOptions()
+    if (strays === undefined) {
       await anchorRoute()
     } else {
-      await strayRoute(strayContext)
+      await strayRoute(strays)
     }
     await canonicalTwins()
   } catch (error) {

@@ -77,19 +77,29 @@ export interface HaplotypeAnchor {
   pathOffset: number
 }
 
-// A row of HaplotypeStrays: visits of one path, between pathStart and pathEnd
-// along it, to nodes with loci between referenceStart and referenceEnd on a
-// reference path, that the walks from its anchor visits do not reach. The walk
-// over them starts at the GBWT position of the first, in the path's forward
-// orientation.
+// A row of HaplotypeStrays: a stretch of one path, from pathStart to the visit
+// at pathEnd, holding visits to nodes of one bin that the walks from anchor
+// visits can miss. `node` and `offset` are the GBWT position of its first
+// visit in the path's forward orientation. A row with a snarl names a path
+// that lies between those two boundary nodes from end to end.
 export interface HaplotypeStray {
+  bin: number
   pathHandle: number
   pathStart: number
   pathEnd: number
-  referenceStart: number
-  referenceEnd: number
+  snarl: [number, number] | undefined
   node: number
   offset: number
+}
+
+export interface HaplotypeStrayOptions {
+  // The largest query context the rows cover.
+  context: number
+  bin: number
+  bound: number
+  // The most nodes between a filled snarl's boundaries for the rows to cover
+  // it, or undefined when the rows leave snarls out.
+  snarlNodes: number | undefined
 }
 
 export interface GbzPath {
@@ -522,53 +532,127 @@ export class GBZBase {
     return value === undefined ? undefined : Number(value)
   }
 
-  // The largest context HaplotypeStrays covers, or undefined without the table.
-  haplotypeStrayContext() {
-    const value = this.index?.has('HaplotypeStrays')
-      ? this.indexTags.get('haplotype_index_stray_context')
-      : undefined
-    return value === undefined ? undefined : Number(value)
+  // How HaplotypeStrays and HaplotypeBinNodes were built, or undefined
+  // without them.
+  async haplotypeStrayOptions(): Promise<HaplotypeStrayOptions | undefined> {
+    const tag = (key: string) =>
+      this.indexTags.get(`haplotype_index_stray_${key}`)
+    if (
+      !this.index?.has('HaplotypeStrays') ||
+      !this.index.has('HaplotypeBinNodes') ||
+      tag('format') !== '2'
+    ) {
+      return undefined
+    }
+    const snarls =
+      tag('snarls') === 'modeled' &&
+      tag('chain_links') === ((await this.tag('chain_links')) ?? '0')
+    return {
+      context: Number(tag('context')),
+      bin: Number(tag('bin')),
+      bound: Number(tag('bound')),
+      snarlNodes: snarls ? Number(tag('snarl_nodes')) : undefined,
+    }
   }
 
-  // The HaplotypeStrays rows on one reference path whose loci meet [from, to].
-  // Each row's span holds loci the index kept for nodes with loci up to
-  // haplotype_index_stray_tolerance bp from them, so the lookup widens by that.
-  async haplotypeStraysInRange(
+  // The HaplotypeStrays rows of the bins firstBin..lastBin of one reference
+  // path.
+  async haplotypeStraysInBins(
     referenceHandle: number,
-    start: number,
-    end: number,
+    firstBin: number,
+    lastBin: number,
   ) {
-    const chunk = Number(this.indexTags.get('haplotype_index_stray_chunk') ?? 0)
-    const tolerance = Number(
-      this.indexTags.get('haplotype_index_stray_tolerance') ?? 0,
-    )
-    const from = Math.max(0, start - tolerance)
-    const to = end + tolerance
     const rows: HaplotypeStray[] = []
-    for await (const key of this.companion.indexScanFrom('HaplotypeStrays', [
+    for await (const row of this.companion.indexScanFrom('HaplotypeStrays', [
       referenceHandle,
-      Math.max(0, from - chunk),
+      firstBin,
+    ])) {
+      const bin = num(row[1], 'HaplotypeStrays.bin')
+      if (row[0] !== referenceHandle || bin > lastBin) {
+        break
+      }
+      const low = num(row[4], 'HaplotypeStrays.snarl_low')
+      const high = num(row[5], 'HaplotypeStrays.snarl_high')
+      rows.push({
+        bin,
+        pathHandle: num(row[2], 'HaplotypeStrays.path_handle'),
+        pathStart: num(row[3], 'HaplotypeStrays.path_start'),
+        snarl: high > 0 ? [low, high] : undefined,
+        pathEnd: num(row[6], 'HaplotypeStrays.path_end'),
+        node: num(row[7], 'HaplotypeStrays.node_handle'),
+        offset: num(row[8], 'HaplotypeStrays.node_offset'),
+      })
+    }
+    return rows
+  }
+
+  // The nodes HaplotypeBinNodes lists for the bins firstBin..lastBin of one
+  // reference path, as a test of one node id.
+  async haplotypeBinNodes(
+    referenceHandle: number,
+    firstBin: number,
+    lastBin: number,
+  ) {
+    const runs: [number, number][] = []
+    for await (const row of this.companion.indexScanFrom('HaplotypeBinNodes', [
+      referenceHandle,
+      firstBin,
     ])) {
       if (
-        key[0] !== referenceHandle ||
-        num(key[1], 'HaplotypeStrays.reference_start') > to
+        row[0] !== referenceHandle ||
+        num(row[1], 'HaplotypeBinNodes.bin') > lastBin
       ) {
         break
       }
-      const referenceEnd = num(key[2], 'HaplotypeStrays.reference_end')
-      if (referenceEnd >= from) {
-        rows.push({
-          referenceStart: num(key[1], 'HaplotypeStrays.reference_start'),
-          referenceEnd,
-          pathHandle: num(key[3], 'HaplotypeStrays.path_handle'),
-          pathStart: num(key[4], 'HaplotypeStrays.path_start'),
-          pathEnd: num(key[5], 'HaplotypeStrays.path_end'),
-          node: num(key[6], 'HaplotypeStrays.node_handle'),
-          offset: num(key[7], 'HaplotypeStrays.node_offset'),
-        })
+      const bytes = blob(row[3], 'HaplotypeBinNodes.nodes')
+      let previous = 0
+      let at = 0
+      const read = () => {
+        let value = 0
+        let scale = 1
+        for (;;) {
+          const byte = bytes[at++]
+          if (byte === undefined) {
+            throw new Error('HaplotypeBinNodes.nodes ends inside a number')
+          }
+          value += (byte & 0x7f) * scale
+          scale *= 128
+          if ((byte & 0x80) === 0) {
+            return value
+          }
+        }
+      }
+      while (at < bytes.length) {
+        const start = previous + read()
+        previous = start + read()
+        runs.push([start, previous])
       }
     }
-    return rows
+    runs.sort((x, y) => x[0] - y[0])
+    const starts: number[] = []
+    const ends: number[] = []
+    for (const [start, end] of runs) {
+      const last = ends.length - 1
+      if (last >= 0 && start <= ends[last]! + 1) {
+        ends[last] = Math.max(ends[last]!, end)
+      } else {
+        starts.push(start)
+        ends.push(end)
+      }
+    }
+    return (id: number) => {
+      let lo = 0
+      let hi = starts.length
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (starts[mid]! <= id) {
+          lo = mid + 1
+        } else {
+          hi = mid
+        }
+      }
+      return lo > 0 && id <= ends[lo - 1]!
+    }
   }
 
   async haplotypeAnchor(

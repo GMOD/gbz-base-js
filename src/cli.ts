@@ -300,7 +300,7 @@ function keepReport(stats: KeepStats) {
     `  walks: ${walks || 'none'}; ${stats.graphFetches} graph records read outside the subgraph; ${stats.seeds} samples extended; twins ${stats.twins.found} of ${stats.twins.tried}`,
     ...(stats.strays
       ? [
-          `  stray rows: ${stats.strays.rows} read, ${stats.strays.walked} of chosen paths walked; walks went ${stats.strays.outsideBp} bp outside the subgraph`,
+          `  stray rows: ${stats.strays.rows} read in ${stats.strays.bins} bins, ${stats.strays.walked} of chosen paths walked; walks went ${stats.strays.outsideBp} bp outside the subgraph`,
         ]
       : []),
     `  ms: scan ${stats.ms.scan.toFixed(0)}, intervals ${stats.ms.intervals.toFixed(0)}, seeds ${stats.ms.seeds.toFixed(0)}, chains ${stats.ms.chains.toFixed(0)}, twins ${stats.ms.twins.toFixed(0)}`,

@@ -26,7 +26,9 @@ function openWithCompanion(graph: string, companion: string) {
 // The index as a reader sees it without HaplotypeStrays, the format through
 // 4.1.0.
 function withoutStrays(db: GBZBase) {
-  Object.defineProperty(db, 'haplotypeStrayContext', { value: () => undefined })
+  Object.defineProperty(db, 'haplotypeStrayOptions', {
+    value: () => Promise.resolve(undefined),
+  })
   return db
 }
 
@@ -300,7 +302,16 @@ describe('a query that uses the keep option', () => {
                 end,
                 { keep, context, snarls },
               )
-              const route = kept.stats.keep?.fallback ?? 'keep'
+              const fallback = kept.stats.keep?.fallback
+              const route =
+                fallback === undefined
+                  ? 'keep'
+                  : fallback.includes('contained snarls only')
+                    ? 'overlapping'
+                    : 'other'
+              expect(route === 'overlapping').toBe(
+                snarls === 'overlapping' && fallback !== undefined,
+              )
               routes.set(route, (routes.get(route) ?? 0) + 1)
               walks += alignments.length
             }
@@ -311,7 +322,8 @@ describe('a query that uses the keep option', () => {
       keepTuning.mostChosenPaths = saved
     }
     expect(walks).toBeGreaterThan(5000)
-    expect(routes.get('keep')).toBeGreaterThan(250)
+    expect(routes.get('keep')).toBeGreaterThan(190)
+    expect(routes.get('overlapping')).toBeGreaterThan(100)
   }, 300000)
 
   // inversion.gfa: a 138.5 kb reference with anchors at 64,572 and 128,696 bp,

@@ -35,6 +35,15 @@ type HandleType =
   | { kind: 'chain' }
   | { kind: 'regular' }
 
+// A snarl filled between two boundary nodes: their ids, lower first, the
+// nodes between them, and how many of those the fill added to the subgraph.
+export interface SnarlFill {
+  low: number
+  high: number
+  nodes: number
+  inserted: number
+}
+
 export interface PathPosition {
   seqOffset: number
   handle: number
@@ -493,6 +502,9 @@ export class Subgraph {
   private refIndexCache: Map<number, number[]> | undefined
   private refPrefixCache: number[] | undefined
   private walkedBp: number | undefined
+  private snarlMode: SnarlOutput = 'none'
+  private snarlFills: SnarlFill[] = []
+  private snarlNodes = new Set<number>()
   readonly stats: SubgraphStats = {
     orderedAlignments: 0,
     lcsAlignments: 0,
@@ -784,6 +796,9 @@ export class Subgraph {
 
   private async insertContext(active: SideQueue, context: number) {
     this.clearPaths()
+    this.snarlMode = 'none'
+    this.snarlFills = []
+    this.snarlNodes.clear()
     const visited = new Set<string>()
     const toRemove = new Set<number>()
     for (const handle of this.records.keys()) {
@@ -830,16 +845,20 @@ export class Subgraph {
   }
 
   async betweenNodes(start: number, end: number) {
+    return (await this.fillBetween(start, end)).inserted.length
+  }
+
+  private async fillBetween(start: number, end: number) {
     this.clearPaths()
     const active = [start, flipNode(end)]
     const visited = new Set([nodeId(start), nodeId(end)])
-    let inserted = 0
+    const inserted: number[] = []
     while (active.length > 0) {
       const curr = active.pop()!
       const id = nodeId(curr)
       if (!this.hasNode(id)) {
         await this.addNode(id)
-        inserted += 1
+        inserted.push(id)
       }
       for (const successor of this.record(curr).successors()) {
         const successorId = nodeId(successor)
@@ -849,15 +868,28 @@ export class Subgraph {
         }
       }
     }
-    return inserted
+    return { inserted, nodes: visited.size - 2 }
   }
 
   async extractSnarls(snarls: SnarlOutput) {
-    let inserted = 0
+    let total = 0
+    this.snarlMode = snarls
     for (const [start, end] of await this.overlappingSnarls(snarls)) {
-      inserted += await this.betweenNodes(start, end)
+      const { inserted, nodes } = await this.fillBetween(start, end)
+      const a = nodeId(start)
+      const b = nodeId(end)
+      this.snarlFills.push({
+        low: Math.min(a, b),
+        high: Math.max(a, b),
+        nodes,
+        inserted: inserted.length,
+      })
+      for (const id of inserted) {
+        this.snarlNodes.add(id)
+      }
+      total += inserted.length
     }
-    return inserted
+    return total
   }
 
   private async overlappingSnarls(snarls: SnarlOutput) {
@@ -1227,6 +1259,11 @@ export class Subgraph {
       referenceLeft: start - reference.position.nodeOffset,
       window: { start, end: start + len },
       context,
+      snarls: {
+        mode: this.snarlMode,
+        fills: this.snarlFills,
+        inserted: this.snarlNodes,
+      },
       keep,
       signal: this.signal,
       prefetchReferenceRange: (pathHandle, fromOffset, toOffset) =>
