@@ -24,3 +24,4 @@ build far-pass --interval 65536 --anchor-spacing 16384
 build unplaced --interval 65536 --anchor-spacing 16384
 build inversion --interval 4096 --anchor-spacing 65536
 build micb-kir3dl1 --interval 1000 --anchor-spacing 2500
+build stray-end --interval 256 --anchor-spacing 2048 --stray-context 100 --stray-bin 1024 --stray-bound 2048 --stray-gap 64

@@ -716,11 +716,12 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         )
       }
     }
+    // The stretches of each path that walks passed: every node that starts in
+    // [x, y). A visit is named by its node's start, so one at `to` is covered
+    // when the stretch ends past it.
     const walkedRanges = new Map<number, [number, number][]>()
     const covered = (pathHandle: number, from: number, to: number) =>
-      (walkedRanges.get(pathHandle) ?? []).some(
-        ([x, y]) => x <= from && to <= y,
-      )
+      (walkedRanges.get(pathHandle) ?? []).some(([x, y]) => x <= from && to < y)
     const markWalked = (pathHandle: number, from: number, to: number) => {
       walkedRanges.set(pathHandle, [
         ...(walkedRanges.get(pathHandle) ?? []),
@@ -826,7 +827,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       markWalked(
         pathHandle,
         Math.min(reachedStart, start - bound),
-        Math.max(reachedEnd, stop),
+        Math.max(reachedEnd, stop + 1),
       )
       countWalk(to ? 'section' : 'visit', to ? 'past the far anchor' : 'bound')
     }
@@ -845,7 +846,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       markWalked(
         row.pathHandle,
         row.pathStart,
-        Math.max(reachedEnd, row.pathEnd),
+        Math.max(reachedEnd, row.pathEnd + 1),
       )
       counted.walked += 1
     }
@@ -859,11 +860,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     for (const [first, last] of stats.scans) {
       for (const sample of await db.haplotypeSamplesInRange(first, last)) {
         stats.scanRows += 1
-        if (
-          records.has(sample.node) &&
-          sample.pathHandle !== input.referenceHandle &&
-          chosen(sample.pathHandle)
-        ) {
+        if (records.has(sample.node) && chosen(sample.pathHandle)) {
           if (
             !(piecesOfPath.get(sample.pathHandle) ?? []).some(id => {
               const piece = pieces[id]!
@@ -916,22 +913,22 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     let noted = 0
     const noteNew = () => {
       for (; noted < pieces.length; noted++) {
-        if (noted !== referenceId) {
-          note(pieces[noted]!)
-        }
+        note(pieces[noted]!)
       }
     }
     noteNew()
     const hasTwin = (piece: ChosenPiece) =>
       (orientationsOf.get(pieceKey(piece))?.size ?? 0) > 1
     const twinBound = 2 * interval
+    // extractPaths keeps the reference walk in either orientation, and its
+    // twin like any other walk, which matters when the reference is chosen.
+    const needsTwin = (piece: ChosenPiece, id: number) =>
+      id === referenceId
+        ? chosen(input.referenceHandle) && twinIsCanonical(piece)
+        : !piece.canonical || twinIsCanonical(piece)
     for (let id = 0; id < pieces.length; id++) {
       const piece = pieces[id]!
-      if (
-        id === referenceId ||
-        hasTwin(piece) ||
-        (piece.canonical && !twinIsCanonical(piece))
-      ) {
+      if (hasTwin(piece) || !needsTwin(piece, id)) {
         continue
       }
       stats.twins.tried += 1

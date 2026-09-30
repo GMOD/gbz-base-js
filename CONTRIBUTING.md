@@ -45,8 +45,10 @@ reorder the reference), `far-stretch.gfa` (a deletion that joins a window to a
 reference stretch far from its anchors), `two-copies.gfa` and `far-pass.gfa`
 (haplotypes that pass the window again from far along their own sequence) and
 `detour.gfa` (walks that leave the subgraph and come back) and `unplaced.gfa` (a
-contig that visits no anchor and has no sample in the window).
-`quay.io/vgteam/vg` is the easiest `vg` on a Mac.
+contig that visits no anchor and has no sample in the window). `test/fuzz`
+generated `reverse-reference.gfa` and `stray-end.gfa`, each with a query that
+returned a wrong answer; `stray-end` takes the indexer options in
+`test/data/build-indexes.sh`. `quay.io/vgteam/vg` is the easiest `vg` on a Mac.
 
 ```sh
 vg gbwt -G split-contig.gfa --gbz-format -g split-contig.gbz

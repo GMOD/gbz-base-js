@@ -1101,8 +1101,6 @@ export class Subgraph {
       })
     }
     const twinsExpected = new Int32Array(count)
-    const refMayStartReversed =
-      refIndex !== undefined && isReverse(handles[refIndex]!)
     for (let i = 0; i < count; i++) {
       const first = handles[i]!
       if (!isReverse(first)) {
@@ -1137,7 +1135,11 @@ export class Subgraph {
             startCount += 1
           }
         }
-        const allTwins = !refMayStartReversed && startCount === twinsExpected[i]
+        // Until the reference walk is found, it can be one of these starts,
+        // with its twin kept above as a walk like any other.
+        const allTwins =
+          (refIndex === undefined || refOffset !== undefined) &&
+          startCount === twinsExpected[i]
         for (let offset = 0; offset < degree; offset++) {
           if (hasPredecessor[from + offset] === 0) {
             const bare = allTwins ? undefined : walk(i, offset, undefined)
