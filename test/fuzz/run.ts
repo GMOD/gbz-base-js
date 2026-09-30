@@ -38,6 +38,8 @@ const usage = `node test/fuzz/run.ts --seeds 0..200 [options]
   --windows N         random windows per seed, shared among its reference paths
                       (default 4)
   --targets N         windows per seed aimed at generated structures (default 6)
+  --edge-windows N    windows per seed whose bins end or start exactly the
+                      stray bound from an anchor (default 0)
   --combos N          context and snarl settings tried per window, of 8
                       (default 1)
   --keep-sets N       most keep sets per window and setting (default 20)
@@ -58,6 +60,7 @@ interface Args {
   dumpDir: string | undefined
   windows: number
   targets: number
+  edgeWindows: number
   combos: number
   keepSets: number
   lines: number
@@ -216,6 +219,7 @@ const flags = {
   'dump-dir': { type: 'string' },
   windows: { type: 'string' },
   targets: { type: 'string' },
+  'edge-windows': { type: 'string' },
   combos: { type: 'string' },
   'keep-sets': { type: 'string' },
   lines: { type: 'string' },
@@ -279,6 +283,7 @@ function readArgs() {
     dumpDir: values['dump-dir'],
     windows: count('windows', 4),
     targets: count('targets', 6),
+    edgeWindows: count('edge-windows', 0),
     combos: count('combos', 1),
     keepSets: count('keep-sets', 20),
     lines: count('lines', 50),
@@ -461,6 +466,66 @@ function targetedWindows(
   return windows
 }
 
+// Windows whose bins end exactly `bound` before an anchor's node or start
+// exactly `bound` after one, and one bin to either side of that, plus windows
+// ending and starting at the anchor itself. These are the edges of the
+// indexer's `reached` rule, where an inclusive bound on one side and an
+// exclusive one on the other would leave a section unplanned. Only a bin
+// boundary can land there, so `--stray-bin 1` reaches every anchor.
+async function edgeWindows(
+  reference: GfaPath,
+  db: GBZBase,
+  count: number,
+  rng: Rng,
+) {
+  const spacing = await db.haplotypeAnchorSpacing()
+  const strays = await db.haplotypeStrayOptions()
+  const handle = (await db.paths()).find(
+    p => pathOf(p.name) === pathOf(reference),
+  )?.handle
+  if (spacing === undefined || strays === undefined || handle === undefined) {
+    return []
+  }
+  const length = reference.length
+  const { bin, bound } = strays
+  const candidates: Window[] = []
+  const endingAt = (hi: number) => {
+    if (hi > 0 && hi <= length && hi % bin === 0) {
+      const start = Math.max(0, hi - rng.int(1, 300))
+      candidates.push({ start, end: hi, target: 'edge' })
+    }
+  }
+  const startingAt = (lo: number) => {
+    if (lo >= 0 && lo < length && lo % bin === 0) {
+      candidates.push({
+        start: lo,
+        end: Math.min(length, lo + rng.int(1, 300)),
+        target: 'edge',
+      })
+    }
+  }
+  for (let k = 1; ; k++) {
+    const anchor = await db.haplotypeAnchor(handle, k * spacing)
+    if (!anchor) {
+      break
+    }
+    const p = anchor.pathOffset
+    for (const d of [-1, 0, 1]) {
+      endingAt(p - bound + d)
+      endingAt(p - bound + d * bin)
+      startingAt(p + bound + d)
+      startingAt(p + bound + d * bin)
+    }
+    endingAt(p)
+    startingAt(p)
+  }
+  const windows: Window[] = []
+  while (candidates.length > 0 && windows.length < count) {
+    windows.push(candidates.splice(rng.int(0, candidates.length - 1), 1)[0]!)
+  }
+  return windows
+}
+
 // Each haplotype with a piece, each sample with one, a random subset and
 // everything. Past `most`, random single haplotypes and samples go.
 function keepSetsFor(
@@ -584,16 +649,25 @@ async function runSeed(
     const share = (count: number, index: number) =>
       Math.floor(count / references.length) +
       (index < count % references.length ? 1 : 0)
-    const windowsOf = references.map((reference, index) => [
-      ...randomWindows(reference.length, share(args.windows, index), rng),
-      ...targetedWindows(
-        reference,
-        gfa,
-        generated.features,
-        share(args.targets, index),
-        rng,
-      ),
-    ])
+    const windowsOf: Window[][] = []
+    for (const [index, reference] of references.entries()) {
+      windowsOf.push([
+        ...randomWindows(reference.length, share(args.windows, index), rng),
+        ...targetedWindows(
+          reference,
+          gfa,
+          generated.features,
+          share(args.targets, index),
+          rng,
+        ),
+        ...(await edgeWindows(
+          reference,
+          db,
+          share(args.edgeWindows, index),
+          rng,
+        )),
+      ])
+    }
     // Each window draws from its own generator, so what the library answers
     // for one window leaves the queries of the next as they were.
     let windowCount = 0
