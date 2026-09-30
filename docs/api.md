@@ -53,11 +53,14 @@ return.
 | `signal`     | `AbortSignal`, checked between range requests                                                                    |
 
 `haplotypes: 'distinct'` merges identical walks into one record with a `weight`.
-`getAlignmentsForRange` accepts `all` and `distinct`.
+A walk identical to the reference walk merges into the reference, so it has no
+alignment record. `getAlignmentsForRange` accepts `all` and `distinct`.
 
 A query that uses the `keep` option returns the reference, the walks whose name
 passes the predicate, and the nodes those walks visit
 ([haplotype-index.md](haplotype-index.md#querying-a-subset-of-the-haplotypes)).
+With `distinct`, it merges the walks of the kept haplotypes, and each `weight`
+counts kept haplotypes.
 
 `getAlignmentsForRange` covers every path fragment the window overlaps.
 `getSubgraphForRange` returns the subgraph for the first one, or `undefined`
@@ -136,4 +139,5 @@ await subgraph.identifyPaths()
 
 Other errors are plain `Error`s with a message, for example an unknown path, a
 path the database has no random-access index for, `keep` without a haplotype
-index, or a haplotype index built for a different graph.
+index, `keep` over a walk that the haplotype index could not name, or a
+haplotype index built for a different graph.

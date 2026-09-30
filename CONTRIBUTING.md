@@ -65,9 +65,24 @@ with these options:
 
 `inversion` takes `--interval 4096 --anchor-spacing 65536` and `micb-kir3dl1`
 `--interval 1000 --anchor-spacing 2500`, both with `--from-db` on the committed
-`.gbz.db`. Every index with anchors carries stray rows, and the tests of the
-anchor route, which an index without them takes, read the fixture through
-`withoutStrays`.
+`.gbz.db`. `test/data/build-indexes.sh` rebuilds every index that has anchors
+from its `.gbz.db` and reports a fixture whose samples or anchors change. Run it
+after a change to `tools/haplotype-index/`, and commit the indexes.
+
+## Checking haplotype queries
+
+A query must return every piece of every haplotype it names: a missing piece
+draws as a deletion. Three checks cover that, from small to large.
+
+- `pnpm test --run` compares the keep route with the sampled route on the
+  fixtures.
+- `test/fuzz/` generates graphs with inversions, duplications, split contigs and
+  unplaced contigs, builds the database and the haplotype index with `vg`,
+  `gbz-base` and `gbz-haplotype-index`, and compares both routes with the pieces
+  read from the GFA. Its README lists the commands.
+- `tools/validate/` compares the two routes on windows of a real graph, and
+  compares the sampled route with the pieces `gbz-truth` reads from the GBZ. Run
+  it after a change to the keep route, `identifyPaths` or the indexer.
 
 ## Scripts
 

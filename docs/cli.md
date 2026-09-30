@@ -42,8 +42,8 @@ gbz-base-query https://host/graph.gbz.db \
 
 `--stats` writes request and byte counts to stderr, with how many walks the
 library identified and how many it could not. For a query that uses the `keep`
-option it also prints what each step of the keep route found and read, and
-whether the result is complete. On an error, `gbz-base-query` prints the message
+option it also prints what each step of the keep route found and read, or the
+reason the query identified every walk. On an error, `gbz-base-query` prints the message
 to stderr and exits with status 1.
 
 ## Flags

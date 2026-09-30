@@ -78,7 +78,7 @@ async function run(db, contig, start, end, set) {
         : 'keep'
       : 'sampled',
     phases: keep
-      ? `scan ${keep.ms.scan.toFixed(0)} intervals ${keep.ms.intervals.toFixed(0)} seeds ${keep.ms.seeds.toFixed(0)} chains ${keep.ms.chains.toFixed(0)} twins ${keep.ms.twins.toFixed(0)}`
+      ? `scan ${keep.ms.scan.toFixed(0)} walks ${keep.ms.walks.toFixed(0)} check ${keep.ms.check.toFixed(0)} twins ${keep.ms.twins.toFixed(0)}`
       : '',
   }
 }

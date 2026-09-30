@@ -48,7 +48,8 @@ A snarl can be far larger than the window, so pair `overlapping` with `limit`.
 `getSubgraphForRange` and the lower-level `subgraphInInterval`,
 `subgraphAtOffset` and `subgraphAroundNodes` take `snarls`. A query that uses
 the `keep` option takes it too, and returns the walks of the same subgraph for
-the chosen haplotypes.
+the chosen haplotypes. With `overlapping` it identifies every walk to find them
+([haplotype-index.md](haplotype-index.md#keep)).
 
 ## Between two boundary nodes
 

@@ -852,7 +852,9 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     stats.ms.walks = lap()
 
     // A sample of a chosen path on the subgraph's nodes outside every piece
-    // would contradict the haplotype index's rows.
+    // would contradict the haplotype index's rows. A sample of the reverse
+    // orientation gives a position of the piece's twin.
+    const reversed: HaplotypeSample[] = []
     stats.scans = handleRuns([...records.keys()].sort((x, y) => x - y))
     for (const [first, last] of stats.scans) {
       for (const sample of await db.haplotypeSamplesInRange(first, last)) {
@@ -860,20 +862,37 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         if (
           records.has(sample.node) &&
           sample.pathHandle !== input.referenceHandle &&
-          chosen(sample.pathHandle) &&
-          !(piecesOfPath.get(sample.pathHandle) ?? []).some(id => {
-            const piece = pieces[id]!
-            return (
-              piece.hapStart <= sample.pathOffset &&
-              sample.pathOffset < piece.hapEnd
-            )
-          })
+          chosen(sample.pathHandle)
         ) {
-          throw new Fallback(
-            `chosen path ${sample.pathHandle} has a sample at ${sample.pathOffset} on the window's nodes that no walk reached`,
-          )
+          if (
+            !(piecesOfPath.get(sample.pathHandle) ?? []).some(id => {
+              const piece = pieces[id]!
+              return (
+                piece.hapStart <= sample.pathOffset &&
+                sample.pathOffset < piece.hapEnd
+              )
+            })
+          ) {
+            throw new Fallback(
+              `chosen path ${sample.pathHandle} has a sample at ${sample.pathOffset} on the window's nodes that no walk reached`,
+            )
+          }
+          if (sample.orientation === 'reverse') {
+            reversed.push(sample)
+          }
         }
       }
+    }
+    for (const sample of reversed) {
+      await pieceAtOrThrough(
+        {
+          pos: { node: sample.node, offset: sample.offset },
+          left: sample.pathOffset,
+        },
+        sample.pathHandle,
+        'reverse',
+        'twin',
+      )
     }
     stats.ms.check = lap()
   }
@@ -996,7 +1015,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     const strays = await db.haplotypeStrayOptions()
     if (strays === undefined) {
       throw new Fallback(
-        'the haplotype index has no stray rows; gbz-haplotype-index writes them from 4.2.0',
+        'the haplotype index has no stray rows; gbz-haplotype-index 0.2.0 writes them',
       )
     }
     await strayRoute(strays)
