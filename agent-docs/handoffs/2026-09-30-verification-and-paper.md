@@ -170,6 +170,38 @@ Everything they found is landed or on a branch; nothing is open in the library.
   `pgrep` loop and writes `chain4.log`, runs tagged `bins4`. Self-bounded chain
   links in the HPRC database: 0 of 69,646,620.
 
+## Review against upstream, evening
+
+A fourth agent held every upstream-facing claim and every decoding assumption
+against gbz-base 0.6.2 and the gbz crate sources in the cargo registry, from the
+point of view of their maintainers. Verdict: no substantive error in the format
+semantics or the index's premises. Upstream's own comment states the premise
+(`subgraph.rs:44-45`: other paths remain anonymous because they cannot be
+identified efficiently using the GBWT). Landed at `aafb2bc`:
+
+- **Walk order** (`b1f737c`): upstream lists walks by start handle then offset;
+  `extractPaths` listed forward-start walks first, so a canonical walk starting
+  on a reverse handle came out last and `unknown#N` numbers differed. No oracle
+  fixture had such a walk. Now sorted as upstream does, the keep route's
+  `extractionOrder` matches, and three oracle fixtures generated with the
+  upstream binary cover it. A 29-window diff against the binary is identical
+  except the two documented CIGAR cases.
+- **Docs** (`aafb2bc`): what the GBWT names versus what gbz-base's database
+  stores (the GBWT's document-array samples are not carried into the database;
+  the index is that sampling kept outside it); a position ranks a visit, not a
+  walk; "reference or generic path" where upstream indexes both; one row per
+  node orientation; `overlapping` snarls need a boundary and a successor inside.
+- **Twin dropping** (`d8e36f2`) is justified by GBWT semantics: the two walks
+  are sequences 2p and 2p+1 over the same coordinates; upstream prints the
+  duplicate too.
+- **Paper** (`~/paper` at `14059c7`): a walk is named from the next sample along
+  it, not the nearest; the database names a path only at its start and upstream
+  reports the rest as unknown; the GBWT's own samples are not in the database;
+  the lengths table is mentioned.
+
+`chain5` on ada runs the acceptance chain on this final main
+(`~/keep-sweep/gbz-base-js-aafb2bc/`, tagged `bins5`), queued behind `chain4`.
+
 ## Left for the user
 
 - Host `bins-final.db`, release npm and the crate.
