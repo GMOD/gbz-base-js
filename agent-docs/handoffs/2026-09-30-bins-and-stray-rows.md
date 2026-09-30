@@ -89,17 +89,20 @@ sweep on ada (`runs/strays4`) had 21 wrong queries and 52 dropped pieces in
 All on the final code (`9eb3436` for `src/`), index
 `hprc-v2.1-mc-grch38.haplotype-index.bins.db`, local files on ada.
 
-| run (`~/keep-sweep/runs/`) | windows                           | queries | keep route | fallback | wrong |
-| -------------------------- | --------------------------------- | ------: | ---------: | -------: | ----: |
-| `bins2`                    | the 1,500 of 09-28                |   9,000 |      8,986 |       14 |     0 |
-| `bins2-targeted`           | 1,330 aimed at the stray rows     |  15,780 |     15,772 |        8 |     0 |
-| `bins2-tutorial`           | 18 loci, four combos              |     216 |        216 |        0 |     0 |
-| `bins2-all`                | the 1,500, every haplotype kept   |   3,000 |      2,998 |        2 |     0 |
-| `bins2-tutorial-all`       | the 18 loci, every haplotype kept |      72 |         72 |        0 |     0 |
-| TARGETED-ALL-ROW           |
+| run (`~/keep-sweep/runs/`) | windows                           |                                       queries | keep route | fallback | wrong |
+| -------------------------- | --------------------------------- | --------------------------------------------: | ---------: | -------: | ----: |
+| `bins2`                    | the 1,500 of 09-28                |                                         9,000 |      8,986 |       14 |     0 |
+| `bins2-targeted`           | 1,330 aimed at the stray rows     |                                        15,780 |     15,772 |        8 |     0 |
+| `bins2-tutorial`           | 18 loci, four combos              |                                           216 |        216 |        0 |     0 |
+| `bins2-all`                | the 1,500, every haplotype kept   |                                         3,000 |      2,998 |        2 |     0 |
+| `bins2-tutorial-all`       | the 18 loci, every haplotype kept |                                            72 |         72 |        0 |     0 |
+|                            | `bins2-targeted-all-sample`       | 80 per targeted stratum, every haplotype kept |        799 |      791 |     8 | 0   |     |
 
 4.1.0 on the first row: 152 wrong, 585 pieces. `strays4` (the branch as found):
-21 wrong, 52 pieces.
+21 wrong, 52 pieces. The 800th query of the last row, every haplotype at a 579
+bp window that a snarl of 8 Mb joins (`jump chr10:16687571->24715172`), ran out
+of an 8 GB heap; with eight haplotypes the keep route took 13 s and the sampled
+route 40 s. Pass `limit` for such a window.
 
 - **Truth from the GBZ** (`gbz-truth`): the sampled route matches on all 8,260
   subgraphs of `bins2` and `bins2-targeted`, 21,653,445 pieces, none missing,
