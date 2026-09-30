@@ -52,7 +52,7 @@ when the session ran low on tokens.
 
 ## Paper (`~/paper`, three commits, not pushed)
 
-Methods "Reading pangenome graphs" now has three sentences on the index, and
+Methods "Reading pangenome graphs" now has two sentences on the index, and
 `supplementary.tex` has Supplementary Note 1 on its own page: the three kinds of
 row, the two routes and every fallback condition, two builder pitfalls, build
 cost, timings including the small-window case, and the three validation counts
@@ -117,11 +117,58 @@ gaps, true by construction of `mark_anchors`; `(a, a)` chain links are guarded
 but never observed, and `select count(*) from Nodes where next>>1 = handle>>1`
 on the HPRC database would settle whether they exist.
 
-**Not yet done because ada dropped**: re-run `runs/bins2` on the fixed source
-(the result cannot differ on HPRC, but the paper's counts would then be measured
-on the released code), and the `(a, a)` query. The ssh master to ada wedged and
-was torn down; `! ssh -fN ada` reopens it. The current `src/` is synced to
-`~/keep-sweep/gbz-base-js-main/` (pre-fix; rsync again).
+## Cross-validation, evening
+
+Three more agents checked the day's work and the whole state of the three repos.
+Everything they found is landed or on a branch; nothing is open in the library.
+
+- **Today's work holds.** One factual slip: the longest HPRC node is 1,024 bp,
+  not 342 (that was the packed blob length, three bases per byte), so the fixed
+  off-by-one still cannot fire on the hosted index. The paper's note had four
+  wording errors, fixed in `~/paper` at `94691b4`: the index it describes is
+  ours, not the one hosted today; the 32 limit counts chosen paths passing the
+  anchors, not haplotypes; peak memory 19.9 GB; the adversarial fuzz settings
+  are examples. The record count in `test/hprc.test.ts` does not depend on the
+  index (plain, anchored and bins-final all agree).
+- **Library beyond the keep route, landed at `d8e36f2`:** `extractPaths` kept a
+  walk in both orientations when both were canonical (a hairpin: it starts and
+  ends at one node in opposite orientations), and kept the twin of a reference
+  walk that is not canonical, which identification then named as the reference
+  over itself. Both routes now drop a named twin whose forward walk of the same
+  path covers the same coordinates (`dropTwins`); AMY1 goes from 1,362 records
+  to 1,213, duplicate spans 149 to 0. `distinct` merged before identification
+  and could lose the reference's identity, so `pairAlignments` against GRCh38
+  returned nothing; it now defers the twins. The identification bound uses
+  `--reference-interval` where that exceeds `--interval`. Fixture
+  `reverse-reference` gained CHM13 and HG002 walks and an index; tests in
+  `test/twins.test.ts`. The fuzzer tolerates a piece once per orientation, which
+  is why 18,500 graphs never flagged the duplicates.
+- **Packaging deviates from the gmod convention**: ESM-only, no `require`
+  condition, no `build:es5`, so a Jest consumer needs a
+  `transformIgnorePatterns` entry. Left as is; decide before a release.
+- **Plugin, landed at `4e93611` on its main:** the walk lift took the first W
+  record of a name, so a haplotype the library returns in pieces was drawn as
+  its first piece with the rest faded and a spurious deletion in the readout.
+  `GraphPath` now carries `start`, the lift unions every record of a name, the
+  legend lists a name once, walk rows measure against every reference record and
+  draw every piece (as separate rows for now), and a popped bubble keeps a
+  record's start. Tests in `packages/core/src/pieces.test.ts`. Comments and
+  `agent-docs/GBZ.md` no longer describe the anchored route. The plugin's index
+  fixtures and the hosted index predate stray rows, so every keep query in its
+  tests falls back to the sampled route; the fixtures' GBZ sources are not in
+  the repo, so they could not be rebuilt. The tube map still draws one tube per
+  record.
+- **BandageJS:** branch `facet-columns` in `.claude/worktrees/facet-columns` of
+  that repo (`b81a9e0`) changes `columns:` to the `facet` form the plugin's core
+  `2f31ab9` introduced. It compiles only against that core, not the published
+  4.0.27 in its lockfile, so land it with the dependency bump when the core is
+  released. Its `node_modules` was stale against the lockfile.
+- **On ada:** `chain3` (source `40d45de`, before the twin fix) ran tutorial
+  216/216, `bins3` 9,000/8,986/14/0 wrong, truth 3,000 subgraphs 1,981,894
+  pieces 0 differ, then the targeted sweep and keep-all passes. `chain4` (source
+  `d8e36f2`, `~/keep-sweep/gbz-base-js-d8e36f2/`) is queued behind it by a
+  `pgrep` loop and writes `chain4.log`, runs tagged `bins4`. Self-bounded chain
+  links in the HPRC database: 0 of 69,646,620.
 
 ## Left for the user
 
