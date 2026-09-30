@@ -39,14 +39,8 @@ async function routes(
   fixture: string,
   windows: [number, number][],
   keepSets: string[][],
-  strays: boolean,
 ) {
   const db = await open(fixture)
-  if (!strays) {
-    Object.defineProperty(db, 'haplotypeStrayOptions', {
-      value: () => Promise.resolve(undefined),
-    })
-  }
   const fallbacks: (string | undefined)[] = []
   for (const [start, end] of windows) {
     for (const context of [0, 100, 1000]) {
@@ -74,52 +68,37 @@ async function routes(
 }
 
 describe('the keep route', () => {
-  const twoCopies = (strays: boolean) =>
-    routes(
+  it('walks both copies of the region when a path visits an anchor from each', async () => {
+    const fallbacks = await routes(
       'two-copies',
       [
         [36000, 40000],
         [37000, 39000],
       ],
       [['HG001#2'], ['HG002#1'], ['HG002#2'], ['HG001#2', 'HG002#1']],
-      strays,
     )
-
-  it('identifies every walk when a path visits an anchor from two copies of the region', async () => {
-    const fallbacks = await twoCopies(false)
-    expect(fallbacks.every(f => f?.includes('copies of the region'))).toBe(true)
-  })
-
-  it('walks both copies of the region from the stray rows', async () => {
-    const fallbacks = await twoCopies(true)
     expect(fallbacks.every(f => f === undefined)).toBe(true)
   })
 
-  it('walks as far past each visit as the sample check allows', async () => {
-    for (const strays of [false, true]) {
-      const fallbacks = await routes(
-        'far-pass',
-        [
-          [36000, 40000],
-          [37000, 39000],
-        ],
-        [['HG001#1'], ['HG002#2'], ['HG004#1'], ['HG001#1', 'HG004#1']],
-        strays,
-      )
-      expect(fallbacks.every(f => f === undefined)).toBe(true)
-    }
+  it('finds a pass over the window far along a chosen path from its anchor visits', async () => {
+    const fallbacks = await routes(
+      'far-pass',
+      [
+        [36000, 40000],
+        [37000, 39000],
+      ],
+      [['HG001#1'], ['HG002#2'], ['HG004#1'], ['HG001#1', 'HG004#1']],
+    )
+    expect(fallbacks.every(f => f === undefined)).toBe(true)
   })
 
   it('walks a fragment of a chosen contig that lies between the anchors', async () => {
-    for (const strays of [false, true]) {
-      const fallbacks = await routes(
-        'far-pass',
-        [[55000, 56500]],
-        [['HG005#1'], ['HG005#1', 'HG002#2']],
-        strays,
-      )
-      expect(fallbacks.every(f => f === undefined)).toBe(true)
-    }
+    const fallbacks = await routes(
+      'far-pass',
+      [[55000, 56500]],
+      [['HG005#1'], ['HG005#1', 'HG002#2']],
+    )
+    expect(fallbacks.every(f => f === undefined)).toBe(true)
   })
 
   it('walks a contig that visits no anchor and has no sample in the window', async () => {
@@ -130,12 +109,11 @@ describe('the keep route', () => {
         [37000, 39000],
       ],
       [['HG006#1'], ['HG006#1', 'HG002#2']],
-      true,
     )
     expect(fallbacks.every(f => f === undefined)).toBe(true)
   })
 
-  it('drops that contig on the anchor route of an index without stray rows', async () => {
+  it('identifies every walk, that contig among them, with a haplotype index that has no stray rows', async () => {
     const db = await open('unplaced')
     Object.defineProperty(db, 'haplotypeStrayOptions', {
       value: () => Promise.resolve(undefined),
@@ -144,8 +122,9 @@ describe('the keep route', () => {
       context: 100,
       keep: name => name.sample === 'HG006',
     })
+    expect(kept.stats.keep?.fallback).toMatch(/no stray rows/)
     const gfa = await kept.toGFA({ names: 'resolved' })
     expect(gfa).toContain('\tctg1\t')
-    expect(gfa).not.toContain('\tctg2\t')
+    expect(gfa).toContain('\tctg2\t')
   })
 })

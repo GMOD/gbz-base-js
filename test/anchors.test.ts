@@ -23,8 +23,7 @@ function openWithCompanion(graph: string, companion: string) {
   })
 }
 
-// The index as a reader sees it without HaplotypeStrays, the format through
-// 4.1.0.
+// The index as a reader sees it without stray rows, the format through 4.1.0.
 function withoutStrays(db: GBZBase) {
   Object.defineProperty(db, 'haplotypeStrayOptions', {
     value: () => Promise.resolve(undefined),
@@ -333,15 +332,7 @@ describe('a query that uses the keep option', () => {
   // flipped and its pass lies before that visit. Neither pass holds a sample,
   // so only the walk can find them.
   it('walks the reversed stretch of an inversion that covers one anchor', async () => {
-    for (const strays of [false, true]) {
-      await reversedStretch(
-        strays ? await openInversion() : withoutStrays(await openInversion()),
-        strays,
-      )
-    }
-  })
-
-  async function reversedStretch(db: GBZBase, strays: boolean) {
+    const db = await openInversion()
     const chr1 = { sample: 'GRCh38', contig: 'chr1' }
     const inverted = ['HG001#1', 'HG002#1']
     const sets: [string, (name: PathName) => boolean][] = [
@@ -365,8 +356,7 @@ describe('a query that uses the keep option', () => {
               end,
               { keep, context, snarls },
             )
-            const stats = kept.stats.keep!
-            expect(stats.fallback).toBeUndefined()
+            expect(kept.stats.keep?.fallback).toBeUndefined()
             const names = alignments.map(a =>
               a.resolved ? `${a.name.sample}#${a.name.haplotype}` : '',
             )
@@ -378,158 +368,49 @@ describe('a query that uses the keep option', () => {
               } as PathName),
             )
             expect(chosen.every(h => names.includes(h))).toBe(true)
-            if (!strays) {
-              expect(stats.anchors).toEqual([64572, 128696])
-              expect(
-                Object.keys(stats.walks).filter(k => k.startsWith('inversion:'))
-                  .length > 0,
-              ).toBe(chosen.length > 0)
-            }
           }
         }
       }
     }
-  }
-
-  // Hides one path's rows at the given anchor nodes of the inversion fixture,
-  // as if the path bypassed those nodes. Hidden rows contradict the stray rows
-  // the index built from the real ones, so the index reads without
-  // HaplotypeStrays.
-  async function hidingRows(
-    db: GBZBase,
-    pathHandle: number,
-    multiples: number[],
-  ) {
-    withoutStrays(db)
-    const hidden = new Set<number>()
-    for (const k of multiples) {
-      hidden.add(nodeId((await db.haplotypeAnchor(0, k * 65536))!.node))
-    }
-    const original = db.haplotypeSamplesInRange.bind(db)
-    Object.defineProperty(db, 'haplotypeSamplesInRange', {
-      value: (min: number, max: number) =>
-        original(min, max).then(rows =>
-          rows.filter(
-            row =>
-              row.pathHandle !== pathHandle || !hidden.has(nodeId(row.node)),
-          ),
-        ),
-    })
-    return db
-  }
-  const straight = { handle: 2, name: 'HG001#2' }
-  const keepStraight = (name: PathName) =>
-    name.sample === 'HG001' && name.haplotype === 2
-  const inversionWindow = [66800, 68200] as const
-
-  it('walks a chosen path seen at a wider anchor when it bypasses both near ones', async () => {
-    const db = await hidingRows(await openInversion(), straight.handle, [1, 2])
-    for (const context of [0, 1000]) {
-      const { kept, alignments } = await expectParity(
-        db,
-        { sample: 'GRCh38', contig: 'chr1' },
-        ...inversionWindow,
-        { keep: keepStraight, context },
-      )
-      expect(kept.stats.keep?.anchorsRead).toBe(3)
-      if (context === 1000) {
-        expect(kept.stats.keep?.fallback).toBeUndefined()
-      }
-      expect(
-        alignments.some(a => a.resolved && a.pathHandle === straight.handle),
-      ).toBe(true)
-    }
   })
 
-  it('pairs a visit to one near anchor with a visit to a wider one on the other side', async () => {
-    const db = await hidingRows(await openInversion(), straight.handle, [1])
-    const { kept, alignments } = await expectParity(
-      db,
-      { sample: 'GRCh38', contig: 'chr1' },
-      ...inversionWindow,
-      { keep: keepStraight, context: 0 },
-    )
-    expect(kept.stats.keep?.fallback).toBeUndefined()
-    expect(kept.stats.keep?.walks['interval: endmarker']).toBe(1)
-    expect(alignments.length).toBe(1)
-  })
-
-  it('identifies every walk when a one-sided walk runs on past the stretch', async () => {
-    const db = await hidingRows(await openInversion(), straight.handle, [0, 1])
-    const { kept } = await expectParity(
-      db,
-      { sample: 'GRCh38', contig: 'chr1' },
-      ...inversionWindow,
-      { keep: keepStraight, context: 0 },
-    )
-    expect(kept.stats.keep?.fallback).toMatch(/runs on past the stretch/)
-  })
-
-  it('trusts a one-sided walk that reaches the end of the contig', async () => {
-    const db = await hidingRows(await openInversion(), straight.handle, [2])
-    const { kept } = await expectParity(
-      db,
-      { sample: 'GRCh38', contig: 'chr1' },
-      ...inversionWindow,
-      { keep: keepStraight, context: 0 },
-    )
-    expect(kept.stats.keep?.fallback).toBeUndefined()
-    expect(kept.stats.keep?.walks['one-sided: endmarker']).toBe(1)
-  })
-
-  it('walks a chosen contig whole when it has a sample in the window and no anchor visit', async () => {
-    const db = await hidingRows(
-      await openInversion(),
-      straight.handle,
-      [0, 1, 2],
-    )
-    const { kept, alignments } = await expectParity(
-      db,
-      { sample: 'GRCh38', contig: 'chr1' },
-      ...inversionWindow,
-      { keep: keepStraight, context: 1000 },
-    )
-    expect(kept.stats.keep?.fallback).toBeUndefined()
-    expect(kept.stats.keep?.walks['whole: endmarker']).toBe(1)
-    expect(alignments.length).toBeGreaterThan(0)
-    expect(
-      alignments.every(a => a.resolved && a.pathHandle === straight.handle),
-    ).toBe(true)
-  })
-
-  it('identifies every walk when a path with no anchor visit is too long to lie between the anchors', async () => {
-    const db = await hidingRows(
-      await openInversion(),
-      straight.handle,
-      [0, 1, 2],
-    )
-    Object.defineProperty(db, 'haplotypeLength', {
-      value: (pathHandle: number) =>
-        Promise.resolve(pathHandle === straight.handle ? 10_000_000 : 138_500),
+  // The subgraph must hold only nodes the haplotype index lists for the bins
+  // the window touches: the stray rows cover visits to those nodes alone.
+  it('identifies every walk when the subgraph holds a node the bins leave out', async () => {
+    const db = await openInversion()
+    const listed = db.haplotypeBinNodes.bind(db)
+    let dropped: number | undefined
+    Object.defineProperty(db, 'haplotypeBinNodes', {
+      value: async (reference: number, first: number, last: number) => {
+        const has = await listed(reference, first, last)
+        return (id: number) => {
+          dropped ??= id
+          return id !== dropped && has(id)
+        }
+      },
     })
     const { kept } = await expectParity(
       db,
       { sample: 'GRCh38', contig: 'chr1' },
-      ...inversionWindow,
-      { keep: name => name.sample === 'HG002', context: 1000 },
+      66800,
+      68200,
+      { keep: name => name.sample === 'HG001', context: 100 },
     )
-    expect(kept.stats.keep?.fallback).toMatch(/no visit to the anchors/)
+    expect(kept.stats.keep?.fallback).toMatch(
+      /lists node \d+ of the subgraph in no bin/,
+    )
   })
 
-  it('identifies every walk when no chosen path passes any anchor or has a sample in the window', async () => {
-    const db = await hidingRows(
-      await openInversion(),
-      straight.handle,
-      [0, 1, 2],
-    )
-    const { kept, alignments } = await expectParity(
+  it('identifies every walk when the context exceeds what the stray rows cover', async () => {
+    const db = await openInversion()
+    const { kept } = await expectParity(
       db,
       { sample: 'GRCh38', contig: 'chr1' },
-      ...inversionWindow,
-      { keep: keepStraight, context: 0 },
+      66800,
+      68200,
+      { keep: name => name.sample === 'HG001', context: 1001 },
     )
-    expect(kept.stats.keep?.fallback).toMatch(/no chosen path/)
-    expect(alignments.length).toBe(1)
+    expect(kept.stats.keep?.fallback).toMatch(/context of 1001 bp exceeds/)
   })
 
   // far-stretch.gfa: a 96 kb reference and four haplotypes. HG002#1 deletes
@@ -538,28 +419,24 @@ describe('a query that uses the keep option', () => {
   // path passes 60 kb before the anchors. The index samples haplotypes every
   // 65,536 bp, so only the reference's samples every 1,024 bp
   // (--reference-interval) fall on the stretch.
-  it('identifies every walk when the context reaches the reference far from the anchors', async () => {
+  it('identifies every walk with a haplotype index that has no stray rows', async () => {
     const db = withoutStrays(
       await openWithCompanion(
         'far-stretch.gbz.db',
         'far-stretch.haplotype-index.db',
       ),
     )
-    const chr1 = { sample: 'GRCh38', contig: 'chr1' }
-    const keep = (name: PathName) =>
-      name.sample === 'HG001' && name.haplotype === 1
-    const near = await expectParity(db, chr1, 66500, 70000, {
-      keep,
-      context: 0,
-    })
-    expect(near.kept.stats.keep?.fallback).toBeUndefined()
-    const far = await expectParity(db, chr1, 66500, 70000, {
-      keep,
-      context: 1000,
-    })
-    expect(far.kept.stats.keep?.fallback).toMatch(
-      /^path 0 has a sample at 5024 on the window's nodes far from its anchor visits/,
+    const { kept } = await expectParity(
+      db,
+      { sample: 'GRCh38', contig: 'chr1' },
+      66500,
+      70000,
+      {
+        keep: name => name.sample === 'HG001' && name.haplotype === 1,
+        context: 1000,
+      },
     )
+    expect(kept.stats.keep?.fallback).toMatch(/no stray rows/)
   })
 
   it('answers from the stray rows when the context reaches the reference far from the anchors', async () => {
@@ -598,31 +475,6 @@ describe('a query that uses the keep option', () => {
     ])
   })
 
-  it('finds a contig with no row at the anchor from its samples in the window', async () => {
-    const db = await openMicb()
-    const anchor = (await db.haplotypeAnchor(1, 0))!
-    const rows = await db.haplotypeSamplesAtNode(anchor.node)
-    const dropped = rows.find(
-      row => row.pathHandle !== 0 && row.pathHandle !== 1,
-    )!
-    const gbzPath = (await db.getPath(dropped.pathHandle))!
-    Object.defineProperty(db, 'haplotypeSamplesAtNode', {
-      value: (handle: number) =>
-        db
-          .haplotypeSamplesInRange(handle, handle)
-          .then(all =>
-            all.filter(row => row.pathHandle !== dropped.pathHandle),
-          ),
-    })
-    const { alignments } = await expectParity(db, chr6, 31500000, 31501000, {
-      keep: name => name.contig === gbzPath.name.contig,
-      context: 0,
-    })
-    expect(
-      alignments.some(a => a.resolved && a.pathHandle === dropped.pathHandle),
-    ).toBe(true)
-  })
-
   it('identifies every walk on the same subgraph when the haplotype index has no anchors', async () => {
     const db = await openSampled('micb-kir3dl1.gbz.db')
     const { kept, alignments } = await expectParity(
@@ -632,7 +484,7 @@ describe('a query that uses the keep option', () => {
       31501000,
       { keep: name => name.sample === 'HG01106' },
     )
-    expect(kept.stats.keep?.fallback).toMatch(/no anchors/)
+    expect(kept.stats.keep?.fallback).toMatch(/no stray rows/)
     expect(alignments.length).toBe(2)
   })
 
@@ -669,7 +521,7 @@ describe('a query that uses the keep option', () => {
     const plain = await (
       await openSampled('micb-kir3dl1.gbz.db')
     ).getSubgraphForRange(chr6Name, 31500000, 31501000, { keep })
-    expect(plain?.stats.keep?.fallback).toMatch(/no anchors/)
+    expect(plain?.stats.keep?.fallback).toMatch(/no stray rows/)
     expect(alignments).toEqual(plain!.alignments())
     const distinct = await db.getSubgraphForRange(
       chr6Name,
