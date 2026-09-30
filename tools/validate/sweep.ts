@@ -72,7 +72,57 @@ const key = (a: Record) =>
 for (const [index, w] of config.rows.entries()) {
   const query = { sample: w.sample, contig: w.contig }
   for (const [context, snarls] of w.combos) {
-    let dumped = false
+    // The sampled route runs once per window and combo; each keep set narrows
+    // a copy of it.
+    let all: { subgraph: any; ms: number } | undefined
+    const sampledFor = async (keep: (name: Name) => boolean) => {
+      if (!all) {
+        const t = performance.now()
+        const subgraph = await subgraphInInterval(db, query, w.start, w.end, {
+          context,
+          snarls,
+        })
+        await subgraph.identifyPaths()
+        all = { subgraph, ms: performance.now() - t }
+        if (nodesOut && piecesOut) {
+          const id = `${path.basename(process.argv[2]!)}:${index}:${context}:${snarls}`
+          const nodes = [
+            ...new Set(
+              [...(subgraph.records as Map<number, unknown>).keys()].map(
+                handle => handle >> 1,
+              ),
+            ),
+          ].sort((a, b) => a - b)
+          nodesOut.write(`${id}\t${nodes.join(',')}\n`)
+          for (const walk of subgraph.paths as Walk[]) {
+            const identity = walk.identity
+            piecesOut.write(
+              `${id}\t${identity?.pathHandle ?? -1}\t${identity?.hapStart ?? -1}\t${identity?.hapEnd ?? -1}\n`,
+            )
+          }
+        }
+      }
+      const walks = all.subgraph.paths as Walk[]
+      const unresolved = walks.filter(
+        (walk, i) => i !== all!.subgraph.refId && walk.identity === undefined,
+      ).length
+      const t = performance.now()
+      const sampled = Object.assign(
+        Object.create(Object.getPrototypeOf(all.subgraph)),
+        all.subgraph,
+      )
+      sampled.records = new Map(all.subgraph.records)
+      sampled.paths = [...walks]
+      if (unresolved === 0) {
+        sampled.keepHaplotypes(keep)
+      }
+      return {
+        sampled,
+        walksAll: walks.length - 1,
+        unresolved,
+        ms: all.ms + performance.now() - t,
+      }
+    }
     for (const [setName, list] of w.keepSets) {
       const keep = (name: Name) =>
         list.includes('all') ||
@@ -98,38 +148,9 @@ for (const [index, w] of config.rows.entries()) {
           keep,
         })
         const t1 = performance.now()
-        const sampled = await subgraphInInterval(db, query, w.start, w.end, {
-          context,
-          snarls,
-        })
-        await sampled.identifyPaths()
-        const walks = sampled.paths as Walk[]
-        row.walksAll = walks.length - 1
-        row.unresolved = walks.filter(
-          (walk, i) => i !== sampled.refId && walk.identity === undefined,
-        ).length
-        if (nodesOut && piecesOut && !dumped) {
-          dumped = true
-          const id = `${path.basename(process.argv[2]!)}:${index}:${context}:${snarls}`
-          const nodes = [
-            ...new Set(
-              [...(sampled.records as Map<number, unknown>).keys()].map(
-                handle => handle >> 1,
-              ),
-            ),
-          ].sort((a, b) => a - b)
-          nodesOut.write(`${id}\t${nodes.join(',')}\n`)
-          for (const walk of walks) {
-            const identity = walk.identity
-            piecesOut.write(
-              `${id}\t${identity?.pathHandle ?? -1}\t${identity?.hapStart ?? -1}\t${identity?.hapEnd ?? -1}\n`,
-            )
-          }
-        }
-        if (row.unresolved === 0) {
-          sampled.keepHaplotypes(keep)
-        }
-        const t2 = performance.now()
+        const { sampled, walksAll, unresolved, ms } = await sampledFor(keep)
+        row.walksAll = walksAll
+        row.unresolved = unresolved
         const a = (kept.alignments() as Record[]).map(key)
         const b = (sampled.alignments() as Record[]).map(key)
         row.route = kept.stats.keep?.fallback ?? 'keep'
@@ -143,7 +164,7 @@ for (const [index, w] of config.rows.entries()) {
         row.keepOnly = a.filter(x => !b.includes(x))
         row.sampledOnly = b.filter(x => !a.includes(x))
         row.msKeep = Math.round(t1 - t0)
-        row.msSampled = Math.round(t2 - t1)
+        row.msSampled = Math.round(ms)
         row.chosenPaths = kept.stats.keep?.chosenPaths
         row.walks = kept.stats.keep?.walks
         row.strays = kept.stats.keep?.strays
