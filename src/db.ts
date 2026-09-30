@@ -450,13 +450,22 @@ export class GBZBase {
     return subgraph
   }
 
+  // A subgraph holds one reference walk, so a window over several fragments of
+  // the path is refused; a cut at the first gap would read as the whole window.
   async getSubgraphForRange(
     ref: PathRef,
     start: number,
     end: number,
     opts: RangeOptions = {},
   ) {
-    const [fragment] = await this.pathFragmentsForRange(ref, start, end)
+    const fragments = await this.pathFragmentsForRange(ref, start, end)
+    const [fragment] = fragments
+    if (fragments.length > 1) {
+      const name = fragment!.path.name
+      throw new Error(
+        `the window ${start}-${end} spans ${fragments.length} fragments of ${formatPathName(name, 0)}: query each fragment from pathFragmentsForRange, or use getAlignmentsForRange`,
+      )
+    }
     return fragment
       ? this.subgraphForFragment(fragment, start, end, opts)
       : undefined

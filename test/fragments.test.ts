@@ -67,9 +67,12 @@ describe('a reference contig stored as two fragments', () => {
     expect(labels).not.toContain('unresolved')
   })
 
-  it('hands back the first fragment as the subgraph, and says which', async () => {
+  it('refuses a subgraph window that spans two fragments, and cuts one that lies in one', async () => {
     const db = await openSplit()
-    const subgraph = await db.getSubgraphForRange(chr1, 400, 1600, {
+    await expect(
+      db.getSubgraphForRange(chr1, 400, 1600, { context: 0 }),
+    ).rejects.toThrow(/spans 2 fragments of GRCh38#0#chr1/)
+    const subgraph = await db.getSubgraphForRange(chr1, 400, 501, {
       context: 0,
     })
     expect(subgraph?.referenceInterval).toEqual({
@@ -80,6 +83,9 @@ describe('a reference contig stored as two fragments', () => {
     const gfa = await subgraph!.toGFA({ names: 'resolved' })
     expect(gfa).toContain('W\tGRCh38\t0\tchr1\t321\t501\t>5')
     expect(gfa).toContain('W\tHG001\t1\tctg1\t321\t501\t>5')
+    expect(
+      await db.getSubgraphForRange(chr1, 1500, 1600, { context: 0 }),
+    ).toBeDefined()
   })
 
   it('names a haplotype in the second fragment in its own coordinates', async () => {

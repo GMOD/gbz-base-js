@@ -63,9 +63,10 @@ With `distinct`, it merges the walks of the kept haplotypes, and each `weight`
 counts kept haplotypes.
 
 `getAlignmentsForRange` covers every path fragment the window overlaps.
-`getSubgraphForRange` returns the subgraph for the first one, or `undefined`
-when the path is unknown. `pathFragmentsForRange` lists the fragments, and
-`hasPath` checks a path.
+`getSubgraphForRange` returns the subgraph of the one fragment the window lies
+in, `undefined` when the path is unknown, and throws when the window spans
+several fragments, since a subgraph holds one reference walk.
+`pathFragmentsForRange` lists the fragments, and `hasPath` checks a path.
 
 ## Subgraph output
 
