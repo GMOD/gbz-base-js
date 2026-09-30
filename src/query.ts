@@ -87,9 +87,10 @@ export interface HaplotypeQueryOptions extends QueryOptions {
 
 // The window for a chosen set of haplotypes: the same subgraph and the same
 // walks as the sampled route narrowed by keepHaplotypes, found from the
-// haplotype index's samples and anchor rows without walking the haplotypes
-// `keep` rejects. Without anchors near the window, or with `haplotypes` other
-// than 'all', every walk is extracted and identified on the same subgraph.
+// haplotype index without walking the haplotypes `keep` rejects, or by
+// extracting and identifying every walk when the index cannot show those
+// walks complete. 'distinct' merges the kept walks afterwards, so its weights
+// count kept haplotypes.
 export async function subgraphForHaplotypes(
   db: GBZBase,
   query: PathQuery,
@@ -110,8 +111,9 @@ export async function subgraphForHaplotypes(
     opts,
   )
   const haplotypes = opts.haplotypes ?? 'all'
-  if (
-    haplotypes !== 'all' ||
+  if (haplotypes === 'reference-only' || haplotypes === 'none') {
+    subgraph.extractPaths(reference, haplotypes)
+  } else if (
     !(await subgraph.extractChosenPaths(
       reference,
       end - start,
@@ -119,10 +121,13 @@ export async function subgraphForHaplotypes(
       opts.context ?? 100,
     ))
   ) {
-    subgraph.extractPaths(reference, haplotypes)
+    subgraph.extractPaths(reference, 'all')
     await subgraph.identifyPaths()
   }
   subgraph.keepHaplotypes(opts.keep)
+  if (haplotypes === 'distinct') {
+    subgraph.mergeDistinct()
+  }
   return subgraph
 }
 

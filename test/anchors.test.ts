@@ -652,7 +652,7 @@ describe('a query that uses the keep option', () => {
     ).rejects.toThrow(/no anchor row for the reference path/)
   })
 
-  it('is what keep uses on the range queries, except with distinct haplotypes', async () => {
+  it('is what keep uses on the range queries, merging distinct walks afterwards', async () => {
     const chr6Name = 'GRCh38#0#chr6'
     const keep = (name: PathName) => name.sample === 'HG01106'
     const db = await openMicb()
@@ -677,6 +677,7 @@ describe('a query that uses the keep option', () => {
       31501000,
       { keep, haplotypes: 'distinct' },
     )
-    expect(distinct?.stats.keep).toBeUndefined()
+    expect(distinct?.stats.keep?.fallback).toBeUndefined()
+    expect(distinct!.pathCount).toBeLessThanOrEqual(kept!.pathCount)
   })
 })

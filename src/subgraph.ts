@@ -1208,11 +1208,32 @@ export class Subgraph {
     this.refId = refId
   }
 
+  // Merges identical walks into one record with a weight, as extractPaths does
+  // for 'distinct'. After keepHaplotypes the weights count kept haplotypes.
+  mergeDistinct() {
+    this.distinctPaths()
+  }
+
   // Narrows an identified subgraph to the reference walk and the named walks
   // `wanted` accepts, and drops every node only the discarded walks visited,
   // so a cut for a chosen set draws that set's private sequence and nothing
-  // else's. Unresolved walks are discarded with the rest.
+  // else's. It needs a name for every walk, since a walk without one could
+  // belong to a wanted haplotype, and one walk per haplotype, since a record
+  // of merged walks carries the name of one of them.
   keepHaplotypes(wanted: (name: PathName) => boolean) {
+    if (this.paths.some(info => info.weight !== undefined)) {
+      throw new Error(
+        "keepHaplotypes needs one walk per haplotype: extract with haplotypes 'all', then call mergeDistinct()",
+      )
+    }
+    const unnamed = this.paths.filter(
+      (info, index) => index !== this.refId && info.identity === undefined,
+    ).length
+    if (unnamed > 0) {
+      throw new Error(
+        `${unnamed} of the window's ${this.paths.length} walks have no name, so the haplotypes to keep cannot be told from the rest; call identifyPaths() first, and check that the haplotype index was built for this graph`,
+      )
+    }
     const refInfo =
       this.refId === undefined ? undefined : this.paths[this.refId]
     const kept = this.paths.filter(

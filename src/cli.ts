@@ -399,6 +399,13 @@ export async function main(argv: string[]) {
   ]
   const keep = kept.length > 0 ? keepPredicate(kept) : undefined
   const anchoredQuery = keep !== undefined && args.interval !== undefined
+  // Walks merge after the haplotypes to keep are chosen, since a merged
+  // record carries the name of one of its walks.
+  const mergeAfterKeep =
+    keep !== undefined && !anchoredQuery && args.haplotypes === 'distinct'
+  if (mergeAfterKeep) {
+    opts.haplotypes = 'all'
+  }
   const subgraph = args.between
     ? await subgraphBetween(db, args.between[0], args.between[1], opts)
     : args.nodes.length > 0
@@ -432,6 +439,9 @@ export async function main(argv: string[]) {
   }
   if (keep !== undefined && !anchoredQuery) {
     subgraph.keepHaplotypes(keep)
+  }
+  if (mergeAfterKeep) {
+    subgraph.mergeDistinct()
   }
   const names = args.resolve ? 'resolved' : 'anonymous'
   const pairs = args.stack

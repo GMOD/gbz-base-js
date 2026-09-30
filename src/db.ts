@@ -436,7 +436,7 @@ export class GBZBase {
     const haplotypes = opts.haplotypes ?? 'all'
     const named = haplotypes === 'all' || haplotypes === 'distinct'
     let subgraph
-    if (keep !== undefined && haplotypes === 'all') {
+    if (keep !== undefined && named) {
       subgraph = await subgraphForHaplotypes(this, query, from, to, {
         ...queryOptions,
         keep,
@@ -445,9 +445,6 @@ export class GBZBase {
       subgraph = await subgraphInInterval(this, query, from, to, queryOptions)
       if (this.hasHaplotypeIndex && named) {
         await subgraph.identifyPaths()
-        if (keep !== undefined) {
-          subgraph.keepHaplotypes(keep)
-        }
       }
     }
     return subgraph
