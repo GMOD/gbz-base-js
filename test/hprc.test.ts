@@ -100,16 +100,17 @@ describe.skipIf(!available(anchoredCompanion))(
     it('returns the sampled route’s walks for the tutorial’s eight haplotypes at KIV-2, AMY1 and MHC class II', async () => {
       const db = await openHprc(anchoredCompanion)
       expect(await db.haplotypeAnchorSpacing()).toBeDefined()
-      // At AMY1, HG01243#2's contig JAHEOX020000063.1 starts inside the window
-      // and passes the stretch between the anchors again in reverse 500 kb
-      // later, so the keep route reports a duplication and identifies every
-      // walk instead.
-      const windows: [string, number, number, boolean][] = [
-        ['chr6', 160616002, 160646753, true],
-        ['chr1', 103690000, 103780000, false],
-        ['chr6', 32510000, 32600000, true],
+      // An index with stray rows answers all three on the keep route, AMY1
+      // included, where HG01243#2's contig JAHEOX020000063.1 starts inside the
+      // window and passes it again in reverse 500 kb later. An index built
+      // before them identifies every walk.
+      const strays = (await db.haplotypeStrayOptions()) !== undefined
+      const windows: [string, number, number][] = [
+        ['chr6', 160616002, 160646753],
+        ['chr1', 103690000, 103780000],
+        ['chr6', 32510000, 32600000],
       ]
-      for (const [contig, start, end, certified] of windows) {
+      for (const [contig, start, end] of windows) {
         const query = { sample: 'GRCh38', contig }
         const opts = {
           context: 1000,
@@ -123,9 +124,11 @@ describe.skipIf(!available(anchoredCompanion))(
           end,
           opts,
         )
-        if (certified) {
+        if (strays) {
           expect(subgraph.stats.keep?.fallback).toBeUndefined()
           expect(subgraph.stats.identification.chains).toEqual([])
+        } else {
+          expect(subgraph.stats.keep?.fallback).toMatch(/no stray rows/)
         }
         const sampled = await subgraphInInterval(db, query, start, end, opts)
         await sampled.identifyPaths()

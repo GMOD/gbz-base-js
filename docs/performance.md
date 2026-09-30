@@ -27,10 +27,10 @@ window elsewhere; "cached" has the window's pages in memory.
 | MHC class II | 8          | keep       | 39,421 | 3.44 s | 1.41 s |
 | MHC class II | 463        | sampled    | 43,540 | 5.49 s | 3.63 s |
 
-Each time is the faster of two runs of `scripts/measure-windows.mjs`. At AMY1
-the keep route identifies every walk, because one contig starts inside the
-window and passes the stretch between the anchors again 500 kb later
-([haplotype-index.md](haplotype-index.md#keep)).
+Each time is the faster of two runs of `scripts/measure-windows.mjs`, with 4.0.0
+and the haplotype index hosted then, which has no stray rows. That query at AMY1
+identified every walk. With stray rows it takes the keep route, as do the other
+three ([haplotype-index.md](haplotype-index.md#measured-on-hprc-v21)).
 
 A first query makes 16-56 range requests and reads 2.2-5.7 MB across both files.
 

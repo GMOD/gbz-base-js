@@ -10,6 +10,8 @@ export type {
   GbzPath,
   HaplotypeAnchor,
   HaplotypeSample,
+  HaplotypeStray,
+  HaplotypeStrayOptions,
   IndexedPosition,
   OpenOptions,
   PathFragment,
