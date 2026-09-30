@@ -139,8 +139,14 @@ route 40 s. Pass `limit` for such a window.
 `ssh ada` needs the user's 2FA once (`! ssh -fN ada`); the control socket then
 lasts 8 hours. It is shared: nice 10, about 12 cores.
 
-- `~/hprc-gbz/hprc-v2.1-mc-grch38.haplotype-index.bins.db`: the index this
-  session validated (8.08 GB, 131,072 bp anchors on GRCh38 and CHM13).
+- `~/hprc-gbz/hprc-v2.1-mc-grch38.haplotype-index.bins-final.db`: the index to
+  host (8.08 GB, 131,072 bp anchors on GRCh38 and CHM13), built by the released
+  indexer source. Its tables are byte-for-byte those of `bins.db`, which the
+  sweeps ran on; it adds the `haplotype_index_tool_version` tag.
+- `~/hprc-gbz/hprc-v2.1-mc-grch38.haplotype-index.bins-32k.db`: 32,768 bp
+  anchors, 10.76 GB. 9,000 + 7,200 queries, none wrong (`runs/bins32k*`), and no
+  faster at the median (random 100 ms against 102, a 3 kb window 66-77 ms
+  against 62-93), so 131 kb stays.
 - `~/keep-sweep/`: `rows.json` (the 1,500 windows of 09-28),
   `rows-targeted.json` (1,330), `rows-tutorial.json` (18 loci),
   `jumps-grch38.tsv`, `runs/bins2*`, `chain2.sh`, and `gbz-base-js-bins/` (a
@@ -149,25 +155,26 @@ lasts 8 hours. It is shared: nice 10, about 12 cores.
 
 ## Decisions for the user
 
-1. **Host the new index.** `bins.db` on ada is validated. 4.1.0 reads it as
-   before, since it ignores the two new tables, so it can replace
+1. **Host the new index.** `bins-final.db` on ada. 4.1.0 reads it as before,
+   since it ignores the two new tables, so it can replace
    `hprc-v2.1-mc-grch38.haplotype-index.anchored.db` in place. Until it is
    hosted, a keep query with the new library identifies every walk: correct, and
-   slower. Rebuild first with the final indexer if the
-   `haplotype_index_tool_version` tag matters; the tables come out the same.
+   slower.
 2. **Release.** npm: the `KeepStats` fields changed (`seeds` and three `ms` keys
    gone, `strays` added), `keepHaplotypes` throws where it discarded, and `keep`
    with `distinct` returns different records, so this is a major version by
    semver, or 4.2.0 if the stats count as diagnostics. crates.io:
    `gbz-haplotype-index` 0.2.0; the published 0.1.0 writes neither table.
-3. **The plugin** answers its pair view only when `stats.keep.fallback` is
-   `undefined` (`GbzBaseSyntenyAdapter.ts`, `pairFeatures`), from when the
-   anchored route returned whole walks. Both routes have returned the same
-   pieces since 4.0, so that gate can go. With it in place and the old index
-   hosted, the pair view composes through the reference on every query.
-4. **Anchor spacing.** 32 kb anchors would cut the walks four times and make
-   small windows faster; chr22 put the cost at 5.6% of the index for GRCh38
-   alone. Not measured on HPRC with stray rows.
+3. **The plugin session** (graphgenomeviewer, main `6133b98`, unreleased)
+   dropped its `stats.keep.fallback` gate on the pair view after this session's
+   note, and joins per-fragment cuts by W coordinates. It asked whether
+   `getSubgraphForRange` cutting one fragment was intended; main now throws on a
+   window over several fragments (`e7752ca`), which the plugin already avoids.
+4. **Small windows.** With a few haplotypes kept, a window under 3 kb takes
+   62-93 ms on the keep route against 19-25 ms for identifying every walk, on
+   local disk. Halving the anchor spacing did not change it, so the time is in
+   the anchor rows read (about five anchors of 928 rows), the sample scan and
+   the prefetch, not the walks. Unmeasured over HTTP with the new index.
 5. **`snarls: 'overlapping'` with `keep`** falls back. Covering it needs every
    snarl boundary's visits listed in the other boundary's bins.
 
