@@ -76,7 +76,8 @@ spacing, since the first read already takes one multiple beyond. The sample
 check cannot see it: the anchor node is outside the subgraph and the missed node
 carries no sample. Fixture `test/data/anchor-at-bound.*`, test in
 `test/fuzzCases.test.ts`; both extension loops now compare inclusively. **The
-hosted HPRC index cannot hit it**: its longest node is 342 bp and the trigger
+hosted HPRC index cannot hit it**: its longest node is 1,024 bp (the 342 in an
+earlier draft was the packed blob length, three bases per byte) and the trigger
 needs one over 65,536 bp at 131,072 bp spacing. It is real for graphs with long
 nodes or spacings under about 700 bp on HPRC. A guard for a snarl bounded by one
 node at both ends went in with it; reasoned, never observed.
