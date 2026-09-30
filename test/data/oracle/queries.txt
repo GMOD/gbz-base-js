@@ -31,3 +31,6 @@ split_chr1_frag2_i	split-contig.gbz.db	--sample GRCh38 --contig chr1 --interval 
 split_chr1_frag1_end	split-contig.gbz.db	--sample GRCh38 --contig chr1 --interval 400..501 --context 0 --cigar
 looping_chr1_i	looping-walk.gbz.db	--sample GRCh38 --contig chr1 --interval 100..700 --context 0 --cigar
 looping_chr1_i_ctx200	looping-walk.gbz.db	--sample GRCh38 --contig chr1 --interval 200..600 --context 200 --cigar
+inversion_chr1_i	inversion.gbz.db	--sample GRCh38 --contig chr1 --interval 40000..100000 --context 100 --cigar
+strayend_chr1_i	stray-end.gbz.db	--sample GRCh38 --contig chr1 --interval 8554..20452 --context 17 --cigar
+strayend_chr1_big	stray-end.gbz.db	--sample GRCh38 --contig chr1 --interval 0..30000 --context 100 --cigar

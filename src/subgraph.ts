@@ -1160,6 +1160,16 @@ export class Subgraph {
         }
       }
     }
+    // Upstream lists walks by start position, handle then offset; the two
+    // passes above find the forward-start walks first.
+    const refInfo =
+      this.refId === undefined ? undefined : this.paths[this.refId]
+    this.paths.sort(
+      (x, y) => x.path[0]! - y.path[0]! || x.offsets[0]! - y.offsets[0]!,
+    )
+    if (refInfo) {
+      this.refId = this.paths.indexOf(refInfo)
+    }
     if (refPos) {
       if (refOffset === undefined || this.refId === undefined) {
         this.clearPaths()

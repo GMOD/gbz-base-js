@@ -1036,14 +1036,8 @@ export async function findChosenPieces(input: ChosenPathsInput) {
   return result()
 }
 
-// extractPaths's order: walks starting on forward handles first, then by
-// handle and offset.
+// extractPaths's order, which is upstream's: by the walk's start position,
+// handle then offset.
 export function extractionOrder(a: ChosenPiece, b: ChosenPiece) {
-  const ah = a.handles[0]!
-  const bh = b.handles[0]!
-  return (
-    Number(isReverse(ah)) - Number(isReverse(bh)) ||
-    ah - bh ||
-    a.offsets[0]! - b.offsets[0]!
-  )
+  return a.handles[0]! - b.handles[0]! || a.offsets[0]! - b.offsets[0]!
 }
