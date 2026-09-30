@@ -46,8 +46,8 @@ lifts the limit on chosen paths, so every piece the keep route can drop shows.
 checkout's `src/`.
 
 `summarize.py` prints, per stratum, the queries the keep route answered, the
-fallbacks with their reasons, and every query whose result differs. Acceptance
-is zero in the WRONG and KEEP-ONLY columns, and `truth-compare.py` reporting no
+fallbacks with their reasons, and every query whose result differs. A run passes
+when the WRONG and KEEP-ONLY columns hold zero and `truth-compare.py` reports no
 subgraph that differs.
 
 `test/fuzz/` checks the same two properties on generated graphs, with the truth

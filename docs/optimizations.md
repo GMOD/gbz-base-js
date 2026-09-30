@@ -36,23 +36,35 @@ that pattern.
 ## The keep route
 
 We compared the keep route record for record with the sampled route on the same
-subgraph, over 58 windows of the HPRC chr22 graph at `context` 0 and 1000 with
-`snarls` none and contained, and over the HPRC v2.1 tutorial windows. Three
-choices in the route came from those runs.
+subgraph: over 58 windows of the HPRC chr22 graph at `context` 0 and 1000 with
+`snarls` none and contained, over the HPRC v2.1 tutorial windows, and over the
+genome-wide windows in
+[haplotype-index.md](haplotype-index.md#measured-on-hprc-v21). Four choices in
+the route came from those runs.
 
 - **Walks between the anchors.** Chains that stop at a fixed distance outside
   the subgraph lost 109 of 1,561 pieces of eight haplotypes at KIV-2 with
   `context: 0`, at 32 kb and at 64 kb, because the copies of the repeat lie up
   to 105 kb apart along each haplotype. Walking each haplotype from its visit to
   the anchor before the window to its visit to the anchor after found all 1,561.
-- **32 kb past the anchors.** A collapsed repeat puts a short second piece of
-  every haplotype 30 kb from the window at IGL and 16 kb from it at GSTT. Chains
-  that stopped when they reached the reference beside the subgraph lost every
-  one of those pieces.
+- **Stray rows.** A route that placed each haplotype from its anchor visits and
+  the samples in the window dropped 585 pieces in 9,000 queries on HPRC v2.1:
+  unplaced contigs of a chosen haplotype, passes through collapsed repeats far
+  along a contig, and the stretch of a contig before its first anchor visit.
+  `gbz-haplotype-index` walks every path from end to end, so it finds each of
+  those stretches and writes it as a stray row.
+- **Node lists per bin.** A first version of the stray rows gave each node one
+  reference position, the nearest. A node beside an edge that joins two distant
+  reference nodes had the position of the near end alone, so a window at the far
+  end read no row for it, and 52 pieces dropped in 9,000 queries. The indexer
+  now runs one search per bin and lists the bin's nodes, and the query checks
+  its subgraph against the lists of the bins it touches.
 - **The twin from the other orientation.** In an 8 kb window at `context: 0`,
-  the samples and chains reached all 43 pieces of eight haplotypes in the
-  orientation `extractPaths` drops. Reading the samples of the other orientation
-  by coordinate completed every twin tried, 85 of 85 over the chr22 runs.
+  the walks reached all 43 pieces of eight haplotypes in the orientation
+  `extractPaths` drops. A reverse-orientation sample in the window gives the
+  twin's position. For a piece without one, reading the samples of the other
+  orientation by coordinate past the piece's end completed every twin tried, 85
+  of 85 over the chr22 runs.
 
 ## The step loops
 
@@ -87,26 +99,10 @@ Node sequences and CIGARs stay strings.
 
 ## Open problems
 
-- A pass of a chosen haplotype through the subgraph can lie outside every walk
-  and between two samples of its path. The query returns the result without it
-  when every sample on the subgraph's nodes lies where its path's anchor visits
-  place it, and identifies every walk when one lies elsewhere. The prototype of
-  the route, which ran its walks and chains alone, returned every chosen piece
-  outside LCR22 and IGL over 2,880 runs on 58 windows of HPRC chr22, and in
-  those nine windows missed 2% of the chosen pieces, short passes 41 kb to 2.6
-  Mb from the haplotype's other pieces. At `context` 100, 1,889 of the 1,907
-  missed passes lay on stretches that GRCh38 passes far from the window, where
-  an index built with `--reference-interval` contains GRCh38 samples, and at
-  `context` 1000, 1,594 of 1,653 did
-  ([haplotype-index.md](haplotype-index.md#keep)). The other passes lie on nodes
-  GRCh38 does not visit, and only a sample of the haplotype can mark them; all
-  220 at `context` 0, in one LCR22A window, are of that kind. GRCh38 visits each
-  node of the chr22 graph once, so a table of the reference's self-overlaps
-  would be empty. Given the stretches from the sampled route, walking the chosen
-  haplotypes there cut the prototype's misses from 1,077 to 64 over 22 runs, at
-  1.6 to 2.2 times its time. A query that takes the stretches from reference
-  samples would still miss the passes on nodes GRCh38 does not visit, 35% of the
-  missed passes at LCR22B, so it would still need the fallback.
+- A query that uses the `keep` option with `snarls: 'overlapping'` identifies
+  every walk when it fills a snarl. The far boundary node of such a snarl lies
+  outside the node lists, so the stray rows would need the visits to every snarl
+  boundary, listed in the bins of the other boundary.
 - Identifying a walk piece shorter than the sampling interval scans the
   haplotype index, and 99.91% of those scans miss
   ([performance.md](performance.md#small-windows-at-the-same-locus)). Following

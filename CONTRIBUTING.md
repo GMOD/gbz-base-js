@@ -71,8 +71,9 @@ after a change to `tools/haplotype-index/`, and commit the indexes.
 
 ## Checking haplotype queries
 
-A query must return every piece of every haplotype it names: a missing piece
-draws as a deletion. Three checks cover that, from small to large.
+A piece missing from a query's result draws as a deletion, so a query must
+return every piece of every haplotype it names. Three checks cover that, from
+small to large.
 
 - `pnpm test --run` compares the keep route with the sampled route on the
   fixtures.
