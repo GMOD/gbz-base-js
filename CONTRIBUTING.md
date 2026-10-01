@@ -33,6 +33,10 @@ dot -Tsvg docs/img/dataflow.dot -o docs/img/dataflow.svg
 
 ## Test data
 
+The indexer lives in
+[GMOD/gbz-haplotype-index](https://github.com/GMOD/gbz-haplotype-index). Build
+or install it and put it on your PATH, or pass its path to the scripts below.
+
 Upstream `gbz-base` builds `test/data/*.gbz.db`
 (`cargo install --git https://github.com/jltsiren/gbz-base`).
 `test/data/oracle/` holds upstream's output for the queries in `queries.txt`;
@@ -69,7 +73,7 @@ with these options:
 `--interval 1000 --anchor-spacing 2500`, both with `--from-db` on the committed
 `.gbz.db`. `test/data/build-indexes.sh` rebuilds every index that has anchors
 from its `.gbz.db` and reports a fixture whose samples or anchors change. Run it
-after a change to `tools/haplotype-index/`, and commit the indexes.
+after a change to the indexer, and commit the indexes.
 
 ## Checking haplotype queries
 

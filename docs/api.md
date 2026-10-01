@@ -16,11 +16,11 @@ const db = await GBZBase.open(new RemoteFile(url), {
 A source is any object with `read(length, position)` and `stat()`, such as
 `LocalFile`, `RemoteFile` or `BlobFile` from `generic-filehandle2`.
 
-| option           | description                                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `haplotypeIndex` | a source for the [haplotype index](haplotype-index.md) file, which `gbz-haplotype-index` writes beside the database |
-| `blockSize`      | bytes fetched per page block, 64 KiB by default                                                                     |
-| `maxBlocks`      | blocks cached per database, 256 by default                                                                          |
+| option           | description                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `haplotypeIndex` | a source for the [haplotype index](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md) file, which `gbz-haplotype-index` writes beside the database |
+| `blockSize`      | bytes fetched per page block, 64 KiB by default                                                                                                                                |
+| `maxBlocks`      | blocks cached per database, 256 by default                                                                                                                                     |
 
 ## Range queries
 
@@ -58,7 +58,7 @@ alignment record. `getAlignmentsForRange` accepts `all` and `distinct`.
 
 A query that uses the `keep` option returns the reference, the walks whose name
 passes the predicate, and the nodes those walks visit
-([haplotype-index.md](haplotype-index.md#querying-a-subset-of-the-haplotypes)).
+([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md#querying-a-subset-of-the-haplotypes)).
 With `distinct`, it merges the walks of the kept haplotypes, and each `weight`
 counts kept haplotypes.
 

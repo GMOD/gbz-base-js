@@ -30,7 +30,8 @@ window elsewhere; "cached" has the window's pages in memory.
 Each time is the faster of two runs of `scripts/measure-windows.mjs`, with 4.0.0
 and the haplotype index hosted then, which has no stray rows. That query at AMY1
 identified every walk. With stray rows it takes the keep route, as do the other
-three ([haplotype-index.md](haplotype-index.md#measured-on-hprc-v21)).
+three
+([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md#measured-on-hprc-v21)).
 
 A first query makes 16-56 range requests and reads 2.2-5.7 MB across both files.
 

@@ -33,10 +33,12 @@ jobs:
       - run: pnpm test --run
 
   # The keep route is complete only while the indexer's rule for stray rows
-  # (tools/haplotype-index/src/strays.rs) and the reader's walks
+  # (src/strays.rs in GMOD/gbz-haplotype-index) and the reader's walks
   # (src/chosenPaths.ts) agree, and nothing checks that at query time. The
   # fuzzer reads the truth from the GFA text, so it is the check: an edit to
-  # either side that drops a piece fails here, not in a user's view.
+  # either side that drops a piece fails here, not in a user's view. A change
+  # to the rule needs a crates.io release of the indexer, then a bump of
+  # INDEXER_VERSION.
   fuzz:
     name: Fuzz against GFA truth
     runs-on: ubuntu-latest
@@ -45,6 +47,7 @@ jobs:
     env:
       VG_VERSION: v1.69.0
       GBZ_BASE_VERSION: 0.6.1
+      INDEXER_VERSION: 0.2.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -60,13 +63,12 @@ jobs:
         with:
           path: |
             ~/.cargo/bin/gbz-base
+            ~/.cargo/bin/gbz-haplotype-index
             ~/.cargo/registry
             ~/.local/bin/vg
-            tools/haplotype-index/target
           key:
             fuzz-tools-${{ runner.os }}-vg-${{ env.VG_VERSION }}-gbz-base-${{
-            env.GBZ_BASE_VERSION }}-${{
-            hashFiles('tools/haplotype-index/Cargo.lock') }}
+            env.GBZ_BASE_VERSION }}-indexer-${{ env.INDEXER_VERSION }}
       - name: Install vg
         run: |
           mkdir -p ~/.local/bin
@@ -80,18 +82,18 @@ jobs:
           if [ ! -x ~/.cargo/bin/gbz-base ]; then
             cargo install gbz-base --version "$GBZ_BASE_VERSION" --locked
           fi
-      - run:
-          cargo build --release --manifest-path tools/haplotype-index/Cargo.toml
+      - name: Install gbz-haplotype-index
+        run: |
+          if [ ! -x ~/.cargo/bin/gbz-haplotype-index ]; then
+            cargo install gbz-haplotype-index --version "$INDEXER_VERSION" --locked
+          fi
       - name: Production-ratio index options, medium graphs
         run: >
-          node test/fuzz/run.ts --seeds 0..150 --scale medium --jobs 4 --indexer
-          tools/haplotype-index/target/release/gbz-haplotype-index --index-args
-          "--interval 256 --anchor-spacing 2048 --stray-context 100 --stray-bin
-          1024 --stray-bound 2048 --stray-gap 64"
+          node test/fuzz/run.ts --seeds 0..150 --scale medium --jobs 4
+          --index-args "--interval 256 --anchor-spacing 2048 --stray-context 100
+          --stray-bin 1024 --stray-bound 2048 --stray-gap 64"
       - name: Samples at anchors only, windows at the anchor bound
         run: >
           node test/fuzz/run.ts --seeds 150..350 --scale small --jobs 4
-          --edge-windows 12 --indexer
-          tools/haplotype-index/target/release/gbz-haplotype-index --index-args
-          "--interval 65536 --anchor-spacing 512 --stray-context 100 --stray-bin
-          1 --stray-bound 300 --stray-gap 8"
+          --edge-windows 12 --index-args "--interval 65536 --anchor-spacing 512
+          --stray-context 100 --stray-bin 1 --stray-bound 300 --stray-gap 8"

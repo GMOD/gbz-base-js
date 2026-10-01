@@ -26,9 +26,7 @@
   "files": [
     "dist",
     "src",
-    "bin",
-    "tools/haplotype-index/Cargo.toml",
-    "tools/haplotype-index/src"
+    "bin"
   ],
   "scripts": {
     "test": "vitest",

@@ -64,12 +64,13 @@ equivalent.
 ## Haplotype index
 
 Without a haplotype index, a query returns each walk as `unknown#N`. Build the
-index once per graph with `gbz-haplotype-index`
+index once per graph with
+[`gbz-haplotype-index`](https://github.com/GMOD/gbz-haplotype-index)
 (`cargo install gbz-haplotype-index`), as a separate file beside the database
-([haplotype index](docs/haplotype-index.md)). Every query that opens the
-database with the index then reports the sample, haplotype and contig of each
-walk. At query time, the `keep` option restricts the result to the haplotypes
-you ask for.
+([haplotype index](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md)).
+Every query that opens the database with the index then reports the sample,
+haplotype and contig of each walk. At query time, the `keep` option restricts
+the result to the haplotypes you ask for.
 
 ```ts
 const db = await GBZBase.open(new RemoteFile(graphUrl), {
@@ -105,7 +106,7 @@ Reference:
 Topics, with examples for both the library and the command line:
 
 - [Alignment records](docs/alignments.md), including haplotype-to-haplotype PAF
-- [The haplotype index](docs/haplotype-index.md)
+- [The haplotype index](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md)
 - [Snarls](docs/snarls.md)
 - [Contents and limitations](docs/contents-and-limitations.md)
 

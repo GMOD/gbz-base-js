@@ -9,7 +9,7 @@ The source is [dataflow.dot](img/dataflow.dot); see
 step 7 and returns the `Subgraph`. A query that uses the `keep` option replaces
 steps 6 and 7 with the keep route, which finds the walks of the chosen
 haplotypes in the same subgraph from the haplotype index
-([haplotype-index.md](haplotype-index.md#keep)).
+([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md#keep)).
 
 1. **`pathFragmentsForRange`** finds the path fragments overlapping the window.
    A contig can be stored as several fragments with gaps between them.
@@ -23,7 +23,7 @@ haplotypes in the same subgraph from the haplotype index
    ([snarls.md](snarls.md)).
 6. **`extractPaths`** lists every walk crossing the window's nodes.
 7. **Identification** finds the haplotype of each walk
-   ([haplotype-index.md](haplotype-index.md#how-a-query-identifies-walks)).
+   ([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md#how-a-query-identifies-walks)).
 8. **`alignments()`** aligns each walk to the reference and joins pieces of one
    haplotype into a record ([alignments.md](alignments.md)).
 

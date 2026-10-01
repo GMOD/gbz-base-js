@@ -6,4 +6,3 @@ coverage
 CHANGELOG.md
 .claude/
 test/data/
-tools/haplotype-index/target

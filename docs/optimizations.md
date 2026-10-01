@@ -39,8 +39,8 @@ We compared the keep route record for record with the sampled route on the same
 subgraph: over 58 windows of the HPRC chr22 graph at `context` 0 and 1000 with
 `snarls` none and contained, over the HPRC v2.1 tutorial windows, and over the
 genome-wide windows in
-[haplotype-index.md](haplotype-index.md#measured-on-hprc-v21). Four choices in
-the route came from those runs.
+[haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md#measured-on-hprc-v21).
+Four choices in the route came from those runs.
 
 - **Walks between the anchors.** Chains that stop at a fixed distance outside
   the subgraph lost 109 of 1,561 pieces of eight haplotypes at KIV-2 with

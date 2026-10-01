@@ -9,7 +9,7 @@ This package computes alignments at query time. `getAlignmentsForRange` aligns
 each walk to the reference ([alignments.md](alignments.md)), and
 `pairAlignments` aligns haplotypes to each other. The sample and haplotype of
 each walk come from the haplotype index, a second file built once per graph
-([haplotype-index.md](haplotype-index.md)).
+([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md)).
 
 ## Limitations
 
