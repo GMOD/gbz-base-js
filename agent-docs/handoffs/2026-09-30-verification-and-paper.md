@@ -252,6 +252,17 @@ The CI fuzz job builds the same way. The committed fixture databases still have
 the links construct found on its own; `test/data/build-indexes.sh` does not
 rebuild the `.gbz.db` files.
 
+The fuzzer also has a `large` scale now: 150-400 kb references, 16-40
+haplotypes, six sites of each structural kind, about 7 s a seed. The sweeps'
+`large` stratum on HPRC (30 windows of 150-500 kb) had been the only coverage at
+that size. Both batches 0 mismatches, 0 route differences, every fallback the
+walk cap:
+
+| index options                         | seeds | keep queries | on keep route | filled a snarl | fills added nodes |
+| ------------------------------------- | ----- | ------------ | ------------- | -------------- | ----------------- |
+| production ratio                      | 300   | 53,592       | 53,031        | 8,872          | 4,159             |
+| samples at anchors and path ends only | 150   | 26,964       | 26,629        | 4,277          | 2,157             |
+
 ## Left for the user
 
 - Host `bins-final.db`, release npm and the crate.
