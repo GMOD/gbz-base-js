@@ -292,8 +292,11 @@ bins, so at large scale use 64 bp and log every seed's line.
   accept), gbz-haplotype-index 0.2.0 on crates.io, plugin and
   `@jbrowse/bandage-core` 4.0.30 on npm and on jbrowse.org/plugins, BandageJS
   deployed with its README figures reshot.
-- Mutation testing of the reader's comparisons: 5 of 13 mutants killed by the
-  suite, `lowest`'s loop proven equivalent; the rest need boundary fixtures.
+- Mutation testing of the reader's comparisons: 13 boundary mutants of
+  `strayRoute`, every one killed by `test/fuzzCases.test.ts` with the sample
+  check on and off, except the `lowest` anchor loop, which never moves (the
+  proof's part 3 says why). Seven needed the `keep-bounds` fixture (`d5316b6`),
+  which puts an anchor or a visit exactly on each boundary of a short contig.
 
 Cleared 2026-10-01: the `stray-table` and `dup-spike` worktrees (both branches
 merged; their uncommitted edits were a superseded docs draft and a spike
