@@ -1,7 +1,7 @@
 # Handoff, 2026-09-30 (evening): independent checks, the paper, and an audit still running
 
-**Closed 2026-10-01.** chain5 finished and matched; nothing in this handoff is
-open except the release steps under [Left for the user](#left-for-the-user).
+**Closed 2026-10-01.** chain5 finished and matched, and the release steps below
+are done; nothing in this handoff is open.
 
 Follows `2026-09-30-bins-and-stray-rows.md`. This session re-derived that
 handoff's claims from the artifacts instead of trusting it, wrote the haplotype
@@ -280,14 +280,20 @@ A 300-seed edge batch with 1 bp bins hit the two-hour limit without a summary
 and no dumped seed; on a 400 kb reference 1 bp bins are hundreds of thousands of
 bins, so at large scale use 64 bp and log every seed's line.
 
-## Left for the user
+## Released 2026-10-01
 
-- Host `bins-final.db`; `test/hprc.test.ts` still points at
-  `hprc-v2.1-mc-grch38.haplotype-index.anchored.db`, which predates stray rows.
-- Release npm and the crate, then the plugin core, then BandageJS. The
-  acceptance chain ran on `aafb2bc`, 30 commits past v4.1.0, so the measured
-  counts hold for the next release, not the published one. Since `aafb2bc`,
-  `src/` has only gained the `snarls` counters in `Subgraph.stats`.
+- The hosted `hprc-v2.1-mc-grch38.haplotype-index.anchored.db` now holds
+  `bins-final.db`, copied over the old file in place (the user's choice: a dozen
+  configs and tutorials name it) with a CloudFront invalidation. The previous
+  file is still on ada. A keep query over HTTP against HPRC's public database
+  takes the keep route and matches the sampled route.
+- gbz-base 5.0.0 on npm (major: twin dropping changes output, and
+  `getSubgraphForRange` and `keepHaplotypes` now throw on input they used to
+  accept), gbz-haplotype-index 0.2.0 on crates.io, plugin and
+  `@jbrowse/bandage-core` 4.0.30 on npm and on jbrowse.org/plugins, BandageJS
+  deployed with its README figures reshot.
+- Mutation testing of the reader's comparisons: 5 of 13 mutants killed by the
+  suite, `lowest`'s loop proven equivalent; the rest need boundary fixtures.
 
 Cleared 2026-10-01: the `stray-table` and `dup-spike` worktrees (both branches
 merged; their uncommitted edits were a superseded docs draft and a spike
