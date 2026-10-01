@@ -1,5 +1,8 @@
 # Handoff, 2026-09-30 (evening): independent checks, the paper, and an audit still running
 
+**Closed 2026-10-01.** chain5 finished and matched; nothing in this handoff is
+open except the release steps under [Left for the user](#left-for-the-user).
+
 Follows `2026-09-30-bins-and-stray-rows.md`. This session re-derived that
 handoff's claims from the artifacts instead of trusting it, wrote the haplotype
 index into the paper, and started an adversarial audit that had not finished
@@ -144,7 +147,8 @@ Everything they found is landed or on a branch; nothing is open in the library.
   is why 18,500 graphs never flagged the duplicates.
 - **Packaging deviates from the gmod convention**: ESM-only, no `require`
   condition, no `build:es5`, so a Jest consumer needs a
-  `transformIgnorePatterns` entry. Left as is; decide before a release.
+  `transformIgnorePatterns` entry. The user decided on 2026-10-01 to stay
+  ESM-only.
 - **Plugin, landed at `4e93611` on its main:** the walk lift took the first W
   record of a name, so a haplotype the library returns in pieces was drawn as
   its first piece with the rest faded and a spurious deletion in the readout.
@@ -168,11 +172,12 @@ Everything they found is landed or on a branch; nothing is open in the library.
   9,000/8,986/14/0 wrong, targeted 15,780/15,772/8/0, tutorial-all 72/72,
   parity-all 3,000/2,998/2/0; GBZ truth 8,260 subgraphs, 21,653,445 pieces, 0
   differ, on both. `chain5` (final main `aafb2bc`,
-  `~/keep-sweep/gbz-base-js-aafb2bc/`, tagged `bins5`) had matched through
-  parity and truth and was on the targeted sweep when this handoff was written;
-  `chain5.log` has the rest. Self-bounded chain links in the HPRC database: 0 of
-  69,646,620. Note: a queue loop that waits with `pgrep -f` on a script's name
-  matches its own command line and never ends; wait on a pid with `kill -0`.
+  `~/keep-sweep/gbz-base-js-aafb2bc/`, tagged `bins5`) finished at 23:04 with
+  the same counts on every pass; `chain5.log` differs from `chain3.log` and
+  `chain4.log` only in the run tags. Self-bounded chain links in the HPRC
+  database: 0 of 69,646,620. Note: a queue loop that waits with `pgrep -f` on a
+  script's name matches its own command line and never ends; wait on a pid with
+  `kill -0`.
 
 ## Review against upstream, evening
 
@@ -203,8 +208,9 @@ identified efficiently using the GBWT). Landed at `aafb2bc`:
   reports the rest as unknown; the GBWT's own samples are not in the database;
   the lengths table is mentioned.
 
-`chain5` on ada runs the acceptance chain on this final main
-(`~/keep-sweep/gbz-base-js-aafb2bc/`, tagged `bins5`), queued behind `chain4`.
+`chain5` on ada ran the acceptance chain on this final main
+(`~/keep-sweep/gbz-base-js-aafb2bc/`, tagged `bins5`) and matched `chain3` and
+`chain4` on every pass. `docs/haplotype-index.md` records the rerun.
 
 ## Guards added, night
 
@@ -276,8 +282,14 @@ bins, so at large scale use 64 bp and log every seed's line.
 
 ## Left for the user
 
-- Host `bins-final.db`, release npm and the crate.
-- `.claude/worktrees/stray-table` still holds an uncommitted docs draft that
-  main supersedes; `dup-spike` as before.
-- `anchors-vs-samples.md` at the repo root (untracked, 09-27) describes the
-  deleted anchor-only route.
+- Host `bins-final.db`; `test/hprc.test.ts` still points at
+  `hprc-v2.1-mc-grch38.haplotype-index.anchored.db`, which predates stray rows.
+- Release npm and the crate, then the plugin core, then BandageJS. The
+  acceptance chain ran on `aafb2bc`, 30 commits past v4.1.0, so the measured
+  counts hold for the next release, not the published one. Since `aafb2bc`,
+  `src/` has only gained the `snarls` counters in `Subgraph.stats`.
+
+Cleared 2026-10-01: the `stray-table` and `dup-spike` worktrees (both branches
+merged; their uncommitted edits were a superseded docs draft and a spike
+toggle), `anchors-vs-samples.md`, and BandageJS's redundant `facet-columns`
+branch.
