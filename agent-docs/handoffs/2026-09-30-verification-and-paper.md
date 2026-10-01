@@ -47,8 +47,7 @@ when the session ran low on tokens.
 - `tools/haplotype-index/README.md`: a change to the walk rule on either side
   must bump `haplotype_index_stray_format`. This tag is the only thing tying
   `strays.rs` to `src/chosenPaths.ts`; nothing checks the rule at query time.
-- `.gitignore` lacks `esm`; `pnpm build` in the primary checkout leaves it
-  untracked. Not fixed.
+- The package ships `dist/` only (ESM), so there is no `esm/` to ignore.
 
 ## Paper (`~/paper`, three commits, not pushed)
 
@@ -158,11 +157,11 @@ Everything they found is landed or on a branch; nothing is open in the library.
   tests falls back to the sampled route; the fixtures' GBZ sources are not in
   the repo, so they could not be rebuilt. The tube map still draws one tube per
   record.
-- **BandageJS:** branch `facet-columns` in `.claude/worktrees/facet-columns` of
-  that repo (`b81a9e0`) changes `columns:` to the `facet` form the plugin's core
-  `2f31ab9` introduced. It compiles only against that core, not the published
-  4.0.27 in its lockfile, so land it with the dependency bump when the core is
-  released. Its `node_modules` was stale against the lockfile.
+- **BandageJS:** its main (`74066a4`) already carries the `facet` form the
+  plugin's core `2f31ab9` introduced, and core 4.0.29 is on npm, so the agent's
+  branch `facet-columns` (`b81a9e0`) is redundant: its `src/figure.ts` is
+  identical to main's. The worktree is removed; the branch is left for a forced
+  delete, since the safe delete refuses an unmerged commit.
 - **On ada:** `chain3` (source `40d45de`, before the twin fix) ran tutorial
   216/216, `bins3` 9,000/8,986/14/0 wrong, truth 3,000 subgraphs 1,981,894
   pieces 0 differ, then the targeted sweep and keep-all passes. `chain4` (source
@@ -217,6 +216,20 @@ identified efficiently using the GBWT). Landed at `aafb2bc`:
   tests take the keep route now, except where more than 32 chosen paths pass the
   anchors. Its suite passes on the published 4.1.0 and on a tarball of main at
   `aafb2bc` (1,017 tests, 0 type errors).
+
+## Plugin, night
+
+- **One row per haplotype in walk rows** (plugin `ac905af`, after its 4.0.29
+  release): a haplotype the cut returns in pieces was two rows, each shorter
+  than the reference with a negative delta, which read as two haplotypes each
+  with a deletion. Now one row, with the contig between the pieces as a `gap`
+  run drawn thin and grey, counted in the row's bp and not in its off-reference
+  bp, and named in the readout ("1.0 kb outside the cut"). The lifted walk's key
+  measures the contig span the same way, so a piece gap is no longer written as
+  a deletion there either. The reference row over two fragments carries its gap.
+  `test/walkRowsGap.test.ts` drives it on screen.
+- Plugin 4.0.29 was tagged and published during the session (`5ad8896`); the
+  pieces fixes and the fixtures are in it, the gap run is not.
 
 ## Left for the user
 
