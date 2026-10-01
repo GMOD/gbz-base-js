@@ -28,7 +28,12 @@ reader's walks still agree.
 ## Running
 
 `vg`, `gbz-base` and `gbz-haplotype-index` must be on `PATH`. `--indexer`, or
-`GBZ_HAPLOTYPE_INDEX`, names another indexer binary.
+`GBZ_HAPLOTYPE_INDEX`, names another indexer binary. Each graph's database is
+built with top-level chains from a vg distance index (`vg index -j`,
+`vg chains`, `gbz-base construct --chains`), since construct's own search finds
+chains only in a component with two tips and a path between them. The summary's
+`filled` and `inserted` count the keep queries whose subgraph filled a snarl and
+whose fills added nodes.
 
 ```sh
 node test/fuzz/run.ts --seeds 0..200

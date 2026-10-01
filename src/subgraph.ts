@@ -472,6 +472,8 @@ interface SubgraphStats {
   identificationSteps: number
   identificationFetches: number
   identification: IdentificationStats
+  // the top-level snarls the query filled, and the nodes those fills added
+  snarls: { fills: number; inserted: number }
   keep: KeepStats | undefined
 }
 
@@ -509,6 +511,7 @@ export class Subgraph {
   readonly stats: SubgraphStats = {
     orderedAlignments: 0,
     lcsAlignments: 0,
+    snarls: { fills: 0, inserted: 0 },
     identificationSteps: 0,
     identificationFetches: 0,
     identification: {
@@ -801,6 +804,7 @@ export class Subgraph {
     this.snarlMode = 'none'
     this.snarlFills = []
     this.snarlNodes.clear()
+    this.stats.snarls = { fills: 0, inserted: 0 }
     const visited = new Set<string>()
     const toRemove = new Set<number>()
     for (const handle of this.records.keys()) {
@@ -890,6 +894,10 @@ export class Subgraph {
         this.snarlNodes.add(id)
       }
       total += inserted.length
+    }
+    this.stats.snarls = {
+      fills: this.snarlFills.length,
+      inserted: this.snarlNodes.size,
     }
     return total
   }

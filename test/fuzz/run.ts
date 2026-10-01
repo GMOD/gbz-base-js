@@ -103,6 +103,10 @@ interface Tally {
     extra: number
     routesDiffer: number
     fallbackReasons: Record<string, number>
+    // queries whose subgraph filled a top-level snarl, and whose fills added
+    // nodes the context had not reached
+    filled: number
+    inserted: number
   }
   generateMs: number
   buildMs: number
@@ -126,6 +130,8 @@ function emptyTally(): Tally {
       extra: 0,
       routesDiffer: 0,
       fallbackReasons: {},
+      filled: 0,
+      inserted: 0,
     },
     generateMs: 0,
     buildMs: 0,
@@ -149,6 +155,8 @@ function merge(into: Tally, from: Tally) {
   into.keep.missing += from.keep.missing
   into.keep.extra += from.keep.extra
   into.keep.routesDiffer += from.keep.routesDiffer
+  into.keep.filled += from.keep.filled
+  into.keep.inserted += from.keep.inserted
   for (const [reason, count] of Object.entries(from.keep.fallbackReasons)) {
     into.keep.fallbackReasons[reason] =
       (into.keep.fallbackReasons[reason] ?? 0) + count
@@ -578,7 +586,33 @@ function build(dir: string, gfaText: string, args: Args) {
       )
     }
   }
-  run('gbz-base', ['construct', file('graph.gbz'), '-o', file('graph.gbz.db')])
+  // construct finds top-level chains only in a component with two tips and a
+  // path between them, which a generated graph with extra contigs or a
+  // hairpin is not; vg's distance index gives the chains for any graph, so
+  // the stray rows model its snarls and a query that fills one stays on the
+  // keep route
+  run('vg', [
+    'index',
+    '-j',
+    file('graph.dist'),
+    '--no-nested-distance',
+    file('graph.gbz'),
+  ])
+  run('vg', [
+    'chains',
+    file('graph.gbz'),
+    file('graph.dist'),
+    '-o',
+    file('graph.chains'),
+  ])
+  run('gbz-base', [
+    'construct',
+    '--chains',
+    file('graph.chains'),
+    file('graph.gbz'),
+    '-o',
+    file('graph.gbz.db'),
+  ])
   run(args.indexer, [
     ...args.indexArgs,
     file('graph.gbz'),
@@ -777,6 +811,12 @@ async function runSeed(
               fallback = subgraph.stats.keep
                 ? subgraph.stats.keep.fallback
                 : 'no keep statistics'
+              if (subgraph.stats.snarls.fills > 0) {
+                tally.keep.filled += 1
+              }
+              if (subgraph.stats.snarls.inserted > 0) {
+                tally.keep.inserted += 1
+              }
               if (fallback === undefined) {
                 tally.keep.answered += 1
               } else {
