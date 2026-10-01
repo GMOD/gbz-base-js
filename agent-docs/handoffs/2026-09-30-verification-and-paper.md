@@ -231,6 +231,27 @@ identified efficiently using the GBWT). Landed at `aafb2bc`:
 - Plugin 4.0.29 was tagged and published during the session (`5ad8896`); the
   pieces fixes and the fixtures are in it, the gap run is not.
 
+## Snarl fills under fuzz, night
+
+The library audit's residual "snarl fills at medium scale are barely exercised"
+had a cause: `gbz-base construct` finds top-level chains only in a component
+with two tips and a path between them, and a generated graph with extra contigs
+or a hairpin is not one, so most fuzz databases had no chain links and no query
+ever filled a snarl. The fuzzer now builds every database with chains from a vg
+distance index (`vg index -j --no-nested-distance`, `vg chains`,
+`construct --chains`), and the subgraph's stats carry `snarls.fills` and
+`snarls.inserted`, which the tally reports as `filled` and `inserted`. Both
+batches on the fixed source, 0 mismatches, 0 route differences:
+
+| scale  | seeds | keep queries | on keep route | filled a snarl | fills added nodes |
+| ------ | ----- | ------------ | ------------- | -------------- | ----------------- |
+| small  | 300   | 33,015       | 32,826        | 7,303          | 4,115             |
+| medium | 200   | 30,666       | 30,652        | 6,396          | 3,504             |
+
+The CI fuzz job builds the same way. The committed fixture databases still have
+the links construct found on its own; `test/data/build-indexes.sh` does not
+rebuild the `.gbz.db` files.
+
 ## Left for the user
 
 - Host `bins-final.db`, release npm and the crate.
