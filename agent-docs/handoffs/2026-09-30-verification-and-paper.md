@@ -162,12 +162,17 @@ Everything they found is landed or on a branch; nothing is open in the library.
   branch `facet-columns` (`b81a9e0`) is redundant: its `src/figure.ts` is
   identical to main's. The worktree is removed; the branch is left for a forced
   delete, since the safe delete refuses an unmerged commit.
-- **On ada:** `chain3` (source `40d45de`, before the twin fix) ran tutorial
-  216/216, `bins3` 9,000/8,986/14/0 wrong, truth 3,000 subgraphs 1,981,894
-  pieces 0 differ, then the targeted sweep and keep-all passes. `chain4` (source
-  `d8e36f2`, `~/keep-sweep/gbz-base-js-d8e36f2/`) is queued behind it by a
-  `pgrep` loop and writes `chain4.log`, runs tagged `bins4`. Self-bounded chain
-  links in the HPRC database: 0 of 69,646,620.
+- **On ada:** three acceptance chains against the index to host, each the same
+  passes as `chain2.sh`. `chain3` (source `40d45de`) and `chain4` (`d8e36f2`,
+  twins dropped) are complete and identical to `bins2`: tutorial 216/216, parity
+  9,000/8,986/14/0 wrong, targeted 15,780/15,772/8/0, tutorial-all 72/72,
+  parity-all 3,000/2,998/2/0; GBZ truth 8,260 subgraphs, 21,653,445 pieces, 0
+  differ, on both. `chain5` (final main `aafb2bc`,
+  `~/keep-sweep/gbz-base-js-aafb2bc/`, tagged `bins5`) had matched through
+  parity and truth and was on the targeted sweep when this handoff was written;
+  `chain5.log` has the rest. Self-bounded chain links in the HPRC database: 0 of
+  69,646,620. Note: a queue loop that waits with `pgrep -f` on a script's name
+  matches its own command line and never ends; wait on a pid with `kill -0`.
 
 ## Review against upstream, evening
 
@@ -258,10 +263,16 @@ haplotypes, six sites of each structural kind, about 7 s a seed. The sweeps'
 that size. Both batches 0 mismatches, 0 route differences, every fallback the
 walk cap:
 
-| index options                         | seeds | keep queries | on keep route | filled a snarl | fills added nodes |
-| ------------------------------------- | ----- | ------------ | ------------- | -------------- | ----------------- |
-| production ratio                      | 300   | 53,592       | 53,031        | 8,872          | 4,159             |
-| samples at anchors and path ends only | 150   | 26,964       | 26,629        | 4,277          | 2,157             |
+| index options                                            | seeds | keep queries | on keep route | filled a snarl | fills added nodes |
+| -------------------------------------------------------- | ----- | ------------ | ------------- | -------------- | ----------------- |
+| production ratio                                         | 300   | 53,592       | 53,031        | 8,872          | 4,159             |
+| samples at anchors and path ends only                    | 150   | 26,964       | 26,629        | 4,277          | 2,157             |
+| production ratio, 1,000 more seeds                       | 1,000 | 179,751      | 177,741       | 30,175         | 13,858            |
+| `--edge-windows 12`, 64 bp bins, samples at anchors only | 100   | 39,635       | 39,356        | 3,445          | 1,515             |
+
+A 300-seed edge batch with 1 bp bins hit the two-hour limit without a summary
+and no dumped seed; on a 400 kb reference 1 bp bins are hundreds of thousands of
+bins, so at large scale use 64 bp and log every seed's line.
 
 ## Left for the user
 
