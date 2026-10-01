@@ -26,4 +26,5 @@ build inversion --interval 4096 --anchor-spacing 65536
 build micb-kir3dl1 --interval 1000 --anchor-spacing 2500
 build stray-end --interval 256 --anchor-spacing 2048 --stray-context 100 --stray-bin 1024 --stray-bound 2048 --stray-gap 64
 build anchor-at-bound --interval 1000 --anchor-spacing 500 --stray-context 1000 --stray-bin 1000 --stray-bound 2000 --stray-gap 64
+build keep-bounds --interval 4096 --anchor-spacing 1000 --stray-context 1 --stray-bin 2000 --stray-bound 1000 --stray-gap 64
 build reverse-reference --interval 16384

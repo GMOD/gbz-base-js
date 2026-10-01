@@ -97,3 +97,90 @@ describe('cases the fuzzer found', () => {
     expect(spans).toContain('6600-6800')
   })
 })
+
+// keep-bounds.gfa, hand-written: anchors every 1,000 bp, bins of 2,000, a
+// bound of 1,000 and a stray context of 1. Each haplotype is a short contig
+// with no other walk near the piece under test, and the index has no sample of
+// that piece in either orientation, so a walk that the keep route skips at a
+// boundary leaves the piece out of the result instead of falling back.
+describe('the boundaries of the keep route', () => {
+  const keptSpans = async (
+    sample: string,
+    start: number,
+    end: number,
+    context: number,
+  ) => {
+    const db = await GBZBase.open(
+      new LocalFile(path.join(dataDir, 'keep-bounds.gbz.db')),
+      {
+        haplotypeIndex: new LocalFile(
+          path.join(dataDir, 'keep-bounds.haplotype-index.db'),
+        ),
+      },
+    )
+    const keep = (name: PathName) => name.sample === sample
+    const kept = await subgraphForHaplotypes(db, chr1, start, end, {
+      context,
+      keep,
+    })
+    const sampled = await subgraphInInterval(db, chr1, start, end, { context })
+    await sampled.identifyPaths()
+    sampled.keepHaplotypes(keep)
+    expect(kept.stats.keep?.fallback).toBeUndefined()
+    expect(await kept.toGFA({ names: 'resolved' })).toBe(
+      await sampled.toGFA({ names: 'resolved' }),
+    )
+    return kept
+      .alignments()
+      .map(a => (a.resolved ? `${a.hapStart}-${a.hapEnd}` : ''))
+  }
+
+  // The window's bin starts at 16,000, where node 19 starts and anchors
+  // 17,000. HG003 runs node 18, the anchor of 16,000, then node 20 at
+  // 17,000-17,500, then node 19, so its section's high anchor starts exactly
+  // at the bins.
+  it('walks a section whose high anchor starts exactly at the bins', async () => {
+    expect(await keptSpans('HG003', 17200, 17300, 0)).toEqual(['1000-1500'])
+  })
+
+  // Node 28 starts at 23,999, one base before the window's bin ends, and
+  // anchors 24,000. HG004 runs node 28, then node 27 at 23,000-23,999, then
+  // node 29, the anchor of 25,000, so its section's low anchor lies one base
+  // inside the bins.
+  it('walks a section whose low anchor starts one base before the bins end', async () => {
+    expect(await keptSpans('HG004', 23400, 23500, 0)).toEqual(['501-1500'])
+  })
+
+  // Node 8 anchors 8,000 and starts at 7,000, exactly the bound before the
+  // window's bin. HG001 visits node 8 at 2,000 along its contig and the 1 bp
+  // window node 10 exactly the bound before and after that, between visits to
+  // node 7, the anchor of 7,000. Only the walk around the visit to node 8
+  // reaches node 10, and only when both of its ends are inclusive.
+  it('walks exactly the bound to each side of an anchor visit the bound before the bins', async () => {
+    expect(await keptSpans('HG001', 8200, 8201, 0)).toEqual([
+      '1000-1001',
+      '3000-3001',
+    ])
+  })
+
+  // HG002 runs nodes 7 and 8 to 2,000 along its contig, then a 1 bp node,
+  // then node 50 at 2,001, a neighbour of window node 10 past HG002's last
+  // anchor visit, so in a stray row. Node 51 after it neighbours no node of
+  // the bin, so the row ends at 2,001, one base past where the walk around
+  // the visit to node 8 reaches.
+  it('walks a stray row that ends one base past a walk around an anchor visit', async () => {
+    expect(await keptSpans('HG002', 8200, 8201, 1)).toEqual([
+      '0-2000',
+      '2001-2051',
+    ])
+  })
+
+  // HG005 runs node 48, 1 bp and a neighbour of the window's first bin, then
+  // node 49 at 1, a neighbour of the second bin alone, then node 52, a
+  // neighbour of neither. Each of the first two visits makes a stray row of
+  // its bin, and the walk of the first row reaches 1, one base short of where
+  // the second ends.
+  it('walks a stray row that ends one base past the row walked before it', async () => {
+    expect(await keptSpans('HG005', 31950, 32050, 1)).toEqual(['1-101'])
+  })
+})

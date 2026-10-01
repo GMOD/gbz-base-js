@@ -52,7 +52,10 @@ reference stretch far from its anchors), `two-copies.gfa` and `far-pass.gfa`
 contig that visits no anchor and has no sample in the window). `test/fuzz`
 generated `reverse-reference.gfa` and `stray-end.gfa`, each with a query that
 returned a wrong answer; `stray-end` takes the indexer options in
-`test/data/build-indexes.sh`. `quay.io/vgteam/vg` is the easiest `vg` on a Mac.
+`test/data/build-indexes.sh`. We wrote `anchor-at-bound.gfa` and
+`keep-bounds.gfa` by hand to place anchors and visits exactly on the keep
+route's boundaries, and they take their options from the same script.
+`quay.io/vgteam/vg` is the easiest `vg` on a Mac.
 
 ```sh
 vg gbwt -G split-contig.gfa --gbz-format -g split-contig.gbz
