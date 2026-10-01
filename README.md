@@ -63,26 +63,34 @@ equivalent.
 
 ## Haplotype index
 
-Without a haplotype index, a query returns each walk as `unknown#N`. Build the
-index once per graph with
+Without a haplotype index, gbz-base queries returns each walk as `unknown#N`.
+
+We created a custom approach called
 [`gbz-haplotype-index`](https://github.com/GMOD/gbz-haplotype-index)
-(`cargo install gbz-haplotype-index`), as a separate file beside the database
-([haplotype index](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md)).
-Every query that opens the database with the index then reports the sample,
-haplotype and contig of each walk. At query time, the `keep` option restricts
-the result to the haplotypes you ask for.
+(`cargo install gbz-haplotype-index`), that adds haplotype walk metadata to the
+graph
+
+This creates a separate file alongside the .gbz.db file
+
+Example usage:
 
 ```ts
 const db = await GBZBase.open(new RemoteFile(graphUrl), {
   haplotypeIndex: new RemoteFile(indexUrl),
 })
+// return all haplotypes
+const records = await db.getAlignmentsForRange(region, start, end)
+
+// or, restrict to particular haplotype. can match multiple haplotypes here in callback
 const records = await db.getAlignmentsForRange(region, start, end, {
   keep: name => name.sample === 'HG00097',
 })
 ```
 
+Same thing using our command line tool
+
 ```bash
-gbz-base-query "$graphUrl" --haplotype-index "$indexUrl" \
+npx -p @gmod/gbz-base gbz-base-query "$graphUrl" --haplotype-index "$indexUrl" \
   --sample GRCh38 --contig chr6 --interval 31500000..31501000 \
   --alignments --keep HG00097
 ```
@@ -119,13 +127,12 @@ Design:
 
 ## Used by
 
-- [BandageJS](https://github.com/cmdcolin/BandageJS) draws the graph with
-  Bandage's layout and can fetch data with gbz-base.
-- A [sequenceTubeMap fork](https://github.com/cmdcolin/sequenceTubeMap) can
-  fetch data with gbz-base.
-- [jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer)
-  uses gbz-base for a graph view like BandageJS's, inside a genome browser, and
-  for haplotype lanes.
+- [BandageJS](https://github.com/cmdcolin/BandageJS) - Our webpage that draws
+  the graph with Bandage's exact graph layout code
+- [sequenceTubeMap - MemPanG26 edition](https://github.com/cmdcolin/sequenceTubeMap) -
+  our sequenceTubeMap fork
+- [JBrowse 2 w/ jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer) -
+  can render both BandageJS and sequenceTubeMap approaches
 
 ## Inspiration
 
