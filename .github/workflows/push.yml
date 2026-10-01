@@ -31,3 +31,67 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test --run
+
+  # The keep route is complete only while the indexer's rule for stray rows
+  # (tools/haplotype-index/src/strays.rs) and the reader's walks
+  # (src/chosenPaths.ts) agree, and nothing checks that at query time. The
+  # fuzzer reads the truth from the GFA text, so it is the check: an edit to
+  # either side that drops a piece fails here, not in a user's view.
+  fuzz:
+    name: Fuzz against GFA truth
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VG_VERSION: v1.69.0
+      GBZ_BASE_VERSION: 0.6.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/gbz-base
+            ~/.cargo/registry
+            ~/.local/bin/vg
+            tools/haplotype-index/target
+          key:
+            fuzz-tools-${{ runner.os }}-vg-${{ env.VG_VERSION }}-gbz-base-${{
+            env.GBZ_BASE_VERSION }}-${{
+            hashFiles('tools/haplotype-index/Cargo.lock') }}
+      - name: Install vg
+        run: |
+          mkdir -p ~/.local/bin
+          if [ ! -x ~/.local/bin/vg ]; then
+            curl -fsSL -o ~/.local/bin/vg "https://github.com/vgteam/vg/releases/download/$VG_VERSION/vg"
+            chmod +x ~/.local/bin/vg
+          fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install gbz-base
+        run: |
+          if [ ! -x ~/.cargo/bin/gbz-base ]; then
+            cargo install gbz-base --version "$GBZ_BASE_VERSION" --locked
+          fi
+      - run:
+          cargo build --release --manifest-path tools/haplotype-index/Cargo.toml
+      - name: Production-ratio index options, medium graphs
+        run: >
+          node test/fuzz/run.ts --seeds 0..150 --scale medium --jobs 4 --indexer
+          tools/haplotype-index/target/release/gbz-haplotype-index --index-args
+          "--interval 256 --anchor-spacing 2048 --stray-context 100 --stray-bin
+          1024 --stray-bound 2048 --stray-gap 64"
+      - name: Samples at anchors only, windows at the anchor bound
+        run: >
+          node test/fuzz/run.ts --seeds 150..350 --scale small --jobs 4
+          --edge-windows 12 --indexer
+          tools/haplotype-index/target/release/gbz-haplotype-index --index-args
+          "--interval 65536 --anchor-spacing 512 --stray-context 100 --stray-bin
+          1 --stray-bound 300 --stray-gap 8"

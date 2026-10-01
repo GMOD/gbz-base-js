@@ -19,6 +19,12 @@ depends on neither the library's GBWT decoding nor the haplotype index.
 `vitest` does not collect these files. `pnpm typecheck`, `pnpm lint` and
 `pnpm format:check` cover them.
 
+CI runs two batches on every push, the `fuzz` job in
+`.github/workflows/push.yml`: 150 medium seeds at the production ratio of index
+options, and 200 small seeds with samples at anchors only and windows aimed at
+the anchor bound. It is the check that the indexer's rule for stray rows and the
+reader's walks still agree.
+
 ## Running
 
 `vg`, `gbz-base` and `gbz-haplotype-index` must be on `PATH`. `--indexer`, or
