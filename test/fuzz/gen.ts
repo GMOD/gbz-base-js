@@ -12,7 +12,7 @@ export interface GenOptions {
   structural: number
 }
 
-export type Scale = 'small' | 'medium'
+export type Scale = 'small' | 'medium' | 'large'
 
 export const scales: Record<Scale, Omit<GenOptions, 'seed'>> = {
   small: {
@@ -30,6 +30,14 @@ export const scales: Record<Scale, Omit<GenOptions, 'seed'>> = {
     maxNodeLen: 1000,
     largeInsertionBp: [1000, 10000],
     structural: 3,
+  },
+  large: {
+    refBp: [150000, 400000],
+    refNodes: [600, 2000],
+    haplotypes: [16, 40],
+    maxNodeLen: 1000,
+    largeInsertionBp: [5000, 40000],
+    structural: 6,
   },
 }
 

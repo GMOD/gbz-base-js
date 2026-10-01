@@ -25,7 +25,7 @@ const defaultIndexArgs =
 const usage = `node test/fuzz/run.ts --seeds 0..200 [options]
 
   --seeds LIST        seeds to run: 7, 0..200 (200 excluded) or 3,9,40..50
-  --scale NAME        small or medium (default small)
+  --scale NAME        small, medium or large (default small)
   --indexer PATH      gbz-haplotype-index binary (default $GBZ_HAPLOTYPE_INDEX,
                       else gbz-haplotype-index on PATH)
   --index-args ARGS   options for the indexer, replacing the default
@@ -261,8 +261,8 @@ function readArgs() {
     process.exit(values.help ? 0 : 2)
   }
   const scale = values.scale ?? 'small'
-  if (scale !== 'small' && scale !== 'medium') {
-    throw new Error(`--scale: "${scale}" is neither small nor medium`)
+  if (scale !== 'small' && scale !== 'medium' && scale !== 'large') {
+    throw new Error(`--scale: "${scale}" is not small, medium or large`)
   }
   const count = (flag: keyof typeof values, fallback: number) => {
     const value = values[flag]

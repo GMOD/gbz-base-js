@@ -42,8 +42,10 @@ node test/fuzz/run.ts --seeds 0..5000 --scale medium --jobs 8 --keep-going \
 ```
 
 `--seeds 0..200` runs seeds 0 to 199. `--scale small` builds a reference of 4–15
-kb with 3–8 haplotypes, and `--scale medium` one of 20–60 kb with 6–16. A small
-seed takes about 0.2 s and a medium seed about 0.7 s in one process.
+kb with 3–8 haplotypes, `--scale medium` one of 20–60 kb with 6–16, and
+`--scale large` one of 150–400 kb with 16–40 and six sites of each structural
+kind, the size of the sweeps' large stratum on HPRC. A small seed takes about
+0.2 s and a medium seed about 0.7 s in one process.
 
 `--index-args` replaces the indexer's options, which default to
 `--interval 256 --anchor-spacing 2048 --stray-context 100`. The runner passes no
