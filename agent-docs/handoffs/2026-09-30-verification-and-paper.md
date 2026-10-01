@@ -202,6 +202,22 @@ identified efficiently using the GBWT). Landed at `aafb2bc`:
 `chain5` on ada runs the acceptance chain on this final main
 (`~/keep-sweep/gbz-base-js-aafb2bc/`, tagged `bins5`), queued behind `chain4`.
 
+## Guards added, night
+
+- **The fuzzer runs in CI** (`a6a46b2`, job `fuzz` in `push.yml`): 150 medium
+  seeds at the production ratio of index options and 200 small seeds with
+  samples at anchors only and `--edge-windows`, against GFA truth. vg 1.69.0 and
+  gbz-base 0.6.1 are pinned and cached; the indexer is built from the tree.
+  First run: 5 min 49 s, success. This is the check that the stray-row rule in
+  `strays.rs` and the walks in `chosenPaths.ts` still agree; nothing checks it
+  at query time.
+- **The plugin's index fixtures carry stray rows** (plugin `e248627`):
+  micb-kir3dl1 is the library's own 0.2.0 index (the databases are
+  byte-identical), fragmented is rebuilt with `--from-db`. Keep queries in its
+  tests take the keep route now, except where more than 32 chosen paths pass the
+  anchors. Its suite passes on the published 4.1.0 and on a tarball of main at
+  `aafb2bc` (1,017 tests, 0 type errors).
+
 ## Left for the user
 
 - Host `bins-final.db`, release npm and the crate.
