@@ -46,7 +46,7 @@ functions report the sample, haplotype and contig of every walk they return.
 | `context`    | bp of graph around the window, 100 by default                                                                    |
 | `haplotypes` | `all` (default), `distinct`, `reference-only` or `none`                                                          |
 | `keep`       | a predicate on `PathName`; the query returns the walks that pass it, plus the reference. Needs a haplotype index |
-| `limit`      | maximum nodes per path fragment                                                                                  |
+| `limit`      | maximum nodes in the subgraph                                                                                    |
 | `snarls`     | `contained` or `overlapping` ([snarls.md](snarls.md)), subgraph only                                             |
 | `signal`     | `AbortSignal`, checked between range requests                                                                    |
 

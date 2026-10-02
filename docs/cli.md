@@ -58,7 +58,7 @@ message to stderr and exits with status 1.
 | `--context N`                       | bp of graph around the window, 100 by default                       | `context`                                     |
 | `--snarls`                          | add contained top-level [snarls](snarls.md)                         | `snarls: 'contained'`                         |
 | `--extend-snarls`                   | add overlapping top-level snarls                                    | `snarls: 'overlapping'`                       |
-| `--limit N`                         | maximum nodes per path fragment                                     | `limit`                                       |
+| `--limit N`                         | maximum nodes in the subgraph                                       | `limit`                                       |
 | `--haplotypes SEL`                  | `all` (default), `distinct`, `reference-only` or `none`             | `haplotypes`                                  |
 | `--cigar`                           | include CIGAR strings                                               | `cigar: true`                                 |
 | `--format json\|gfa`                | the subgraph's output format                                        | `toSubgraphJson`, `toGFA`                     |
