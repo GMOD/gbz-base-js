@@ -9,7 +9,7 @@
 // Step labels stay to one or two words past the function name for the same
 // reason; dataflow.md carries the rest.
 //
-// Both entry points are drawn at the top. getSubgraphForRange used to be an
+// Both entry points are drawn at the top. getSubgraphs used to be an
 // edge label between extractPaths and the GFA box, which put the name of a
 // caller at the wrong end of the arrow — it reads as something extractPaths
 // calls. It enters where it really enters, and the arrow out of extractPaths
@@ -35,8 +35,8 @@ digraph gbzbasejs {
         fontname="Helvetica" fontsize=10 margin="0.14,0.07"]
   edge [color="#57606a" fontname="Helvetica" fontsize=9]
 
-  query    [label="getAlignmentsForRange(path, start, end)" fillcolor="#ddf4ff" color="#0969da"]
-  frags    [label="pathFragmentsForRange" fillcolor="#dafbe1" color="#1a7f37"]
+  query    [label="getAlignments({ path, start, end })" fillcolor="#ddf4ff" color="#0969da"]
+  frags    [label="getPathFragments" fillcolor="#dafbe1" color="#1a7f37"]
   pos      [label="pathPosition\nReferenceIndex" fillcolor="#dafbe1" color="#1a7f37"]
   prefetch [label="prefetch the reference walk" fillcolor="#dafbe1" color="#1a7f37"]
   walk     [label="aroundInterval\nreference walk + context" fillcolor="#fff8c5" color="#9a6700"]
@@ -46,11 +46,11 @@ digraph gbzbasejs {
   sampled  [label="identifyPaths\nHaplotypeSamples" fillcolor="#dafbe1" color="#1a7f37"]
   align    [label="alignments()"]
   out      [label="HaplotypeAlignment[]" fillcolor="#ddf4ff" color="#0969da"]
-  sub      [label="getSubgraphForRange(path, start, end)" fillcolor="#ddf4ff" color="#0969da"]
+  sub      [label="getSubgraphs({ path, start, end })" fillcolor="#ddf4ff" color="#0969da"]
   gfa      [label="Subgraph.toGFA / toSubgraphJson" fillcolor="#ddf4ff" color="#0969da"]
 
   query -> frags
-  sub -> frags [style=dashed label=" first fragment only "]
+  sub -> frags
   frags -> pos [label=" per fragment "]
   pos -> prefetch
   prefetch -> walk

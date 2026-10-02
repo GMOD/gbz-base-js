@@ -142,7 +142,7 @@ await subgraph.identifyPaths()
 | `SchemaVersionError`    | `GBZBase.open` | a different schema version (`found`), or `undefined` for a non-gbz-base file |
 | `ForwardOnlyIndexError` | `GBZBase.open` | the haplotype index was built with `--forward-only`; rebuild it              |
 | `UnknownPathError`      | range queries  | the graph has no path of that name; carries the resolved `path`              |
-| `SubgraphLimitError`    | any query      | `limit` reached; carries `windowBp` and `walkedBp`                           |
+| `SubgraphLimitError`    | any query      | `limit` reached; an interval query sets `windowBp` and `walkedBp`            |
 
 `SubgraphLimitError` counts `walkedBp` from the start of the window the caller
 asked for, across every fragment before the one that tripped.
