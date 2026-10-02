@@ -1,3 +1,15 @@
+## [6.0.0](https://github.com/GMOD/gbz-base-js/compare/v5.0.0...v6.0.0) (2026-10-02)
+
+### Other Changes
+
+- Released, and the hosted index carries stray rows ([f126008](https://github.com/GMOD/gbz-base-js/commit/f12600852764df7e2ec24b9461f8bcfa12d1bb45))
+- Move the indexer crate and the haplotype index docs to GMOD/gbz-haplotype-index ([ebf8c19](https://github.com/GMOD/gbz-base-js/commit/ebf8c192c8780a1f87002d68a79494c26996fe6a))
+- Keep-bounds fixture puts anchors and visits on each walk boundary ([d5316b6](https://github.com/GMOD/gbz-base-js/commit/d5316b6b34d7bccf6b8535ecca53e09dedbed089))
+- Every reader boundary mutant is killed but the equivalent one ([9b91f25](https://github.com/GMOD/gbz-base-js/commit/9b91f2587fdbd0c8c0e5abc3738f001c4759e9aa))
+- Update README.md ([f5530bc](https://github.com/GMOD/gbz-base-js/commit/f5530bc3424b1649bc7bd680112ac611a2362f5f))
+- Take one options object everywhere, and read the file size from the SQLite header ([4e1d1ef](https://github.com/GMOD/gbz-base-js/commit/4e1d1ef7f3d1ceab0fba4419350f910edbf2323e))
+- The options-object API ([e0d6909](https://github.com/GMOD/gbz-base-js/commit/e0d6909ae80015f7f0875b5939122a1a13a450ec))
+
 ## [5.0.0](https://github.com/GMOD/gbz-base-js/compare/v4.1.0...v5.0.0) (2026-10-01)
 
 ### Other Changes
