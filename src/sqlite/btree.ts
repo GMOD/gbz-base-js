@@ -160,32 +160,41 @@ export class BTree {
     return low
   }
 
-  async prefetchRowidRange(root: number, lo: number, hi: number) {
-    const leafLevel = await this.tableDepth(root, lo)
-    let pages = [root]
+  async prefetchRowidRanges(root: number, ranges: [number, number][]) {
+    if (ranges.length === 0) {
+      return true
+    }
+    const leafLevel = await this.tableDepth(root, ranges[0]![0])
+    let frontiers = ranges.map(() => [root])
     for (let level = 0; level < leafLevel; level++) {
-      const decoded = await Promise.all(pages.map(n => this.pageAt(n)))
-      const children: number[] = []
-      decoded.forEach(({ page, header }, i) => {
-        const from = i === 0 ? this.childIndexFor(page, header, lo) : 0
-        const to =
-          i === decoded.length - 1
-            ? this.childIndexFor(page, header, hi)
-            : header.cellCount
-        for (let c = from; c <= to; c++) {
-          children.push(
-            c === header.cellCount
-              ? header.rightChild
-              : readUint32(page, cellOffset(page, header, c)),
-          )
-        }
-      })
-      if (!this.pager.prefetch(children)) {
+      frontiers = await Promise.all(
+        frontiers.map((pages, r) => this.childrenInRange(pages, ...ranges[r]!)),
+      )
+      if (!this.pager.prefetch(frontiers.flat())) {
         return false
       }
-      pages = children
     }
     return true
+  }
+
+  private async childrenInRange(pages: number[], lo: number, hi: number) {
+    const decoded = await Promise.all(pages.map(n => this.pageAt(n)))
+    const children: number[] = []
+    decoded.forEach(({ page, header }, i) => {
+      const from = i === 0 ? this.childIndexFor(page, header, lo) : 0
+      const to =
+        i === decoded.length - 1
+          ? this.childIndexFor(page, header, hi)
+          : header.cellCount
+      for (let c = from; c <= to; c++) {
+        children.push(
+          c === header.cellCount
+            ? header.rightChild
+            : readUint32(page, cellOffset(page, header, c)),
+        )
+      }
+    })
+    return children
   }
 
   async tableRowid(
@@ -239,7 +248,16 @@ export class BTree {
   async *tableScan(
     root: number,
   ): AsyncGenerator<{ rowid: number; values: SqlValue[] }> {
-    const { page, header } = await this.pageAt(root)
+    yield* this.scanPage(root, await this.tableDepth(root, 0))
+  }
+
+  // Prefetches only leaves: interior pages prefetched a level up would be
+  // evicted by the leaf prefetches below them before they were read
+  private async *scanPage(
+    pageNumber: number,
+    depth: number,
+  ): AsyncGenerator<{ rowid: number; values: SqlValue[] }> {
+    const { page, header } = await this.pageAt(pageNumber)
     if (header.type === LEAF_TABLE) {
       for (let i = 0; i < header.cellCount; i++) {
         const offset = cellOffset(page, header, i)
@@ -258,9 +276,10 @@ export class BTree {
       children.push(header.rightChild)
       let i = 0
       while (i < children.length) {
-        const end = i + this.pager.prefetchLeading(children.slice(i))
+        const end =
+          depth > 1 ? i + 1 : i + this.pager.prefetchLeading(children.slice(i))
         for (; i < end; i++) {
-          yield* this.tableScan(children[i]!)
+          yield* this.scanPage(children[i]!, depth - 1)
         }
       }
     }

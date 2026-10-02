@@ -330,8 +330,8 @@ export class GBZBase {
   }
 
   /** @internal */
-  prefetchRecords(lo: number, hi: number) {
-    return this.sqlite.prefetchRows('Nodes', lo, hi)
+  prefetchRecords(ranges: [number, number][]) {
+    return this.sqlite.prefetchRows('Nodes', ranges)
   }
 
   /** @internal */
@@ -874,7 +874,7 @@ export class GBZBase {
     ])
     const positions: IndexedPosition[] = []
     if (first !== undefined && last !== undefined) {
-      await this.sqlite.prefetchRows('ReferenceIndex', first, last + 1)
+      await this.sqlite.prefetchRows('ReferenceIndex', [[first, last + 1]])
       for (let rowid = first; rowid <= last; rowid++) {
         positions.push(await this.indexedRow(rowid))
       }

@@ -1,5 +1,7 @@
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -91,11 +93,68 @@ describe('pager', () => {
       source(() => false),
       { blockSize: 4096, maxBlocks: 4 },
     )
-    expect(await prefetched.prefetchRows('Nodes', 1, 5782)).toBe(false)
+    expect(await prefetched.prefetchRows('Nodes', [[1, 5782]])).toBe(false)
     for (let rowid = 1; rowid <= 5782; rowid += 50) {
       await prefetched.byRowid('Nodes', rowid)
     }
     expect(prefetched.pager.bytesFetched).toBe(plain.pager.bytesFetched)
+  })
+
+  it('budgets the runs of one prefetch together, not one at a time', async () => {
+    const open = () =>
+      SqliteDatabase.open(
+        source(() => false),
+        { blockSize: 4096, maxBlocks: 8 },
+      )
+    const runs = (count: number) =>
+      Array.from({ length: count }, (_, i): [number, number] => [
+        1 + i * 1000,
+        40 + i * 1000,
+      ])
+    const fits = await open()
+    expect(await fits.prefetchRows('Nodes', runs(3))).toBe(true)
+    const fetches = fits.pager.fetches
+    for (const [lo, hi] of runs(3)) {
+      for (let rowid = lo; rowid <= hi; rowid++) {
+        await fits.byRowid('Nodes', rowid)
+      }
+    }
+    expect(fits.pager.fetches).toBe(fetches)
+    const tooMany = await open()
+    expect(await tooMany.prefetchRows('Nodes', runs(5))).toBe(false)
+  })
+
+  it('scans a three-level table without fetching any block twice', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'gbz-base-pager-'))
+    const file = path.join(dir, 'deep.db')
+    try {
+      const writer = new DatabaseSync(file)
+      writer.exec('PRAGMA page_size = 512')
+      writer.exec('CREATE TABLE T (id INTEGER PRIMARY KEY, v BLOB)')
+      const insert = writer.prepare('INSERT INTO T VALUES (?, ?)')
+      writer.exec('BEGIN')
+      for (let id = 1; id <= 20000; id++) {
+        insert.run(id, new Uint8Array(8).fill(id % 251))
+      }
+      writer.exec('COMMIT')
+      writer.close()
+      const deep = await readFile(file)
+      const db = await SqliteDatabase.open(
+        {
+          read: async (length: number, position: number) =>
+            deep.subarray(position, position + length),
+        },
+        { blockSize: 512, maxBlocks: 8 },
+      )
+      let last = 0
+      for await (const { rowid } of db.scan('T')) {
+        last = rowid
+      }
+      expect(last).toBe(20000)
+      expect(db.pager.bytesFetched).toBeLessThanOrEqual(deep.length)
+    } finally {
+      await rm(dir, { recursive: true })
+    }
   })
 
   it('scans a table without fetching any block twice', async () => {

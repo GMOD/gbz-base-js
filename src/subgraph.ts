@@ -703,9 +703,9 @@ export class Subgraph {
   }
 
   // One request for the reference walk's node records where their rowids are
-  // close, and one per run of them where the walk crosses a gap in node ids
-  // (AMY1's reference walk spans two gaps of millions), so the walk after it
-  // never fetches leaf pages one at a time.
+  // close, and one prefetch over the runs of them where the walk crosses a gap
+  // in node ids (AMY1's reference walk spans two gaps of millions), so the walk
+  // after it never fetches leaf pages one at a time.
   private async prefetchReferenceRange(
     pathHandle: number,
     fromOffset: number,
@@ -718,19 +718,20 @@ export class Subgraph {
     if (first && last) {
       const a = first.pos.node
       const b = last.pos.node
-      const whole = await this.db.prefetchRecords(
-        Math.min(a, b),
-        Math.max(a, b) + 1,
-      )
+      const whole = await this.db.prefetchRecords([
+        [Math.min(a, b), Math.max(a, b) + 1],
+      ])
       if (!whole) {
         const positions = await this.db.indexedPositionsBetween(
           pathHandle,
           fromOffset,
           toOffset,
         )
-        const runs = rowidRuns(positions.map(p => p.pos.node))
-        await Promise.all(
-          runs.map(([lo, hi]) => this.db.prefetchRecords(lo, hi + 2)),
+        await this.db.prefetchRecords(
+          rowidRuns(positions.map(p => p.pos.node)).map(([lo, hi]) => [
+            lo,
+            hi + 2,
+          ]),
         )
       }
     }

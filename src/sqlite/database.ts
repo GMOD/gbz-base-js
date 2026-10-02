@@ -112,8 +112,8 @@ export class SqliteDatabase {
     return this.btree.tableRowid(this.rootPage(table), rowid)
   }
 
-  prefetchRows(table: string, lo: number, hi: number) {
-    return this.btree.prefetchRowidRange(this.rootPage(table), lo, hi)
+  prefetchRows(table: string, ranges: [number, number][]) {
+    return this.btree.prefetchRowidRanges(this.rootPage(table), ranges)
   }
 
   scan(table: string) {
