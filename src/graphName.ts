@@ -1,3 +1,5 @@
+import { sha256 } from './sha256.ts'
+
 export interface GraphName {
   name: string | undefined
   subgraph: Map<string, Set<string>>
@@ -87,8 +89,9 @@ export async function sha256Hex(chunks: Uint8Array[]) {
     bytes.set(chunk, offset)
     offset += chunk.length
   }
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)]
-    .map(byte => byte.toString(16).padStart(2, '0'))
-    .join('')
+  const subtle = (globalThis.crypto as Crypto | undefined)?.subtle
+  const digest = subtle
+    ? new Uint8Array(await subtle.digest('SHA-256', bytes))
+    : sha256(bytes)
+  return [...digest].map(byte => byte.toString(16).padStart(2, '0')).join('')
 }
