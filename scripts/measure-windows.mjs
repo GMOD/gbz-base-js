@@ -6,7 +6,7 @@
 // through the same range queries the plugin makes.
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
-import { GBZBase } from '../dist/index.js'
+import { GBZBase } from '../esm/index.js'
 
 const [graph, index, which = 'both', repeats = '1'] = process.argv.slice(2)
 const open = file =>

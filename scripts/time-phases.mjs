@@ -1,6 +1,6 @@
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
-import { GBZBase, Subgraph } from '../dist/index.js'
+import { GBZBase, Subgraph } from '../esm/index.js'
 
 const [graph, index, contig, start, end, context] = process.argv.slice(2)
 const open = file =>

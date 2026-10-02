@@ -2,7 +2,7 @@ import fs from 'node:fs'
 
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
-import { GBZBase } from '../dist/index.js'
+import { GBZBase } from '../esm/index.js'
 
 const [graph, index, contig, start, end, context, out] = process.argv.slice(2)
 if (out === undefined) {

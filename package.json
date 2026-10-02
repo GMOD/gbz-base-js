@@ -12,33 +12,34 @@
     "url": "https://github.com/cmdcolin"
   },
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    }
+    "import": "./esm/index.js",
+    "require": "./dist/index.js"
   },
   "bin": {
     "gbz-base-query": "bin/query.js"
   },
   "files": [
     "dist",
+    "esm",
     "src",
     "bin"
   ],
   "scripts": {
     "test": "vitest",
     "coverage": "pnpm test --coverage",
-    "clean": "rimraf dist",
+    "clean": "rimraf dist esm",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit -p tsconfig.lint.json",
     "prebuild": "pnpm clean",
-    "build": "tsc",
-    "preversion": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test --run && pnpm build",
+    "build": "pnpm build:esm && pnpm build:es5",
+    "build:esm": "tsc --outDir esm",
+    "build:es5": "tsc --module commonjs --moduleResolution bundler --outDir dist",
+    "postbuild:es5": "echo '{\"type\": \"commonjs\"}' > dist/package.json",
+    "test:pack": "./scripts/test-pack.sh",
+    "preversion": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test --run && pnpm build && pnpm test:pack",
     "version": "git-cliff --tag v$npm_package_version --unreleased --prepend CHANGELOG.md && git add CHANGELOG.md",
     "postversion": "git push --follow-tags"
   },

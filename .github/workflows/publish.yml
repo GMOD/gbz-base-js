@@ -24,6 +24,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test --run
+      - run: pnpm test:pack
 
   publish:
     name: Publish to npm
