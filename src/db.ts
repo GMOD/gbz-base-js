@@ -457,6 +457,9 @@ export class GBZBase {
 
   async getPathFragments(opts: PathWindow): Promise<PathFragment[]> {
     const { start, end } = opts
+    if (Number.isNaN(start) || Number.isNaN(end)) {
+      throw new Error(`The window ${start}..${end} is not a number range`)
+    }
     const ordered = await this.pathsNamed(opts.path)
     if (ordered.length === 0) {
       throw new UnknownPathError(pathNameFor(toPathQuery(opts.path), 0))

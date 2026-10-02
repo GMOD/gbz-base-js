@@ -77,6 +77,9 @@ describe('pathFragmentsForRange', () => {
     await expect(
       db.getPathFragments({ path: 'nonexistent', start: 0, end: 1000 }),
     ).rejects.toThrow(UnknownPathError)
+    await expect(
+      db.getSubgraphs({ path: chr6, start: Number.NaN, end: 31501000 }),
+    ).rejects.toThrow('The window NaN..31501000 is not a number range')
     expect(await db.hasPath(chr6)).toBe(true)
     expect(await db.hasPath('nonexistent')).toBe(false)
   })
