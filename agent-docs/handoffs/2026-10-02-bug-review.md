@@ -6,10 +6,11 @@ reviewers: the SQLite layer, GBWT/`db.ts`/names, `subgraph.ts`, and
 below on one branch. Each fix has a regression test built from its repro, and
 each test fails with the source change reverted.
 
-The Fable second-opinion review from the first session was lost with that
-session and has not been rerun. Its draft patches survived and served as
-starting points for findings 1, 3, 4, 5, 6, 7 and 9; the fixes for 4 and 9
-differ from the drafts, as recorded below.
+The first session's Fable second-opinion review hit a usage limit before
+reporting. Its draft patches survived and served as starting points for findings
+1, 3, 4, 5, 6, 7 and 9; the fixes for 4 and 9 differ from the drafts, as
+recorded below. A second Fable review of the fixes ran afterwards; see
+[Second review](#second-review).
 
 ## Fixed
 
@@ -79,11 +80,48 @@ The package now ships dual ESM/CJS like the other gmod parsers: `esm/` for
 (`pnpm test:pack`) reads a fixture through both entries and the bin;
 `preversion` and the publish workflow's test job run it.
 
+## Second review
+
+A Fable review of f6315e9 found every fix above sound and reported six more
+items. Its notes and repro scripts are in the session scratchpad under
+`fable2/`.
+
+Fixed:
+
+- **`mergeDistinct()` before `identifyPaths()` gave wrong output** on an indexed
+  `distinct` subgraph: it merged the deferred twins for good, so identification
+  dropped a walk on `reverse-reference` and named two weight-2 records for two
+  haplotypes on `shared-hairpin`. `mergeDistinct()` now settles deferred twins
+  like the output methods. Test: `test/twins.test.ts`.
+- **`alignToRef(i)` indexed the unsettled walk list** when it came before any
+  other output. It settles first. Test: `test/twins.test.ts`.
+- **Query options were accepted silently.** A fractional node id returned an
+  empty subgraph, a NaN or negative `context` acted as 0, and `limit: NaN` meant
+  no limit. The query entry points in `src/query.ts` now require whole numbers.
+  Test: `test/api.test.ts`.
+
+Not fixed:
+
+- **Concurrent prefetches can evict each other** (`subgraph.ts`
+  `prefetchReferenceRange`). Each `prefetchRecords` call fits half the cache,
+  but the per-run calls go out together under `Promise.all`. At defaults this
+  needs more than 16 MB of node records in one window. Fix: stop issuing runs
+  once their summed blocks reach the budget.
+- **A three-level `tableScan` refetches interior blocks**: 65.1 MB for a 63 MB
+  table at defaults, the same as before the fixes. Fix: prefetch only the level
+  whose children are leaves.
+- **The CLI rejects upstream's `1.5k`/`10M` suffixes** for `--context` and
+  `--limit`. Before the CLI validation these parsed as NaN.
+
+The review also reran the differential sweep against upstream `gbz-base query`:
+2,509 queries, every mismatch CIGAR-only. 53 come from reverse-reference walks
+(documented in `docs/internals.md`) and 16 from equal-weight LCS ties. Upstream
+picks among tied alignments by its `fast_weighted_lcs` search order, not by a
+rule, so matching it would mean porting that DP; the ties do not affect
+correctness.
+
 ## Not fixed
 
-- Calling `mergeDistinct()` before `identifyPaths()` on an indexed `distinct`
-  subgraph still merges the twins too early. The docs describe `mergeDistinct()`
-  only after identification or `keepHaplotypes`.
 - A non-SQLite file throws a plain "Not a SQLite database" error, not
   `SchemaVersionError`.
 - A window past the end of a cut fixture's fragment fails with "No successor for
