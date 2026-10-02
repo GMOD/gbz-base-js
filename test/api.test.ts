@@ -349,6 +349,20 @@ describe('subgraphInInterval', () => {
   })
 })
 
+describe('subgraphAroundNodes', () => {
+  it('takes overlapping snarls around one node named twice, as upstream does', async () => {
+    const db = await openMicb()
+    const around = (nodeIds: number[]) =>
+      db.subgraphAroundNodes({ nodeIds, context: 0, snarls: 'overlapping' })
+    const once = await around([129])
+    const twice = await around([129, 129])
+    expect(await twice.toGFA()).toBe(await once.toGFA())
+    await expect(around([129, 130])).rejects.toThrow(
+      'Overlapping snarls cannot be extracted for a node-based query with multiple nodes',
+    )
+  })
+})
+
 describe('keep', () => {
   const wanted = (name: { sample: string }) => name.sample === 'HG01106'
 

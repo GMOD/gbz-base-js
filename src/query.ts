@@ -129,7 +129,7 @@ export async function subgraphAroundNodes(db: GBZBase, opts: NodesQuery) {
   if (haplotypes === 'reference-only') {
     throw new Error('Cannot output a reference path in a node-based query')
   }
-  if (snarls === 'overlapping' && opts.nodeIds.length > 1) {
+  if (snarls === 'overlapping' && new Set(opts.nodeIds).size > 1) {
     throw new Error(
       'Overlapping snarls cannot be extracted for a node-based query with multiple nodes',
     )
