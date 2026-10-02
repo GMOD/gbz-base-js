@@ -3,13 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { openSampled } from './fixtures.ts'
 import { UnknownPathError } from '../src/db.ts'
 import { parsePathName } from '../src/pathName.ts'
-import { SubgraphLimitError } from '../src/subgraph.ts'
+import { Subgraph, SubgraphLimitError } from '../src/subgraph.ts'
 
 const chr6 = 'GRCh38#0#chr6'
 
 function openMicb() {
   return openSampled('micb-kir3dl1.gbz.db')
 }
+
+it('builds a subgraph only through a query', () => {
+  // @ts-expect-error the constructor is private
+  expect(() => new Subgraph()).toThrow()
+})
 
 describe('parsePathName', () => {
   it('reads a PanSN name', () => {

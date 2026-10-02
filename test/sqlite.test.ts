@@ -37,6 +37,24 @@ describe('sqlite reader', () => {
     await expect(SqliteDatabase.open(source(stale))).rejects.toThrow(
       /no valid database size/,
     )
+    await expect(
+      SqliteDatabase.open(source(bytes.subarray(0, 80))),
+    ).rejects.toThrow('Not a SQLite database')
+  })
+
+  it('names a file cut short of the size its header gives', async () => {
+    const bytes = await readFile(file)
+    const cut = bytes.subarray(0, bytes.length - 8192)
+    const db = await SqliteDatabase.open(
+      {
+        read: async (length, position) =>
+          cut.subarray(position, position + length),
+      },
+      { blockSize: 4096 },
+    )
+    await expect(
+      db.pager.page(bytes.length / db.pager.pageSize),
+    ).rejects.toThrow(/short of the \d+ bytes its SQLite header gives/)
   })
 
   it('scans every node row', async () => {

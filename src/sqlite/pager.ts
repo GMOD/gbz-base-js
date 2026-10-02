@@ -34,12 +34,21 @@ export class Pager {
   }
 
   private async read(length: number, start: number) {
+    const bytes = await this.readRetrying(length, start)
+    this.bytesFetched += bytes.length
+    if (bytes.length < length) {
+      throw new Error(
+        `the file ends at byte ${start + bytes.length}, short of the ${this.fileSize} bytes its SQLite header gives`,
+      )
+    }
+    return bytes
+  }
+
+  private async readRetrying(length: number, start: number) {
     let attempt = 0
     for (;;) {
       try {
-        const bytes = await this.source.read(length, start)
-        this.bytesFetched += bytes.length
-        return bytes
+        return await this.source.read(length, start)
       } catch (error) {
         attempt += 1
         if (attempt >= 3) {

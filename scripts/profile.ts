@@ -7,7 +7,7 @@ const db = await GBZBase.open({
     '/Users/colin/src/gbz-base-js/test/data/micb-kir3dl1.gbz.db',
   ),
 })
-const subgraph = new Subgraph(db)
+const subgraph = Subgraph.create(db)
 console.time('pathPosition')
 const ref = await subgraph.pathPosition({
   sample: 'GRCh38',

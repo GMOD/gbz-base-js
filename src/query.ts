@@ -44,7 +44,7 @@ export interface BetweenQuery {
 }
 
 export async function subgraphAtOffset(db: GBZBase, opts: OffsetQuery) {
-  const subgraph = new Subgraph(db, opts)
+  const subgraph = Subgraph.create(db, opts)
   const reference = await subgraph.pathPosition(
     pathNameFor(toPathQuery(opts.path), opts.offset),
   )
@@ -62,7 +62,7 @@ export async function subgraphAtOffset(db: GBZBase, opts: OffsetQuery) {
 // `context` bp around that, and the snarls `snarls` selects.
 async function aroundWindow(db: GBZBase, opts: IntervalQuery) {
   const { start, end } = opts
-  const subgraph = new Subgraph(db, opts)
+  const subgraph = Subgraph.create(db, opts)
   try {
     const reference = await subgraph.pathPosition(
       pathNameFor(toPathQuery(opts.path), start),
@@ -134,7 +134,7 @@ export async function subgraphAroundNodes(db: GBZBase, opts: NodesQuery) {
       'Overlapping snarls cannot be extracted for a node-based query with multiple nodes',
     )
   }
-  const subgraph = new Subgraph(db, opts)
+  const subgraph = Subgraph.create(db, opts)
   await subgraph.aroundNodes(opts.nodeIds, opts.context ?? 100)
   await subgraph.extractSnarls(snarls)
   subgraph.extractPaths(undefined, haplotypes)
@@ -146,7 +146,7 @@ export async function subgraphBetween(db: GBZBase, opts: BetweenQuery) {
   if (haplotypes === 'reference-only') {
     throw new Error('Cannot output a reference path in a node-based query')
   }
-  const subgraph = new Subgraph(db, opts)
+  const subgraph = Subgraph.create(db, opts)
   await subgraph.betweenNodes(opts.startHandle, opts.endHandle)
   subgraph.extractPaths(undefined, haplotypes)
   return subgraph

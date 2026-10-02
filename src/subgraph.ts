@@ -534,11 +534,15 @@ export class Subgraph {
   private readonly limit: number | undefined
   private readonly signal: AbortSignal | undefined
 
-  /** @internal */
-  constructor(db: GBZBase, opts: SubgraphOptions = {}) {
+  private constructor(db: GBZBase, opts: SubgraphOptions) {
     this.db = db
     this.limit = opts.limit
     this.signal = opts.signal
+  }
+
+  /** @internal */
+  static create(db: GBZBase, opts: SubgraphOptions = {}) {
+    return new Subgraph(db, opts)
   }
 
   get nodeCount() {
@@ -615,18 +619,20 @@ export class Subgraph {
   async pathPosition(query: PathName): Promise<ReferencePath> {
     const path = await this.db.findPath(query)
     if (!path) {
-      throw new Error(`Cannot find a path covering ${formatPathName(query)}`)
+      throw new Error(
+        `Cannot find a path covering offset ${query.fragment} of ${formatPathName(query)}`,
+      )
     }
     if (!path.isIndexed) {
       throw new Error(
-        `Path ${formatPathName(path.name)} has not been indexed for random access`,
+        `The fragment of ${formatPathName(path.name)} at ${path.name.fragment} has not been indexed for random access`,
       )
     }
     const queryOffset = query.fragment - path.name.fragment
     const indexed = await this.db.indexedPosition(path.handle, queryOffset)
     if (!indexed) {
       throw new Error(
-        `Path ${formatPathName(path.name)} has not been indexed for random access`,
+        `The fragment of ${formatPathName(path.name)} at ${path.name.fragment} has not been indexed for random access`,
       )
     }
     return this.findPathPosition(
@@ -664,7 +670,7 @@ export class Subgraph {
       const next = record.gbwt().lf(pos.offset)
       if (!next) {
         throw new Error(
-          `Path ${formatPathName(path.name)} does not contain offset ${queryOffset}`,
+          `The fragment of ${formatPathName(path.name)} at ${path.name.fragment} does not contain offset ${queryOffset}`,
         )
       }
       pos = next

@@ -9,7 +9,7 @@ const db = await GBZBase.open({
   source: open(graph),
   haplotypeIndex: open(index),
 })
-const subgraph = new Subgraph(db)
+const subgraph = Subgraph.create(db)
 const t = label => {
   const now = performance.now()
   if (t.last !== undefined) {

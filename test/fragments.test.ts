@@ -134,6 +134,14 @@ describe('a reference contig stored as two fragments', () => {
     ).toHaveLength(1)
   })
 
+  it('reports the first fragment to trip the node limit, in path order', async () => {
+    const db = await openSplit()
+    const error = await db
+      .getSubgraphs({ path: chr1, start: 400, end: 2001, context: 0, limit: 1 })
+      .catch((error: unknown) => error)
+    expect(error).toMatchObject({ windowBp: 1601, walkedBp: 0 })
+  })
+
   it('reports the node limit from the start of the window, not of the fragment that tripped it', async () => {
     const db = await openSplit()
     const error = await db

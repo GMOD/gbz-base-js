@@ -412,7 +412,7 @@ export class GBZBase {
       if (!last) {
         const path = await this.getPath(handle)
         throw new Error(
-          `Path ${path ? formatPathName(path.name) : handle} has not been indexed for random access`,
+          `${path ? `The fragment of ${formatPathName(path.name)} at ${path.name.fragment}` : `Path ${handle}`} has not been indexed for random access`,
         )
       }
       let length = last.pathOffset
@@ -487,9 +487,15 @@ export class GBZBase {
 
   async getSubgraphs(opts: WindowQuery): Promise<Subgraph[]> {
     const fragments = await this.getPathFragments(opts)
-    return Promise.all(
+    const settled = await Promise.allSettled(
       fragments.map(fragment => this.subgraphForFragment(fragment, opts)),
     )
+    return settled.map(result => {
+      if (result.status === 'rejected') {
+        throw result.reason
+      }
+      return result.value
+    })
   }
 
   async getAlignments(opts: AlignmentQuery): Promise<HaplotypeAlignment[]> {

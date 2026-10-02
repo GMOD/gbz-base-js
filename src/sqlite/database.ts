@@ -32,7 +32,7 @@ export class SqliteDatabase {
     const firstBlock = await source.read(opts.blockSize ?? 65536, 0)
     const header = firstBlock.subarray(0, 100)
     const magic = new TextDecoder().decode(header.subarray(0, 15))
-    if (magic !== 'SQLite format 3') {
+    if (magic !== 'SQLite format 3' || header.length < 100) {
       throw new Error('Not a SQLite database')
     }
     const view = new DataView(
