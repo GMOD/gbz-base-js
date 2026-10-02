@@ -302,4 +302,39 @@ describe('distinct from a lower-level query', () => {
       )
     },
   )
+  it.each(fixtures)(
+    'names the same walks whether mergeDistinct ran before identifyPaths: $name',
+    async ({ name, ...window }) => {
+      const db = await openFixture(name, true)
+      const query = { path: grch38, ...window, haplotypes: 'distinct' as const }
+      const merged = await db.subgraphInInterval(query)
+      merged.mergeDistinct()
+      await merged.identifyPaths()
+      const plain = await db.subgraphInInterval(query)
+      await plain.identifyPaths()
+      expect(walks(await merged.toGFA({ names: 'resolved' }))).toEqual(
+        walks(await plain.toGFA({ names: 'resolved' })),
+      )
+    },
+  )
+
+  it.each(fixtures)(
+    'aligns the settled walks when alignToRef comes first: $name',
+    async ({ name, ...window }) => {
+      const query = { path: grch38, ...window, haplotypes: 'distinct' as const }
+      const indexed = await (
+        await openFixture(name, true)
+      ).subgraphInInterval(query)
+      const plain = await (
+        await openFixture(name, false)
+      ).subgraphInInterval(query)
+      const cigars = (subgraph: typeof plain, count: number) =>
+        Array.from({ length: count }, (_, i) => subgraph.alignToRef(i))
+      const early = cigars(indexed, 4)
+      expect(early).toEqual(cigars(plain, 4))
+      expect(early.slice(0, indexed.pathCount)).toEqual(
+        cigars(indexed, indexed.pathCount),
+      )
+    },
+  )
 })

@@ -1277,7 +1277,11 @@ export class Subgraph {
   // Merges identical walks into one record with a weight, as extractPaths does
   // for 'distinct'. After keepHaplotypes the weights count kept haplotypes.
   mergeDistinct() {
-    this.distinctPaths(false)
+    if (this.twinDeferred) {
+      this.settleDeferred()
+    } else {
+      this.distinctPaths(false)
+    }
   }
 
   // Output read before identifyPaths sees the walks merged as they would be
@@ -1912,6 +1916,7 @@ export class Subgraph {
 
   /** @internal */
   alignToRef(pathIndex: number) {
+    this.settleDeferred()
     return this.alignment(pathIndex)
       ?.edits.map(([op, len]) => `${len}${op}`)
       .join('')
