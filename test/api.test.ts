@@ -341,14 +341,81 @@ describe('getSubgraphForRange', () => {
 })
 
 describe('subgraphInInterval', () => {
-  it('rejects an interval that is empty, reversed or not a number', async () => {
+  it('rejects an interval that is empty or reversed', async () => {
     const db = await openMicb()
     const path = { sample: 'GRCh38', contig: 'chr6' }
-    for (const end of [31500000, 31499900, Number.NaN]) {
+    for (const end of [31500000, 31499900]) {
       await expect(
         db.subgraphInInterval({ path, start: 31500000, end, context: 0 }),
       ).rejects.toThrow('Interval length must be greater than 0')
     }
+  })
+})
+
+describe('query options', () => {
+  const path = { sample: 'GRCh38', contig: 'chr6' }
+  const window = { path, start: 31500000, end: 31501000 }
+  const queries: [string, (db: GBZBase) => Promise<unknown>, string][] = [
+    [
+      'context NaN',
+      db => db.subgraphInInterval({ ...window, context: Number.NaN }),
+      'context must be a whole number, not NaN',
+    ],
+    [
+      'context -1',
+      db => db.subgraphInInterval({ ...window, context: -1 }),
+      'context must be a whole number, not -1',
+    ],
+    [
+      'limit NaN',
+      db => db.subgraphInInterval({ ...window, limit: Number.NaN }),
+      'limit must be a whole number, not NaN',
+    ],
+    [
+      'end NaN',
+      db => db.subgraphInInterval({ ...window, end: Number.NaN }),
+      'end must be a whole number, not NaN',
+    ],
+    [
+      'fractional start',
+      db => db.subgraphInInterval({ ...window, start: 31500000.5 }),
+      'start must be a whole number, not 31500000.5',
+    ],
+    [
+      'fractional offset',
+      db => db.subgraphAtOffset({ path, offset: 31500000.5 }),
+      'offset must be a whole number, not 31500000.5',
+    ],
+    [
+      'fractional node id',
+      db => db.subgraphAroundNodes({ nodeIds: [1.5] }),
+      'node id must be a whole number of at least 1, not 1.5',
+    ],
+    [
+      'node id 0',
+      db => db.subgraphAroundNodes({ nodeIds: [0] }),
+      'node id must be a whole number of at least 1, not 0',
+    ],
+    [
+      'fractional handle',
+      db => db.subgraphBetween({ startHandle: 258.5, endHandle: 300 }),
+      'startHandle must be a whole number of at least 2, not 258.5',
+    ],
+  ]
+
+  it.each(queries)('rejects %s', async (_, query, message) => {
+    await expect(query(await openMicb())).rejects.toThrow(message)
+  })
+
+  it('still reads a window that runs to Infinity through getSubgraphs', async () => {
+    const db = await openMicb()
+    const subgraphs = await db.getSubgraphs({
+      path,
+      start: 31510000,
+      end: Number.POSITIVE_INFINITY,
+      context: 0,
+    })
+    expect(subgraphs).toHaveLength(1)
   })
 })
 

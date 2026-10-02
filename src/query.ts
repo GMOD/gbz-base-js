@@ -43,15 +43,36 @@ export interface BetweenQuery {
   signal?: AbortSignal | undefined
 }
 
+function wholeNumber(name: string, value: number, min = 0) {
+  if (!Number.isSafeInteger(value) || value < min) {
+    throw new Error(
+      `${name} must be a whole number${min > 0 ? ` of at least ${min}` : ''}, not ${value}`,
+    )
+  }
+  return value
+}
+
+function contextOf(opts: QueryOptions) {
+  return wholeNumber('context', opts.context ?? 100)
+}
+
+function createSubgraph(db: GBZBase, opts: QueryOptions | BetweenQuery) {
+  if (opts.limit !== undefined) {
+    wholeNumber('limit', opts.limit)
+  }
+  return Subgraph.create(db, opts)
+}
+
 export async function subgraphAtOffset(db: GBZBase, opts: OffsetQuery) {
-  const subgraph = Subgraph.create(db, opts)
+  const context = contextOf(opts)
+  const subgraph = createSubgraph(db, opts)
   const reference = await subgraph.pathPosition(
-    pathNameFor(toPathQuery(opts.path), opts.offset),
+    pathNameFor(toPathQuery(opts.path), wholeNumber('offset', opts.offset)),
   )
   await subgraph.aroundPosition(
     reference.position.handle,
     reference.position.nodeOffset,
-    opts.context ?? 100,
+    context,
   )
   await subgraph.extractSnarls(opts.snarls ?? 'none')
   subgraph.extractPaths(reference, opts.haplotypes ?? 'all')
@@ -61,18 +82,16 @@ export async function subgraphAtOffset(db: GBZBase, opts: OffsetQuery) {
 // The subgraph both routes read a window from: the reference walk through it,
 // `context` bp around that, and the snarls `snarls` selects.
 async function aroundWindow(db: GBZBase, opts: IntervalQuery) {
-  const { start, end } = opts
-  const subgraph = Subgraph.create(db, opts)
+  const start = wholeNumber('start', opts.start)
+  const end = wholeNumber('end', opts.end)
+  const context = contextOf(opts)
+  const subgraph = createSubgraph(db, opts)
   try {
     const reference = await subgraph.pathPosition(
       pathNameFor(toPathQuery(opts.path), start),
     )
     await subgraph.prefetchReferenceWalk(reference, end - start)
-    await subgraph.aroundInterval(
-      reference.position,
-      end - start,
-      opts.context ?? 100,
-    )
+    await subgraph.aroundInterval(reference.position, end - start, context)
     await subgraph.extractSnarls(opts.snarls ?? 'none')
     return { subgraph, reference }
   } catch (error) {
@@ -110,7 +129,7 @@ export async function subgraphInInterval(db: GBZBase, opts: IntervalQuery) {
       reference,
       opts.end - opts.start,
       keep,
-      opts.context ?? 100,
+      contextOf(opts),
     ))
   ) {
     subgraph.extractPaths(reference, 'all')
@@ -134,8 +153,12 @@ export async function subgraphAroundNodes(db: GBZBase, opts: NodesQuery) {
       'Overlapping snarls cannot be extracted for a node-based query with multiple nodes',
     )
   }
-  const subgraph = Subgraph.create(db, opts)
-  await subgraph.aroundNodes(opts.nodeIds, opts.context ?? 100)
+  const context = contextOf(opts)
+  for (const id of opts.nodeIds) {
+    wholeNumber('node id', id, 1)
+  }
+  const subgraph = createSubgraph(db, opts)
+  await subgraph.aroundNodes(opts.nodeIds, context)
   await subgraph.extractSnarls(snarls)
   subgraph.extractPaths(undefined, haplotypes)
   return subgraph
@@ -146,8 +169,11 @@ export async function subgraphBetween(db: GBZBase, opts: BetweenQuery) {
   if (haplotypes === 'reference-only') {
     throw new Error('Cannot output a reference path in a node-based query')
   }
-  const subgraph = Subgraph.create(db, opts)
-  await subgraph.betweenNodes(opts.startHandle, opts.endHandle)
+  const subgraph = createSubgraph(db, opts)
+  await subgraph.betweenNodes(
+    wholeNumber('startHandle', opts.startHandle, 2),
+    wholeNumber('endHandle', opts.endHandle, 2),
+  )
   subgraph.extractPaths(undefined, haplotypes)
   return subgraph
 }

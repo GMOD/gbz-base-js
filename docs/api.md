@@ -41,6 +41,9 @@ const subgraphs = await db.getSubgraphs({ ...window, context: 0 })
 `_gbwt_ref#0#contig`. When the database was opened with a haplotype index, both
 functions report the sample, haplotype and contig of every walk they return.
 
+Offsets, `context`, `limit`, node ids and handles must be non-negative whole
+numbers; a query throws on anything else.
+
 | option       | description                                                                                                      |
 | ------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `context`    | bp of graph around the window, 100 by default                                                                    |
