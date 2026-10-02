@@ -735,7 +735,7 @@ export class Subgraph {
 
   /** @internal */
   async aroundInterval(start: PathPosition, len: number, context: number) {
-    if (len === 0) {
+    if (!(len > 0)) {
       throw new Error('Interval length must be greater than 0')
     }
     this.walkedBp = 0

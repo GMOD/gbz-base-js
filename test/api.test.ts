@@ -334,6 +334,18 @@ describe('getSubgraphForRange', () => {
   })
 })
 
+describe('subgraphInInterval', () => {
+  it('rejects an interval that is empty, reversed or not a number', async () => {
+    const db = await openMicb()
+    const path = { sample: 'GRCh38', contig: 'chr6' }
+    for (const end of [31500000, 31499900, Number.NaN]) {
+      await expect(
+        db.subgraphInInterval({ path, start: 31500000, end, context: 0 }),
+      ).rejects.toThrow('Interval length must be greater than 0')
+    }
+  })
+})
+
 describe('keep', () => {
   const wanted = (name: { sample: string }) => name.sample === 'HG01106'
 
