@@ -73,7 +73,7 @@ export class SchemaVersionError extends Error {
   constructor(found: string | undefined) {
     super(
       found === undefined
-        ? `not a gbz-base database: its Tags table has no version`
+        ? `not a gbz-base database: it has no version tag`
         : `unsupported database schema "${found}"; this reader understands "${SCHEMA_VERSION}"`,
     )
     this.found = found
@@ -236,6 +236,11 @@ export interface FetchStats {
   bytesFetched: number
 }
 
+function forgetOnRejection<T>(pending: Promise<T>, forget: () => void) {
+  pending.catch(forget)
+  return pending
+}
+
 async function readTags(sqlite: SqliteDatabase) {
   const tags = new Map<string, string>()
   for await (const { values } of sqlite.scan('Tags')) {
@@ -245,7 +250,6 @@ async function readTags(sqlite: SqliteDatabase) {
 }
 
 export class GBZBase {
-  private tagCache: Promise<Map<string, string>> | undefined
   private pathCache: Promise<GbzPath[]> | undefined
   private pathMapCache: Promise<Map<number, GbzPath>> | undefined
   private indexTags = new Map<string, string>()
@@ -254,13 +258,16 @@ export class GBZBase {
   readonly sqlite: SqliteDatabase
   /** @internal */
   readonly index: SqliteDatabase | undefined
+  private readonly tagMap: Map<string, string>
 
   private constructor(
     sqlite: SqliteDatabase,
     index: SqliteDatabase | undefined,
+    tags: Map<string, string>,
   ) {
     this.sqlite = sqlite
     this.index = index
+    this.tagMap = tags
   }
 
   static async open(opts: OpenOptions) {
@@ -270,20 +277,27 @@ export class GBZBase {
       maxBlocks: opts.maxBlocks,
     }
     const sqlite = await SqliteDatabase.open(source, pagerOptions)
-    for (const table of ['Tags', 'Nodes', 'Paths', 'ReferenceIndex']) {
+    const tags = sqlite.objects.has('Tags')
+      ? await readTags(sqlite)
+      : new Map<string, string>()
+    const version = tags.get('version')
+    if (version !== SCHEMA_VERSION) {
+      throw new SchemaVersionError(version)
+    }
+    for (const table of ['Nodes', 'Paths', 'ReferenceIndex']) {
       sqlite.rootPage(table)
     }
     const index = haplotypeIndex
       ? await SqliteDatabase.open(haplotypeIndex, pagerOptions)
       : undefined
-    const db = new GBZBase(sqlite, index)
-    const version = await db.tag('version')
-    if (version !== SCHEMA_VERSION) {
-      throw new SchemaVersionError(version)
-    }
+    const db = new GBZBase(sqlite, index, tags)
     if (index) {
       for (const table of ['Tags', 'HaplotypeSamples', 'HaplotypeLengths']) {
-        index.rootPage(table)
+        if (!index.objects.has(table)) {
+          throw new Error(
+            `haplotypeIndex is not a gbz-base haplotype index: it has no ${table} table`,
+          )
+        }
       }
       db.indexTags = await readTags(index)
       const indexed = db.indexTags.get('haplotype_index_paths')
@@ -307,13 +321,12 @@ export class GBZBase {
     return db
   }
 
-  tags() {
-    this.tagCache ??= readTags(this.sqlite)
-    return this.tagCache
+  async tags() {
+    return this.tagMap
   }
 
   async tag(key: string) {
-    return (await this.tags()).get(key)
+    return this.tagMap.get(key)
   }
 
   /** @internal */
@@ -338,14 +351,18 @@ export class GBZBase {
   }
 
   paths() {
-    this.pathCache ??= (async () => {
-      const paths: GbzPath[] = []
-      for await (const { rowid, values } of this.sqlite.scan('Paths')) {
-        paths.push(rowToPath(rowid, values))
-      }
-      return paths
-    })()
+    this.pathCache ??= forgetOnRejection(this.scanPaths(), () => {
+      this.pathCache = undefined
+    })
     return this.pathCache
+  }
+
+  private async scanPaths() {
+    const paths: GbzPath[] = []
+    for await (const { rowid, values } of this.sqlite.scan('Paths')) {
+      paths.push(rowToPath(rowid, values))
+    }
+    return paths
   }
 
   /** @internal */
@@ -356,8 +373,13 @@ export class GBZBase {
 
   /** @internal */
   pathsByHandle() {
-    this.pathMapCache ??= this.paths().then(
-      paths => new Map(paths.map(path => [path.handle, path])),
+    this.pathMapCache ??= forgetOnRejection(
+      this.paths().then(
+        paths => new Map(paths.map(path => [path.handle, path])),
+      ),
+      () => {
+        this.pathMapCache = undefined
+      },
     )
     return this.pathMapCache
   }

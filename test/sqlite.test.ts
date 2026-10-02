@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { LocalFile } from 'generic-filehandle2'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { GBZBase, SchemaVersionError } from '../src/db.ts'
 import { SqliteDatabase } from '../src/sqlite/database.ts'
@@ -81,6 +81,59 @@ describe('sqlite reader', () => {
     await expect(
       GBZBase.open({ source: new LocalFile(future) }),
     ).rejects.toThrow('GBZ-base version 99')
+  })
+
+  it('names a non-gbz-base file with SchemaVersionError before looking for tables', async () => {
+    const index = path.join(
+      import.meta.dirname,
+      'data',
+      'example.haplotype-index.db',
+    )
+    await expect(
+      GBZBase.open({ source: new LocalFile(index) }),
+    ).rejects.toMatchObject({ name: 'SchemaVersionError', found: undefined })
+  })
+
+  it('names a haplotype index that is not one', async () => {
+    await expect(
+      GBZBase.open({
+        source: new LocalFile(file),
+        haplotypeIndex: new LocalFile(file),
+      }),
+    ).rejects.toThrow(
+      'haplotypeIndex is not a gbz-base haplotype index: it has no HaplotypeSamples table',
+    )
+  })
+
+  it('reads the paths again after a failed read instead of caching the failure', async () => {
+    const inner = new LocalFile(file)
+    let failures = 0
+    const db = await GBZBase.open({
+      source: {
+        read: async (length: number, position: number) => {
+          if (failures > 0) {
+            failures -= 1
+            throw new Error('transient')
+          }
+          return inner.read(length, position)
+        },
+      },
+      blockSize: 4096,
+      maxBlocks: 2,
+    })
+    await db.getRecord(1000)
+    await db.getRecord(5000)
+    vi.useFakeTimers()
+    try {
+      failures = 3
+      const first = db.hasPath('GRCh38#0#chr6').catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(await first).toMatchObject({ message: 'transient' })
+      expect(await db.hasPath('GRCh38#0#chr6')).toBe(true)
+      expect((await db.pathsByHandle()).size).toBeGreaterThan(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('reads tags and paths', async () => {
