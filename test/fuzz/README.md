@@ -83,10 +83,11 @@ A window takes a `context` of 0, 1, 17 or 100 bp and `snarls` of `none` or
   carry a name, and the walks must equal the GFA's pieces on the subgraph's
   nodes: the same path, the same `hapStart` and `hapEnd`, the same nodes. A
   piece may appear once in each orientation.
-- **Keep route.** `subgraphForHaplotypes` for each haplotype with a piece, each
-  sample with one, a random subset and everything. The walks must equal the
-  GFA's pieces of the kept haplotypes plus the reference piece that contains the
-  window. A query that fell back to the sampled route must still match.
+- **Keep route.** `subgraphInInterval` with `keep` set to each haplotype with a
+  piece, each sample with one, a random subset and everything. The walks must
+  equal the GFA's pieces of the kept haplotypes plus the reference piece that
+  contains the window. A query that fell back to the sampled route must still
+  match.
 
 ## Output
 
