@@ -1,3 +1,10 @@
+## [6.0.1](https://github.com/GMOD/gbz-base-js/compare/v6.0.0...v6.0.1) (2026-10-02)
+
+### Other Changes
+
+- Close the holes a review of 6.0.0 found ([89acd08](https://github.com/GMOD/gbz-base-js/commit/89acd085899f65daa1eb7f9342cf3837b165bcb6))
+- The data-flow diagram names the 6.0 methods; only interval queries set the limit error's window fields ([a6f55b1](https://github.com/GMOD/gbz-base-js/commit/a6f55b15f0b96c525e891b5177a5eee2d638ae9a))
+
 ## [6.0.0](https://github.com/GMOD/gbz-base-js/compare/v5.0.0...v6.0.0) (2026-10-02)
 
 ### Other Changes
