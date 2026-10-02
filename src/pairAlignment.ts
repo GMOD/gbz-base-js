@@ -241,11 +241,11 @@ function untakenPieces(run: Run, query: Interval[], target: Interval[]) {
   return pieces
 }
 
-// The best-scoring collinear chain of runs, then the best over the runs that
-// overlap no accepted run on either sequence, and so on: a second copy of a
-// repeat finds its target taken and an inversion finds its target free. A run
-// that overlaps its predecessor is trimmed from the front, which an exact
-// match allows at any base.
+// The best-scoring collinear chain of runs matching minMatch bases or more,
+// then the best over the runs that overlap no accepted run on either sequence,
+// and so on: a second copy of a repeat finds its target taken and an inversion
+// finds its target free. A run that overlaps its predecessor is trimmed from
+// the front, which an exact match allows at any base.
 function chainRuns(
   runs: Run[],
   maxGap: number,
@@ -295,24 +295,23 @@ function chainRuns(
         }
       }
     }
-    let end = 0
-    for (let j = 1; j < pool.length; j++) {
-      if (score[j]! > score[end]!) {
+    const matched = new Int32Array(pool.length)
+    let end = -1
+    for (let j = 0; j < pool.length; j++) {
+      const run = pool[j]!
+      matched[j] = (matched[back[j]!] ?? 0) + run.qe - run.qs - trims[j]!
+      if (matched[j]! >= minMatch && (end < 0 || score[j]! > score[end]!)) {
         end = j
       }
+    }
+    if (end < 0) {
+      break
     }
     const chain: Link[] = []
     for (let j = end; j >= 0; j = back[j]!) {
       chain.push({ run: pool[j]!, trim: trims[j]! })
     }
     chain.reverse()
-    const matched = chain.reduce(
-      (sum, { run, trim }) => sum + run.qe - run.qs - trim,
-      0,
-    )
-    if (matched < minMatch) {
-      break
-    }
     chains.push(chain)
     // A record's CIGAR accounts for every base between its ends in its own
     // orientation, so a later chain of that orientation may not nest in its

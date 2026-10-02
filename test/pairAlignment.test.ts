@@ -293,6 +293,23 @@ describe('pairAlignments past the exact alignment', () => {
     expect(record!.sharedBases).toBe(2 * FLANK)
   })
 
+  it('keeps a chain that matches minMatch bases though a shorter one outscores it', () => {
+    const lengths = [90, 200, 200, 60, 60, 50, 200]
+    const nodes = Object.fromEntries(
+      lengths.map((length, i) => [i + 1, randomSequence(length, 40 + i)]),
+    )
+    const [P, C, E, A, B, X, D] = [1, 2, 3, 4, 5, 6, 7]
+    const records = pairAlignments({
+      query: forward(P, C, E, A, B),
+      target: forward(A, X, B, D, P),
+      sequenceOf: id => nodes[id]!,
+      bases: false,
+    })
+    expect(
+      records.map(r => [r.queryStart, r.targetStart, pairCigar(r.edits)]),
+    ).toEqual([[490, 0, '60=50D60=']])
+  })
+
   it('leaves anchors worth fewer bases than the gap between them costs apart', () => {
     const records = pairAlignments({
       query: forward(5, 3, 3, 6),
@@ -333,6 +350,27 @@ describe('pairAlignments inside a large private stretch', () => {
     expect(rest).toEqual([])
     expect(count(record!.edits, 'I')).toBe(0)
     expect(count(record!.edits, '=')).toBe(300 + 1000 + 2100 + 1000 + 300)
+  })
+
+  it('chains k-mer runs that match minMatch bases though a shorter one outscores them', () => {
+    const shorter = randomSequence(99, 31)
+    const a = randomSequence(60, 32)
+    const b = randomSequence(60, 33)
+    const [record] = records(
+      randomSequence(1000, 35) +
+        shorter +
+        randomSequence(1000, 36) +
+        a +
+        b +
+        randomSequence(1000, 37),
+      a +
+        randomSequence(300, 34) +
+        b +
+        randomSequence(1000, 38) +
+        shorter +
+        randomSequence(1000, 39),
+    )
+    expect(pairCigar(record!.edits)).toMatch(/^300=2099I60=300D6\d=/)
   })
 
   it('keeps an inversion nested in the gap of the forward chain over the same stretch', () => {
