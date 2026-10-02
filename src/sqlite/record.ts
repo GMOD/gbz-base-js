@@ -12,6 +12,9 @@ export function readVarint(
     }
     value = value * 128 + (byte & 0x7f)
     if ((byte & 0x80) === 0) {
+      if (i === 7 && !Number.isSafeInteger(value)) {
+        throw new Error('SQLite varint exceeds the safe integer range')
+      }
       return [value, offset + i + 1]
     }
   }

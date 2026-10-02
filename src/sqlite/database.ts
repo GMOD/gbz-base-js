@@ -1,5 +1,5 @@
 import { BTree } from './btree.ts'
-import { Pager } from './pager.ts'
+import { Pager, checkPagerOptions } from './pager.ts'
 
 import type { ByteSource } from '../filehandle.ts'
 import type { PagerOptions } from './pager.ts'
@@ -29,7 +29,11 @@ export class SqliteDatabase {
   }
 
   static async open(source: ByteSource, opts: PagerOptions = {}) {
-    const firstBlock = await source.read(opts.blockSize ?? 65536, 0)
+    checkPagerOptions(opts)
+    const firstBlock = await source.read(
+      Math.max(512, opts.blockSize ?? 65536),
+      0,
+    )
     const header = firstBlock.subarray(0, 100)
     const magic = new TextDecoder().decode(header.subarray(0, 15))
     if (magic !== 'SQLite format 3' || header.length < 100) {

@@ -5,6 +5,21 @@ export interface PagerOptions {
   maxBlocks?: number | undefined
 }
 
+export function checkPagerOptions({ blockSize, maxBlocks }: PagerOptions) {
+  if (
+    blockSize !== undefined &&
+    !(Number.isSafeInteger(blockSize) && blockSize > 0)
+  ) {
+    throw new Error(`blockSize must be a positive integer, not ${blockSize}`)
+  }
+  if (
+    maxBlocks !== undefined &&
+    !(Number.isSafeInteger(maxBlocks) && maxBlocks > 0)
+  ) {
+    throw new Error(`maxBlocks must be a positive integer, not ${maxBlocks}`)
+  }
+}
+
 export class Pager {
   private blocks = new Map<number, Promise<Uint8Array>>()
   private readonly blockSize: number
@@ -69,31 +84,64 @@ export class Pager {
   }
 
   private block(index: number) {
-    const cached = this.blocks.get(index)
+    const cached = this.touch(index)
     if (cached) {
-      this.blocks.delete(index)
-      this.blocks.set(index, cached)
       return cached
     }
     const start = index * this.blockSize
     const length = Math.min(this.blockSize, this.fileSize - start)
     const pending = this.read(length, start)
     this.fetches += 1
-    this.blocks.set(index, pending)
-    this.forgetOnFailure(pending, [index])
+    this.store(index, pending)
     this.evict()
     return pending
   }
 
+  private touch(index: number) {
+    const cached = this.blocks.get(index)
+    if (cached) {
+      this.blocks.delete(index)
+      this.blocks.set(index, cached)
+    }
+    return cached
+  }
+
+  private blockOf(pageNumber: number) {
+    return Math.floor(((pageNumber - 1) * this.pageSize) / this.blockSize)
+  }
+
+  // half the cache, so a prefetch cannot evict its own blocks
+  private get prefetchBudget() {
+    return Math.max(1, Math.floor(this.maxBlocks / 2))
+  }
+
   prefetch(pageNumbers: number[]) {
-    const wanted = [
-      ...new Set(
-        pageNumbers.map(pageNumber =>
-          Math.floor(((pageNumber - 1) * this.pageSize) / this.blockSize),
-        ),
-      ),
-    ]
-      .filter(index => !this.blocks.has(index))
+    const indexes = new Set(pageNumbers.map(n => this.blockOf(n)))
+    if (indexes.size > this.prefetchBudget) {
+      return false
+    }
+    this.fetchBlocks(indexes)
+    return true
+  }
+
+  prefetchLeading(pageNumbers: number[]) {
+    const indexes = new Set<number>()
+    let count = 0
+    for (const pageNumber of pageNumbers) {
+      const index = this.blockOf(pageNumber)
+      if (!indexes.has(index) && indexes.size === this.prefetchBudget) {
+        break
+      }
+      indexes.add(index)
+      count += 1
+    }
+    this.fetchBlocks(indexes)
+    return count
+  }
+
+  private fetchBlocks(indexes: Set<number>) {
+    const wanted = [...indexes]
+      .filter(index => !this.touch(index))
       .sort((a, b) => a - b)
     let runStart = 0
     while (runStart < wanted.length) {
@@ -114,22 +162,20 @@ export class Pager {
     const length = Math.min(count * this.blockSize, this.fileSize - start)
     const pending = this.read(length, start)
     this.fetches += 1
-    const indexes: number[] = []
     for (let i = 0; i < count; i++) {
       const within = i * this.blockSize
-      indexes.push(firstIndex + i)
-      this.blocks.set(
+      this.store(
         firstIndex + i,
         pending.then(bytes => bytes.subarray(within, within + this.blockSize)),
       )
     }
-    this.forgetOnFailure(pending, indexes)
     this.evict()
   }
 
-  private forgetOnFailure(pending: Promise<Uint8Array>, indexes: number[]) {
-    pending.catch(() => {
-      for (const index of indexes) {
+  private store(index: number, block: Promise<Uint8Array>) {
+    this.blocks.set(index, block)
+    block.catch(() => {
+      if (this.blocks.get(index) === block) {
         this.blocks.delete(index)
       }
     })

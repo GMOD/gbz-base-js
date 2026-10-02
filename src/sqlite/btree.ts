@@ -58,8 +58,6 @@ interface IndexCell {
 
 const MAX_DECODED_INDEX_PAGES = 4096
 
-const PREFETCH_PAGE_LIMIT = 4096
-
 export class BTree {
   private readonly usable: number
   private pager: Pager
@@ -182,10 +180,9 @@ export class BTree {
           )
         }
       })
-      if (children.length > PREFETCH_PAGE_LIMIT) {
+      if (!this.pager.prefetch(children)) {
         return false
       }
-      this.pager.prefetch(children)
       pages = children
     }
     return true
@@ -259,9 +256,12 @@ export class BTree {
         children.push(readUint32(page, cellOffset(page, header, i)))
       }
       children.push(header.rightChild)
-      this.pager.prefetch(children)
-      for (const child of children) {
-        yield* this.tableScan(child)
+      let i = 0
+      while (i < children.length) {
+        const end = i + this.pager.prefetchLeading(children.slice(i))
+        for (; i < end; i++) {
+          yield* this.tableScan(children[i]!)
+        }
       }
     }
   }
