@@ -99,19 +99,18 @@ Fixed:
   empty subgraph, a NaN or negative `context` acted as 0, and `limit: NaN` meant
   no limit. The query entry points in `src/query.ts` now require whole numbers.
   Test: `test/api.test.ts`.
+- **Concurrent prefetches evicted each other.** `prefetchReferenceRange` sent
+  one `prefetchRecords` call per run of node ids under `Promise.all`, and each
+  fit half the cache alone. `prefetchRows` now takes a list of rowid ranges and
+  checks the budget once per b-tree level over all of them. Test:
+  `test/pager.test.ts`.
+- **A three-level `tableScan` refetched interior blocks.** It prefetches only
+  leaves now. A 63 MB table at defaults went from 142 reads / 65.1 MB to 113
+  reads / 63.2 MB. Test: `test/pager.test.ts`, on a table that `node:sqlite`
+  builds with 512-byte pages.
 
-Not fixed:
-
-- **Concurrent prefetches can evict each other** (`subgraph.ts`
-  `prefetchReferenceRange`). Each `prefetchRecords` call fits half the cache,
-  but the per-run calls go out together under `Promise.all`. At defaults this
-  needs more than 16 MB of node records in one window. Fix: stop issuing runs
-  once their summed blocks reach the budget.
-- **A three-level `tableScan` refetches interior blocks**: 65.1 MB for a 63 MB
-  table at defaults, the same as before the fixes. Fix: prefetch only the level
-  whose children are leaves.
-- **The CLI rejects upstream's `1.5k`/`10M` suffixes** for `--context` and
-  `--limit`. Before the CLI validation these parsed as NaN.
+Declined: upstream's CLI accepts `1.5k`/`10M` suffixes for `--context` and
+`--limit`. This CLI takes whole numbers only, and `docs/cli.md` says so.
 
 The review also reran the differential sweep against upstream `gbz-base query`:
 2,509 queries, every mismatch CIGAR-only. 53 come from reverse-reference walks

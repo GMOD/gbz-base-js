@@ -2,8 +2,10 @@
 
 `gbz-base-query` runs one query with the [library](api.md) and prints the
 result. The program takes the flags of upstream's `gbz-base query`, and adds
-flags for the haplotype index, alignment records and PAF. The database and the
-haplotype index can each be a local path or an `http(s)://` URL.
+flags for the haplotype index, alignment records and PAF. Numeric flags take
+whole numbers such as `10000`; upstream also accepts `10k`, and this program
+rejects it. The database and the haplotype index can each be a local path or an
+`http(s)://` URL.
 
 ```bash
 npx -p @gmod/gbz-base gbz-base-query --help   # run without installing
