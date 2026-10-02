@@ -94,6 +94,16 @@ function parseHandle(text: string) {
   return encodeNode(Number(digits), orientation)
 }
 
+function wholeNumber(flag: string, text: string, min = 0) {
+  const value = Number(text)
+  if (!/^\d+$/.test(text) || !Number.isSafeInteger(value) || value < min) {
+    throw new Error(
+      `${flag} needs a whole number${min > 0 ? ` of at least ${min}` : ''}, not ${text}`,
+    )
+  }
+  return value
+}
+
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     file: '',
@@ -113,11 +123,12 @@ function parseArgs(argv: string[]): Args {
   }
   const next = (i: number) => {
     const value = argv[i + 1]
-    if (value === undefined) {
+    if (value === undefined || /^-(-|[a-zA-Z]$)/.test(value)) {
       throw new Error(`${argv[i]} needs a value`)
     }
     return value
   }
+  const number = (i: number, min = 0) => wholeNumber(argv[i]!, next(i), min)
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!
     switch (arg) {
@@ -128,21 +139,25 @@ function parseArgs(argv: string[]): Args {
         args.contig = next(i++)
         break
       case '--haplotype':
-        args.haplotype = Number(next(i++))
+        args.haplotype = number(i++)
         break
       case '-o':
       case '--offset':
-        args.offset = Number(next(i++))
+        args.offset = number(i++)
         break
       case '-i':
       case '--interval': {
-        const [a, b] = next(i++).split('..')
-        args.interval = [Number(a), Number(b)]
+        const text = next(i++)
+        const [a, b, extra] = text.split('..')
+        if (a === undefined || b === undefined || extra !== undefined) {
+          throw new Error(`--interval needs A..B, not ${text}`)
+        }
+        args.interval = [wholeNumber(arg, a), wholeNumber(arg, b)]
         break
       }
       case '-n':
       case '--node':
-        args.nodes.push(Number(next(i++)))
+        args.nodes.push(number(i++, 1))
         break
       case '-b':
       case '--between': {
@@ -154,7 +169,7 @@ function parseArgs(argv: string[]): Args {
         break
       }
       case '--context':
-        args.context = Number(next(i++))
+        args.context = number(i++)
         break
       case '--snarls':
         args.snarls =
@@ -164,7 +179,7 @@ function parseArgs(argv: string[]): Args {
         args.snarls = 'overlapping'
         break
       case '--limit':
-        args.limit = Number(next(i++))
+        args.limit = number(i++, 1)
         break
       case '--haplotypes': {
         const output = next(i++)
@@ -202,13 +217,13 @@ function parseArgs(argv: string[]): Args {
         args.contigLengths = next(i++)
         break
       case '--max-gap':
-        args.maxGap = Number(next(i++))
+        args.maxGap = number(i++)
         break
       case '--no-bases':
         args.bases = false
         break
       case '--block-size':
-        args.blockSize = Number(next(i++))
+        args.blockSize = number(i++, 1)
         break
       case '--haplotype-index':
         args.haplotypeIndex = next(i++)
@@ -302,12 +317,25 @@ function keepReport(stats: KeepStats) {
 }
 
 function keepPredicate(keep: string[]) {
-  const wanted = keep.map(text => text.split('#'))
+  const wanted = keep.map(text => {
+    const [sample, haplotype, extra] = text.split('#')
+    if (
+      !sample ||
+      extra !== undefined ||
+      (haplotype !== undefined && !/^\d+$/.test(haplotype))
+    ) {
+      throw new Error(`Expected sample or sample#haplotype, got ${text}`)
+    }
+    return {
+      sample,
+      haplotype: haplotype === undefined ? undefined : Number(haplotype),
+    }
+  })
   return (name: PathName) =>
     wanted.some(
-      ([sample, haplotype]) =>
+      ({ sample, haplotype }) =>
         sample === name.sample &&
-        (haplotype === undefined || Number(haplotype) === name.haplotype),
+        (haplotype === undefined || haplotype === name.haplotype),
     )
 }
 
@@ -323,9 +351,12 @@ function contigLengths(text: string) {
   return new Map(
     text
       .split('\n')
-      .map(line => line.split(/\s+/))
+      .map(line => line.trim().split(/\s+/))
       .filter(fields => fields.length >= 2)
-      .map(fields => [fields[0]!, Number(fields[1])] as const),
+      .map(([name, length]) => [
+        name!,
+        wholeNumber(`--contig-lengths ${name}`, length!),
+      ]),
   )
 }
 
@@ -489,7 +520,7 @@ export async function main(argv: string[]) {
     process.stderr.write(
       `Subgraph contains ${subgraph.nodeCount} nodes and ${subgraph.pathCount} paths; ${fetches} fetches, ${bytesFetched} bytes${index}; ${orderedAlignments} ordered + ${lcsAlignments} lcs alignments; identification ${identificationSteps} steps, ${identificationFetches} lookups\n`,
     )
-    if (args.resolve) {
+    if (args.resolve && !anchoredQuery) {
       process.stderr.write(
         `${identificationReport(subgraph.stats.identification)}\n`,
       )
@@ -499,4 +530,19 @@ export async function main(argv: string[]) {
       process.stderr.write(`${keepReport(keepStats)}\n`)
     }
   }
+}
+
+export function run(argv: string[]) {
+  process.stdout.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EPIPE') {
+      process.exit(0)
+    }
+    throw error
+  })
+  main(argv).catch((error: unknown) => {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    )
+    process.exit(1)
+  })
 }
