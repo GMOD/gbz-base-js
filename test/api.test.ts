@@ -1,7 +1,10 @@
+import path from 'node:path'
+
+import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { openSampled } from './fixtures.ts'
-import { UnknownPathError } from '../src/db.ts'
+import { dataDir, openSampled } from './fixtures.ts'
+import { GBZBase, UnknownPathError } from '../src/db.ts'
 import { parsePathName } from '../src/pathName.ts'
 import { Subgraph, SubgraphLimitError } from '../src/subgraph.ts'
 
@@ -369,6 +372,27 @@ describe('keep', () => {
       .filter(line => line.startsWith('W\t'))
       .map(line => line.split('\t')[1])
     expect(walks).toEqual(['GRCh38', 'HG01106', 'HG01106'])
+  })
+
+  it('counts the reference among the pieces it breaks down by source', async () => {
+    const db = await GBZBase.open({
+      source: new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
+      haplotypeIndex: new LocalFile(
+        path.join(dataDir, 'micb-kir3dl1.haplotype-index.db'),
+      ),
+    })
+    const [kept] = await db.getSubgraphs({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+      keep: wanted,
+    })
+    const stats = kept!.stats.keep!
+    expect(stats.fallback).toBeUndefined()
+    expect(stats.sources.reference).toBe(1)
+    expect(Object.values(stats.sources).reduce((sum, n) => sum + n, 0)).toBe(
+      stats.pieces,
+    )
   })
 
   it('aligns only the kept walks, and each the same as in the whole window', async () => {

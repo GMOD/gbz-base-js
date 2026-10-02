@@ -415,7 +415,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       }
     }
     stats.sources.reference = 1
-    stats.pieces = emitted.length
+    stats.pieces = emitted.length + 1
     return { reference, pieces: emitted, stats }
   }
 
