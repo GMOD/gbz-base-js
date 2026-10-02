@@ -874,7 +874,13 @@ function sharedRuns(
       : (visits.get(nodeId(handle)) ?? [])) {
       const flipped = isReverse(handle) !== isReverse(target[rank]!)
       const step = flipped ? -1 : 1
-      if (!seeds.has(key(i - 1, rank - step, flipped))) {
+      const previous = rank - step
+      const continues =
+        i > 0 &&
+        previous >= 0 &&
+        previous < target.length &&
+        seeds.has(key(i - 1, previous, flipped))
+      if (!continues) {
         let j = i
         let r = rank
         while (

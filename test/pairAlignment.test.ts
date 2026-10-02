@@ -94,6 +94,34 @@ describe('pairAlignments', () => {
     ).toEqual([0, 70])
   })
 
+  it('starts a run at the first target step when the query visits the last one just before', () => {
+    const records = pairAlignments({
+      query: forward(8, 5, 7),
+      target: forward(7, 8),
+      sequenceOf,
+      minMatch: 1,
+      bases: false,
+    })
+    expect(
+      records.map(r => [r.queryStart, r.targetStart, pairCigar(r.edits)]),
+    ).toEqual([
+      [0, 40, '40='],
+      [64, 0, '40='],
+    ])
+  })
+
+  it('aligns a single-node target to the same node walked backwards', () => {
+    const records = pairAlignments({
+      query: flipped(7),
+      target: forward(7),
+      sequenceOf,
+      minMatch: 1,
+    })
+    expect(records.map(r => [r.strand, pairCigar(r.edits)])).toEqual([
+      ['-', '40='],
+    ])
+  })
+
   it.each([
     [
       'a SNP bubble',
