@@ -9,7 +9,6 @@ import { main } from '../src/cli.ts'
 import { encodeNode } from '../src/gbwt/node.ts'
 import { reverseComplement } from '../src/gbwt/sequence.ts'
 import { pairAlignments, pairCigar } from '../src/pairAlignment.ts'
-import { subgraphInInterval } from '../src/query.ts'
 
 import type { PairChain } from '../src/pairAlignment.ts'
 import type { PairAlignment } from '../src/subgraph.ts'
@@ -37,12 +36,12 @@ const count = (edits: [string, number][], op: string) =>
 
 describe('pairAlignments', () => {
   it('aligns the private stretch between two shared nodes base by base', () => {
-    const [chain] = pairAlignments(
-      forward(1, 4, 3),
-      forward(1, 2, 3),
+    const [chain] = pairAlignments({
+      query: forward(1, 4, 3),
+      target: forward(1, 2, 3),
       sequenceOf,
-      { minMatch: 1 },
-    )
+      minMatch: 1,
+    })
     expect(chain).toMatchObject({
       queryStart: 0,
       queryEnd: 28,
@@ -54,12 +53,12 @@ describe('pairAlignments', () => {
   })
 
   it('writes a flipped walk as a - record whose edits read along the target', () => {
-    const [chain] = pairAlignments(
-      flipped(3, 4, 1),
-      forward(1, 2, 3),
+    const [chain] = pairAlignments({
+      query: flipped(3, 4, 1),
+      target: forward(1, 2, 3),
       sequenceOf,
-      { minMatch: 1 },
-    )
+      minMatch: 1,
+    })
     expect(chain).toMatchObject({
       queryStart: 0,
       queryEnd: 28,
@@ -71,23 +70,24 @@ describe('pairAlignments', () => {
   })
 
   it('writes two unrelated stretches as an insertion and a deletion', () => {
-    const [chain] = pairAlignments(
-      forward(7, 5, 8),
-      forward(7, 6, 8),
+    const [chain] = pairAlignments({
+      query: forward(7, 5, 8),
+      target: forward(7, 6, 8),
       sequenceOf,
-      { minMatch: 1 },
-    )
+      minMatch: 1,
+    })
     expect(pairCigar(chain!.edits)).toBe('40=24I30D40=')
     expect(chain!.sharedBases).toBe(80)
   })
 
   it('breaks a record at a private run longer than maxGap', () => {
-    const chains = pairAlignments(
-      forward(7, 5, 8),
-      forward(7, 6, 8),
+    const chains = pairAlignments({
+      query: forward(7, 5, 8),
+      target: forward(7, 6, 8),
       sequenceOf,
-      { maxGap: 25, minMatch: 1 },
-    )
+      maxGap: 25,
+      minMatch: 1,
+    })
     expect(chains.map(chain => pairCigar(chain.edits))).toEqual(['40=', '40='])
     expect(
       chains.map(chain => chain.targetStart).sort((a, b) => a - b),
@@ -148,7 +148,7 @@ describe('pairAlignments', () => {
     'with bases: false, writes %s from the shared nodes alone',
     (_, query, target, compared, shared) => {
       const records = (bases: boolean) =>
-        pairAlignments(query, target, sequenceOf, { minMatch: 1, bases }).map(
+        pairAlignments({ query, target, sequenceOf, minMatch: 1, bases }).map(
           ({ edits, sharedBases, ...span }) => ({
             span,
             cigar: pairCigar(edits),
@@ -192,7 +192,11 @@ describe('pairAlignments past the exact alignment', () => {
   const lookup = (id: number) => sequences[id]!
 
   it('reports an inversion the graph holds as two unrelated nodes as a - record', () => {
-    const records = pairAlignments(forward(1, 3, 2), forward(1, 4, 2), lookup)
+    const records = pairAlignments({
+      query: forward(1, 3, 2),
+      target: forward(1, 4, 2),
+      sequenceOf: lookup,
+    })
     expect(
       records.map(r => [
         r.strand,
@@ -221,7 +225,13 @@ describe('pairAlignments past the exact alignment', () => {
 
   it('reports an inversion a walk takes through a shared node once, though its bases align again in the gap of the forward record over it', () => {
     expect(
-      summary(pairAlignments(throughSharedInversion, forward(1, 3, 2), lookup)),
+      summary(
+        pairAlignments({
+          query: throughSharedInversion,
+          target: forward(1, 3, 2),
+          sequenceOf: lookup,
+        }),
+      ),
     ).toEqual([
       ['+', 0, 3400, 0, 3400, '200=3000I3000D200=', 400],
       ['-', 200, 3200, 200, 3200, '3000=', 3000],
@@ -230,7 +240,9 @@ describe('pairAlignments past the exact alignment', () => {
 
   it('with bases: false, reports the inversion a walk takes through a shared node and none that only the bases would find', () => {
     const noBases = (query: number[], target: number[]) =>
-      summary(pairAlignments(query, target, lookup, { bases: false }))
+      summary(
+        pairAlignments({ query, target, sequenceOf: lookup, bases: false }),
+      )
     expect(noBases(forward(1, 3, 2), forward(1, 4, 2))).toEqual([
       ['+', 0, 3400, 0, 3400, '200=3000I3000D200=', 400],
     ])
@@ -241,11 +253,11 @@ describe('pairAlignments past the exact alignment', () => {
   })
 
   it('aligns a tandem copy by its bases where a walk revisits the node', () => {
-    const [record, ...rest] = pairAlignments(
-      forward(1, 3, 3, 2),
-      forward(1, 3, 2),
-      lookup,
-    )
+    const [record, ...rest] = pairAlignments({
+      query: forward(1, 3, 3, 2),
+      target: forward(1, 3, 2),
+      sequenceOf: lookup,
+    })
     expect(rest).toEqual([])
     expect(count(record!.edits, '=')).toBe(3400)
     expect(count(record!.edits, 'I')).toBe(3000)
@@ -254,12 +266,12 @@ describe('pairAlignments past the exact alignment', () => {
   })
 
   it('leaves anchors worth fewer bases than the gap between them costs apart', () => {
-    const records = pairAlignments(
-      forward(5, 3, 3, 6),
-      forward(5, 3, 6),
-      lookup,
-      { minMatch: 1 },
-    )
+    const records = pairAlignments({
+      query: forward(5, 3, 3, 6),
+      target: forward(5, 3, 6),
+      sequenceOf: lookup,
+      minMatch: 1,
+    })
     expect(records.map(r => pairCigar(r.edits))).toEqual(['60=', '60='])
   })
 })
@@ -273,11 +285,11 @@ describe('pairAlignments inside a large private stretch', () => {
       3: query,
       4: target,
     }
-    return pairAlignments(
-      forward(1, 3, 2),
-      forward(1, 4, 2),
-      id => sequences[id]!,
-    )
+    return pairAlignments({
+      query: forward(1, 3, 2),
+      target: forward(1, 4, 2),
+      sequenceOf: id => sequences[id]!,
+    })
   }
 
   it('aligns the gap between two chained k-mer runs by seeding it again', () => {
@@ -365,13 +377,12 @@ describe('pairAlignments inside a large private stretch', () => {
 describe('Subgraph.pairAlignments', () => {
   const micbWindow = async () => {
     const db = await openSampled('micb-kir3dl1.gbz.db')
-    const subgraph = await subgraphInInterval(
-      db,
-      { sample: 'GRCh38', contig: 'chr6' },
-      31500000,
-      31501000,
-      { context: 500 },
-    )
+    const subgraph = await db.subgraphInInterval({
+      path: { sample: 'GRCh38', contig: 'chr6' },
+      start: 31500000,
+      end: 31501000,
+      context: 500,
+    })
     await subgraph.identifyPaths()
     const target = subgraph
       .alignments()

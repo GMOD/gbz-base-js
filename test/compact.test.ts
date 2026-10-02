@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
 import { isReverse, nodeId } from '../src/gbwt/node.ts'
-import { subgraphInInterval } from '../src/query.ts'
 import { compactSubgraphTransferables } from '../src/subgraph.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
@@ -13,8 +12,13 @@ const micb = path.join(dataDir, 'micb-kir3dl1.gbz.db')
 const window = { sample: 'GRCh38', contig: 'chr6' }
 
 async function subgraph() {
-  const db = await GBZBase.open(new LocalFile(micb))
-  return subgraphInInterval(db, window, 31500000, 31501000, { context: 100 })
+  const db = await GBZBase.open({ source: new LocalFile(micb) })
+  return db.subgraphInInterval({
+    path: window,
+    start: 31500000,
+    end: 31501000,
+    context: 100,
+  })
 }
 
 describe('toCompactSubgraph', () => {

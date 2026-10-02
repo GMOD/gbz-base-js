@@ -3,17 +3,29 @@ import { GbwtRecord, decompressEdges } from './gbwt/record.ts'
 import { decodeSequence, encodedSequenceLength } from './gbwt/sequence.ts'
 import { graphNameFromTags } from './graphName.ts'
 import { formatPathName, pathNameFor, toPathQuery } from './pathName.ts'
-import { subgraphForHaplotypes, subgraphInInterval } from './query.ts'
+import {
+  subgraphAroundNodes,
+  subgraphAtOffset,
+  subgraphBetween,
+  subgraphInInterval,
+} from './query.ts'
 import { SqliteDatabase } from './sqlite/database.ts'
+import { SubgraphLimitError } from './subgraph.ts'
 
 import type { ByteSource } from './filehandle.ts'
 import type { Pos } from './gbwt/record.ts'
 import type { GraphName } from './graphName.ts'
 import type { PathName, PathRef } from './pathName.ts'
-import type { QueryOptions } from './query.ts'
+import type {
+  BetweenQuery,
+  IntervalQuery,
+  NodesQuery,
+  OffsetQuery,
+  PathWindow,
+} from './query.ts'
 import type { PagerOptions } from './sqlite/pager.ts'
 import type { SqlValue } from './sqlite/record.ts'
-import type { HaplotypeAlignment } from './subgraph.ts'
+import type { HaplotypeAlignment, Subgraph } from './subgraph.ts'
 
 export const SCHEMA_VERSION = 'GBZ-base version 4'
 
@@ -23,15 +35,24 @@ export interface PathFragment {
   end: number
 }
 
-export interface RangeOptions extends QueryOptions {
-  keep?: ((name: PathName) => boolean) | undefined
-}
+export type WindowQuery = IntervalQuery
 
-export interface AlignmentOptions extends Pick<
-  RangeOptions,
-  'context' | 'limit' | 'signal' | 'keep'
+export interface AlignmentQuery extends Omit<
+  WindowQuery,
+  'haplotypes' | 'snarls'
 > {
   haplotypes?: 'all' | 'distinct' | undefined
+}
+
+export class UnknownPathError extends Error {
+  override name = 'UnknownPathError'
+
+  readonly path: PathName
+
+  constructor(path: PathName) {
+    super(`the graph has no path named ${formatPathName(path)}`)
+    this.path = path
+  }
 }
 
 export class ForwardOnlyIndexError extends Error {
@@ -104,7 +125,9 @@ export interface HaplotypeStrayOptions {
 
 export interface GbzPath {
   handle: number
+  /** @internal */
   fwStart: Pos
+  /** @internal */
   revStart: Pos
   name: PathName
   isIndexed: boolean
@@ -201,8 +224,16 @@ function rowToPath(rowid: number, values: SqlValue[]): GbzPath {
   }
 }
 
-export interface OpenOptions extends PagerOptions {
-  haplotypeIndex?: ByteSource
+export interface OpenOptions {
+  source: ByteSource
+  haplotypeIndex?: ByteSource | undefined
+  blockSize?: number | undefined
+  maxBlocks?: number | undefined
+}
+
+export interface FetchStats {
+  fetches: number
+  bytesFetched: number
 }
 
 async function readTags(sqlite: SqliteDatabase) {
@@ -219,7 +250,9 @@ export class GBZBase {
   private pathMapCache: Promise<Map<number, GbzPath>> | undefined
   private indexTags = new Map<string, string>()
 
+  /** @internal */
   readonly sqlite: SqliteDatabase
+  /** @internal */
   readonly index: SqliteDatabase | undefined
 
   private constructor(
@@ -230,8 +263,12 @@ export class GBZBase {
     this.index = index
   }
 
-  static async open(source: ByteSource, opts: OpenOptions = {}) {
-    const { haplotypeIndex, ...pagerOptions } = opts
+  static async open(opts: OpenOptions) {
+    const { source, haplotypeIndex } = opts
+    const pagerOptions: PagerOptions = {
+      blockSize: opts.blockSize,
+      maxBlocks: opts.maxBlocks,
+    }
     const sqlite = await SqliteDatabase.open(source, pagerOptions)
     for (const table of ['Tags', 'Nodes', 'Paths', 'ReferenceIndex']) {
       sqlite.rootPage(table)
@@ -279,10 +316,12 @@ export class GBZBase {
     return (await this.tags()).get(key)
   }
 
+  /** @internal */
   prefetchRecords(lo: number, hi: number) {
     return this.sqlite.prefetchRows('Nodes', lo, hi)
   }
 
+  /** @internal */
   async getRecord(handle: number) {
     const row = await this.sqlite.byRowid('Nodes', handle)
     if (!row) {
@@ -309,11 +348,13 @@ export class GBZBase {
     return this.pathCache
   }
 
+  /** @internal */
   async getPath(handle: number) {
     const row = await this.sqlite.byRowid('Paths', handle)
     return row ? rowToPath(handle, row) : undefined
   }
 
+  /** @internal */
   pathsByHandle() {
     this.pathMapCache ??= this.paths().then(
       paths => new Map(paths.map(path => [path.handle, path])),
@@ -321,6 +362,7 @@ export class GBZBase {
     return this.pathMapCache
   }
 
+  /** @internal */
   async findPath(name: PathName) {
     const candidates = (await this.paths()).filter(
       p =>
@@ -330,10 +372,6 @@ export class GBZBase {
         p.name.fragment <= name.fragment,
     )
     return candidates.sort((a, b) => b.name.fragment - a.name.fragment)[0]
-  }
-
-  async pathsForSample(sample: string) {
-    return (await this.paths()).filter(p => p.name.sample === sample)
   }
 
   private async pathsNamed(ref: PathRef) {
@@ -354,6 +392,7 @@ export class GBZBase {
 
   private pathLengths = new Map<number, Promise<number>>()
 
+  /** @internal */
   pathLength(handle: number) {
     let length = this.pathLengths.get(handle)
     if (!length) {
@@ -373,7 +412,7 @@ export class GBZBase {
       if (!last) {
         const path = await this.getPath(handle)
         throw new Error(
-          `Path ${path ? formatPathName(path.name, path.name.fragment) : handle} has not been indexed for random access`,
+          `Path ${path ? formatPathName(path.name) : handle} has not been indexed for random access`,
         )
       }
       let length = last.pathOffset
@@ -394,15 +433,15 @@ export class GBZBase {
     return indexed
   }
 
-  async pathFragmentsForRange(
-    ref: PathRef,
-    start: number,
-    end: number,
-  ): Promise<PathFragment[]> {
+  async getPathFragments(opts: PathWindow): Promise<PathFragment[]> {
+    const { start, end } = opts
+    const ordered = await this.pathsNamed(opts.path)
+    if (ordered.length === 0) {
+      throw new UnknownPathError(pathNameFor(toPathQuery(opts.path), 0))
+    }
     if (end <= start) {
       return []
     }
-    const ordered = await this.pathsNamed(ref)
     const covering = ordered.filter(p => p.name.fragment <= start).slice(-1)
     const within = ordered.filter(
       p => p.name.fragment > start && p.name.fragment < end,
@@ -417,77 +456,73 @@ export class GBZBase {
     return fragments.filter(f => start < f.end)
   }
 
-  private async subgraphForFragment(
-    fragment: PathFragment,
-    start: number,
-    end: number,
-    opts: RangeOptions,
-  ) {
-    const { keep, ...queryOptions } = opts
-    if (keep !== undefined && !this.hasHaplotypeIndex) {
-      throw new Error(
-        'keep needs the haplotype index: this database cannot name its walks',
-      )
-    }
+  private async subgraphForFragment(fragment: PathFragment, opts: WindowQuery) {
     const { sample, contig, haplotype } = fragment.path.name
-    const query = { sample, contig, haplotype }
-    const from = Math.max(start, fragment.start)
-    const to = Math.min(end, fragment.end)
+    const start = Math.max(opts.start, fragment.start)
     const haplotypes = opts.haplotypes ?? 'all'
-    const named = haplotypes === 'all' || haplotypes === 'distinct'
-    let subgraph
-    if (keep !== undefined && named) {
-      subgraph = await subgraphForHaplotypes(this, query, from, to, {
-        ...queryOptions,
-        keep,
+    try {
+      const subgraph = await subgraphInInterval(this, {
+        ...opts,
+        path: { sample, contig, haplotype },
+        start,
+        end: Math.min(opts.end, fragment.end),
       })
-    } else {
-      subgraph = await subgraphInInterval(this, query, from, to, queryOptions)
-      if (this.hasHaplotypeIndex && named) {
+      if (
+        opts.keep === undefined &&
+        this.hasHaplotypeIndex &&
+        (haplotypes === 'all' || haplotypes === 'distinct')
+      ) {
         await subgraph.identifyPaths()
       }
+      return subgraph
+    } catch (error) {
+      throw error instanceof SubgraphLimitError && error.walkedBp !== undefined
+        ? new SubgraphLimitError(error.limit, {
+            windowBp: opts.end - opts.start,
+            walkedBp: start - opts.start + error.walkedBp,
+          })
+        : error
     }
-    return subgraph
   }
 
-  // A subgraph holds one reference walk, so a window over several fragments of
-  // the path is refused; a cut at the first gap would read as the whole window.
-  async getSubgraphForRange(
-    ref: PathRef,
-    start: number,
-    end: number,
-    opts: RangeOptions = {},
-  ) {
-    const fragments = await this.pathFragmentsForRange(ref, start, end)
-    const [fragment] = fragments
-    if (fragments.length > 1) {
-      const name = fragment!.path.name
-      throw new Error(
-        `the window ${start}-${end} spans ${fragments.length} fragments of ${formatPathName(name, 0)}: query each fragment from pathFragmentsForRange, or use getAlignmentsForRange`,
-      )
-    }
-    return fragment
-      ? this.subgraphForFragment(fragment, start, end, opts)
-      : undefined
+  async getSubgraphs(opts: WindowQuery): Promise<Subgraph[]> {
+    const fragments = await this.getPathFragments(opts)
+    return Promise.all(
+      fragments.map(fragment => this.subgraphForFragment(fragment, opts)),
+    )
   }
 
-  async getAlignmentsForRange(
-    ref: PathRef,
-    start: number,
-    end: number,
-    opts: AlignmentOptions = {},
-  ) {
-    const result: HaplotypeAlignment[] = []
-    for (const fragment of await this.pathFragmentsForRange(ref, start, end)) {
-      const subgraph = await this.subgraphForFragment(
-        fragment,
-        start,
-        end,
-        opts,
-      )
-      result.push(...subgraph.alignments())
+  async getAlignments(opts: AlignmentQuery): Promise<HaplotypeAlignment[]> {
+    return (await this.getSubgraphs(opts)).flatMap(subgraph =>
+      subgraph.alignments(),
+    )
+  }
+
+  subgraphInInterval(opts: IntervalQuery) {
+    return subgraphInInterval(this, opts)
+  }
+
+  subgraphAtOffset(opts: OffsetQuery) {
+    return subgraphAtOffset(this, opts)
+  }
+
+  subgraphAroundNodes(opts: NodesQuery) {
+    return subgraphAroundNodes(this, opts)
+  }
+
+  subgraphBetween(opts: BetweenQuery) {
+    return subgraphBetween(this, opts)
+  }
+
+  fetchStats(): { graph: FetchStats; haplotypeIndex: FetchStats | undefined } {
+    const stats = ({ pager }: SqliteDatabase) => ({
+      fetches: pager.fetches,
+      bytesFetched: pager.bytesFetched,
+    })
+    return {
+      graph: stats(this.sqlite),
+      haplotypeIndex: this.index ? stats(this.index) : undefined,
     }
-    return result
   }
 
   async graphName() {
@@ -526,6 +561,7 @@ export class GBZBase {
     return this.index
   }
 
+  /** @internal */
   async haplotypeSampleInterval() {
     const value = this.indexTags.get('haplotype_index_interval')
     return value === undefined ? undefined : Number(value)
@@ -533,6 +569,7 @@ export class GBZBase {
 
   // The most bp between two samples of any path: the reference paths take
   // --reference-interval, which can exceed --interval.
+  /** @internal */
   async haplotypeSampleGap() {
     const interval = await this.haplotypeSampleInterval()
     const reference = this.indexTags.get('haplotype_index_reference_interval')
@@ -541,6 +578,7 @@ export class GBZBase {
       : Math.max(interval, reference === undefined ? 0 : Number(reference))
   }
 
+  /** @internal */
   async haplotypeAnchorSpacing() {
     const value = this.index?.has('HaplotypeAnchors')
       ? this.indexTags.get('haplotype_index_anchor_spacing')
@@ -550,6 +588,7 @@ export class GBZBase {
 
   // How HaplotypeStrays and HaplotypeBinNodes were built, or undefined
   // without them.
+  /** @internal */
   async haplotypeStrayOptions(): Promise<HaplotypeStrayOptions | undefined> {
     const tag = (key: string) =>
       this.indexTags.get(`haplotype_index_stray_${key}`)
@@ -573,6 +612,7 @@ export class GBZBase {
 
   // The HaplotypeStrays rows of the bins firstBin..lastBin of one reference
   // path.
+  /** @internal */
   async haplotypeStraysInBins(
     referenceHandle: number,
     firstBin: number,
@@ -604,6 +644,7 @@ export class GBZBase {
 
   // The nodes HaplotypeBinNodes lists for the bins firstBin..lastBin of one
   // reference path, as a test of one node id.
+  /** @internal */
   async haplotypeBinNodes(
     referenceHandle: number,
     firstBin: number,
@@ -671,6 +712,7 @@ export class GBZBase {
     }
   }
 
+  /** @internal */
   async haplotypeAnchor(
     pathHandle: number,
     anchorOffset: number,
@@ -694,6 +736,7 @@ export class GBZBase {
       : undefined
   }
 
+  /** @internal */
   haplotypeSamplesAtNode(handle: number) {
     return this.haplotypeSamplesInRange(handle, handle)
   }
@@ -711,6 +754,7 @@ export class GBZBase {
     }
   }
 
+  /** @internal */
   async haplotypeSamplesInRange(minHandle: number, maxHandle: number) {
     const samples: HaplotypeSample[] = []
     for await (const key of this.companion.indexScanFrom('HaplotypeSamples', [
@@ -732,6 +776,7 @@ export class GBZBase {
     return samples
   }
 
+  /** @internal */
   async haplotypeSampleAt(node: number, offset: number) {
     const key = await this.companion.indexSeekLE('HaplotypeSamples', [
       node,
@@ -747,6 +792,7 @@ export class GBZBase {
     return row ? this.sampleFromRow(row) : undefined
   }
 
+  /** @internal */
   async haplotypeLength(pathHandle: number) {
     const row = await this.companion.byRowid('HaplotypeLengths', pathHandle)
     return row ? num(row[1], 'HaplotypeLengths.length') : undefined
@@ -776,6 +822,7 @@ export class GBZBase {
       : undefined
   }
 
+  /** @internal */
   async indexedPosition(
     pathHandle: number,
     pathOffset: number,
@@ -784,6 +831,7 @@ export class GBZBase {
     return rowid === undefined ? undefined : this.indexedRow(rowid)
   }
 
+  /** @internal */
   async indexedPositionsBetween(
     pathHandle: number,
     fromOffset: number,

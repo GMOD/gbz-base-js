@@ -4,7 +4,6 @@ import { LocalFile, RemoteFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
-import { subgraphForHaplotypes, subgraphInInterval } from '../src/query.ts'
 
 import type { PathName } from '../src/pathName.ts'
 import type { Subgraph } from '../src/subgraph.ts'
@@ -57,12 +56,16 @@ describe.skipIf(!available(anchoredCompanion))(
   'a query that uses the keep option',
   () => {
     it('writes one W line per haplotype, spanning what its alignment does, as the sampled route does', async () => {
-      const db = await GBZBase.open(new RemoteFile(graphUrl), {
+      const db = await GBZBase.open({
+        source: new RemoteFile(graphUrl),
         haplotypeIndex: isRemote(anchoredCompanion)
           ? new RemoteFile(anchoredCompanion)
           : new LocalFile(anchoredCompanion),
       })
-      const kept = await subgraphForHaplotypes(db, query, start, end, {
+      const kept = await db.subgraphInInterval({
+        path: query,
+        start,
+        end,
         ...opts,
         keep,
       })
@@ -73,7 +76,12 @@ describe.skipIf(!available(anchoredCompanion))(
         'HG02559#1 11643',
         'HG02559#2 6472',
       ])
-      const sampled = await subgraphInInterval(db, query, start, end, opts)
+      const sampled = await db.subgraphInInterval({
+        path: query,
+        start,
+        end,
+        ...opts,
+      })
       await sampled.identifyPaths()
       sampled.keepHaplotypes(keep)
       expect(await walkSpans(sampled)).toEqual(alignmentSpans(sampled))
@@ -84,7 +92,8 @@ describe.skipIf(!available(anchoredCompanion))(
     // another that starts after the anchor, so no anchor row leads to its walk
     // through the window; a sample of the second contig in the window does.
     it('keeps a haplotype whose contig starts after the anchor', async () => {
-      const db = await GBZBase.open(new RemoteFile(graphUrl), {
+      const db = await GBZBase.open({
+        source: new RemoteFile(graphUrl),
         haplotypeIndex: isRemote(anchoredCompanion)
           ? new RemoteFile(anchoredCompanion)
           : new LocalFile(anchoredCompanion),
@@ -92,7 +101,10 @@ describe.skipIf(!available(anchoredCompanion))(
       const broken = ['HG04199#1', 'HG04199#2']
       const keep = (name: PathName) =>
         broken.includes(`${name.sample}#${name.haplotype}`)
-      const kept = await subgraphForHaplotypes(db, query, start, end, {
+      const kept = await db.subgraphInInterval({
+        path: query,
+        start,
+        end,
         ...opts,
         keep,
       })
@@ -103,7 +115,12 @@ describe.skipIf(!available(anchoredCompanion))(
         )
         .sort()
       expect(names).toEqual(broken)
-      const sampled = await subgraphInInterval(db, query, start, end, opts)
+      const sampled = await db.subgraphInInterval({
+        path: query,
+        start,
+        end,
+        ...opts,
+      })
       await sampled.identifyPaths()
       sampled.keepHaplotypes(keep)
       expect(kept.alignments()).toEqual(sampled.alignments())

@@ -1,8 +1,8 @@
 import type { ByteSource } from '../filehandle.ts'
 
 export interface PagerOptions {
-  blockSize?: number
-  maxBlocks?: number
+  blockSize?: number | undefined
+  maxBlocks?: number | undefined
 }
 
 export class Pager {

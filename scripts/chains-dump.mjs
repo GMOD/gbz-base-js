@@ -2,7 +2,7 @@ import fs from 'node:fs'
 
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
-import { GBZBase, subgraphInInterval } from '../dist/index.js'
+import { GBZBase } from '../dist/index.js'
 
 const [graph, index, contig, start, end, context, out] = process.argv.slice(2)
 if (out === undefined) {
@@ -12,15 +12,18 @@ if (out === undefined) {
 }
 const open = file =>
   /^https?:\/\//.test(file) ? new RemoteFile(file) : new LocalFile(file)
-const db = await GBZBase.open(open(graph), { haplotypeIndex: open(index) })
+const db = await GBZBase.open({
+  source: open(graph),
+  haplotypeIndex: open(index),
+})
 const t0 = performance.now()
-const subgraph = await subgraphInInterval(
-  db,
-  { sample: 'GRCh38', contig },
-  Number(start),
-  Number(end),
-  { context: Number(context), snarls: 'contained' },
-)
+const subgraph = await db.subgraphInInterval({
+  path: { sample: 'GRCh38', contig },
+  start: Number(start),
+  end: Number(end),
+  context: Number(context),
+  snarls: 'contained',
+})
 const t1 = performance.now()
 await subgraph.identifyPaths()
 const t2 = performance.now()
@@ -36,12 +39,12 @@ fs.writeFileSync(
     records: alignments.length,
     unresolvedRecords: alignments.filter(a => !a.resolved).length,
     graphPager: {
-      fetches: db.sqlite.pager.fetches,
-      bytes: db.sqlite.pager.bytesFetched,
+      fetches: db.fetchStats().graph.fetches,
+      bytes: db.fetchStats().graph.bytesFetched,
     },
     indexPager: {
-      fetches: db.index.pager.fetches,
-      bytes: db.index.pager.bytesFetched,
+      fetches: db.fetchStats().haplotypeIndex.fetches,
+      bytes: db.fetchStats().haplotypeIndex.bytesFetched,
     },
     stats: subgraph.stats,
     alignments: alignments.map(a => ({

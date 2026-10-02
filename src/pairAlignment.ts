@@ -16,9 +16,12 @@ export interface PairChain {
 }
 
 export interface PairOptions {
-  maxGap?: number
-  minMatch?: number
-  bases?: boolean
+  query: number[]
+  target: number[]
+  sequenceOf: (id: number) => string
+  maxGap?: number | undefined
+  minMatch?: number | undefined
+  bases?: boolean | undefined
 }
 
 // An exact match: query [qs, qe) against target [ts, te), the target read
@@ -906,12 +909,8 @@ function sharedRuns(
 // maxGap caps that to bound the work. A record matching under minMatch bases is
 // dropped. Coordinates count from each walk's first base; a `-` record's edits
 // read along the target, the way minimap2 writes a reverse-strand row.
-export function pairAlignments(
-  query: number[],
-  target: number[],
-  sequenceOf: (id: number) => string,
-  opts: PairOptions = {},
-): PairChain[] {
+export function pairAlignments(opts: PairOptions): PairChain[] {
+  const { query, target, sequenceOf } = opts
   const a = walkSequence(query, sequenceOf)
   const b = walkSequence(target, sequenceOf)
   const runs = sharedRuns(

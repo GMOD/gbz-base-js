@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 
 import { checkResolvedRecordAgainstSamples } from './walkBack.ts'
 import { GBZBase } from '../src/db.ts'
-import { subgraphForHaplotypes, subgraphInInterval } from '../src/query.ts'
 
 import type { PathName } from '../src/pathName.ts'
 
@@ -20,7 +19,8 @@ const isRemote = (file: string) => /^https?:\/\//.test(file)
 const available = (file: string) => isRemote(file) || existsSync(file)
 
 function openHprc(index = companion) {
-  return GBZBase.open(new RemoteFile(graphUrl), {
+  return GBZBase.open({
+    source: new RemoteFile(graphUrl),
     haplotypeIndex: isRemote(index)
       ? new RemoteFile(index)
       : new LocalFile(index),
@@ -43,13 +43,13 @@ const keepEight = (name: PathName) =>
 describe.skipIf(!available(companion))('the published HPRC v2.1 graph', () => {
   it('names the AMY1 window without scanning the companion across id gaps', async () => {
     const db = await openHprc()
-    const subgraph = await subgraphInInterval(
-      db,
-      { sample: 'GRCh38', contig: 'chr1' },
-      103690000,
-      103780000,
-      { context: 1000, snarls: 'contained' },
-    )
+    const subgraph = await db.subgraphInInterval({
+      path: { sample: 'GRCh38', contig: 'chr1' },
+      start: 103690000,
+      end: 103780000,
+      context: 1000,
+      snarls: 'contained',
+    })
     await subgraph.identifyPaths()
     const alignments = subgraph.alignments()
     expect(subgraph.nodeCount).toBe(12240)
@@ -104,20 +104,25 @@ describe.skipIf(!available(anchoredCompanion))(
           snarls: 'contained' as const,
           keep: keepEight,
         }
-        const subgraph = await subgraphForHaplotypes(
-          db,
-          query,
+        const subgraph = await db.subgraphInInterval({
+          path: query,
           start,
           end,
-          opts,
-        )
+          ...opts,
+        })
         if (strays) {
           expect(subgraph.stats.keep?.fallback).toBeUndefined()
           expect(subgraph.stats.identification.chains).toEqual([])
         } else {
           expect(subgraph.stats.keep?.fallback).toMatch(/no stray rows/)
         }
-        const sampled = await subgraphInInterval(db, query, start, end, opts)
+        const sampled = await db.subgraphInInterval({
+          ...opts,
+          path: query,
+          start,
+          end,
+          keep: undefined,
+        })
         await sampled.identifyPaths()
         sampled.keepHaplotypes(keepEight)
         expect(await subgraph.toGFA({ names: 'resolved' })).toBe(

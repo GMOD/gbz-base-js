@@ -2,17 +2,15 @@ import { LocalFile } from 'generic-filehandle2'
 import { GBZBase } from '../src/db.ts'
 import { flipNode } from '../src/gbwt/node.ts'
 import type { Pos } from '../src/gbwt/record.ts'
-import { subgraphInInterval } from '../src/query.ts'
 
 const file = process.argv[2] as string
-const db = await GBZBase.open(new LocalFile(file))
-const subgraph = await subgraphInInterval(
-  db,
-  { sample: 'GRCh38', contig: 'chr20' },
-  30000000,
-  30010000,
-  { context: 0 },
-)
+const db = await GBZBase.open({ source: new LocalFile(file) })
+const subgraph = await db.subgraphInInterval({
+  path: { sample: 'GRCh38', contig: 'chr20' },
+  start: 30000000,
+  end: 30010000,
+  context: 0,
+})
 await subgraph.identifyPaths()
 const alignments = subgraph.alignments()
 const byPath = new Map<number, number>()

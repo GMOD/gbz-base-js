@@ -1,26 +1,39 @@
 export {
   ForwardOnlyIndexError,
   GBZBase,
-  GbzRecord,
   SCHEMA_VERSION,
   SchemaVersionError,
+  UnknownPathError,
 } from './db.ts'
 export type {
-  AlignmentOptions,
+  AlignmentQuery,
+  FetchStats,
   GbzPath,
-  HaplotypeAnchor,
-  HaplotypeSample,
-  HaplotypeStray,
-  HaplotypeStrayOptions,
-  IndexedPosition,
   OpenOptions,
   PathFragment,
-  RangeOptions,
+  WindowQuery,
 } from './db.ts'
+export type {
+  BetweenQuery,
+  IntervalQuery,
+  NodeHaplotypeOutput,
+  NodesQuery,
+  OffsetQuery,
+  PathWindow,
+  QueryOptions,
+} from './query.ts'
 export { GENERIC_SAMPLE, formatPathName, parsePathName } from './pathName.ts'
 export type { PathName, PathQuery, PathRef } from './pathName.ts'
 export type { ByteSource } from './filehandle.ts'
 export type { Pos } from './gbwt/record.ts'
+export type { Orientation } from './gbwt/node.ts'
+export {
+  encodeNode,
+  flipNode,
+  isReverse,
+  nodeId,
+  nodeOrientation,
+} from './gbwt/node.ts'
 export {
   Subgraph,
   SubgraphLimitError,
@@ -28,46 +41,16 @@ export {
 } from './subgraph.ts'
 export type {
   AlignmentSpan,
-  ChainEnd,
-  ChainRecord,
   CompactPath,
   CompactSubgraph,
   HaplotypeAlignment,
   HaplotypeOutput,
   HaplotypeRef,
-  IdentificationStats,
   PairAlignment,
   PairAlignmentOptions,
-  PathIdentity,
-  PathPosition,
-  ReferencePath,
   SnarlOutput,
   SubgraphJson,
-  SubgraphOptions,
   SubgraphOutputOptions,
   SubgraphPath,
 } from './subgraph.ts'
-export {
-  subgraphAroundNodes,
-  subgraphAtOffset,
-  subgraphBetween,
-  subgraphForHaplotypes,
-  subgraphInInterval,
-} from './query.ts'
-export type { HaplotypeQueryOptions, QueryOptions } from './query.ts'
-export type {
-  ChosenPieceSource,
-  KeepStats,
-  KeepWalkEnd,
-} from './chosenPaths.ts'
-export { SqliteDatabase } from './sqlite/database.ts'
 export type { GraphName } from './graphName.ts'
-export { weightedLcs } from './lcs.ts'
-export { pairAlignments, pairCigar } from './pairAlignment.ts'
-export type {
-  PairChain,
-  PairEdit,
-  PairOp,
-  PairOptions,
-} from './pairAlignment.ts'
-export * as nodes from './gbwt/node.ts'

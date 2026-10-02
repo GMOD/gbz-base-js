@@ -4,28 +4,28 @@ import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
-import { subgraphInInterval } from '../src/query.ts'
+import { SubgraphLimitError } from '../src/subgraph.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
 const chr1 = 'GRCh38#0#chr1'
 
 function openSplit(withIndex = true) {
-  return GBZBase.open(
-    new LocalFile(path.join(dataDir, 'split-contig.gbz.db')),
-    withIndex
-      ? {
-          haplotypeIndex: new LocalFile(
-            path.join(dataDir, 'split-contig.haplotype-index.db'),
-          ),
-        }
-      : {},
-  )
+  return GBZBase.open({
+    source: new LocalFile(path.join(dataDir, 'split-contig.gbz.db')),
+    haplotypeIndex: withIndex
+      ? new LocalFile(path.join(dataDir, 'split-contig.haplotype-index.db'))
+      : undefined,
+  })
 }
 
 describe('a reference contig stored as two fragments', () => {
   it('bounds each fragment by its own length', async () => {
     const db = await openSplit()
-    const fragments = await db.pathFragmentsForRange(chr1, 0, 5000)
+    const fragments = await db.getPathFragments({
+      path: chr1,
+      start: 0,
+      end: 5000,
+    })
     expect(fragments.map(f => [f.start, f.end])).toEqual([
       [0, 501],
       [1500, 2001],
@@ -35,7 +35,11 @@ describe('a reference contig stored as two fragments', () => {
 
   it('measures the fragments the same way without the index', async () => {
     const db = await openSplit(false)
-    const fragments = await db.pathFragmentsForRange(chr1, 0, 5000)
+    const fragments = await db.getPathFragments({
+      path: chr1,
+      start: 0,
+      end: 5000,
+    })
     expect(fragments.map(f => [f.start, f.end])).toEqual([
       [0, 501],
       [1500, 2001],
@@ -44,19 +48,38 @@ describe('a reference contig stored as two fragments', () => {
 
   it('answers nothing inside the gap', async () => {
     const db = await openSplit()
-    expect(await db.pathFragmentsForRange(chr1, 600, 1400)).toEqual([])
-    expect(await db.getAlignmentsForRange(chr1, 600, 1400)).toEqual([])
-    expect(await db.getSubgraphForRange(chr1, 600, 1400)).toBeUndefined()
+    expect(
+      await db.getPathFragments({ path: chr1, start: 600, end: 1400 }),
+    ).toEqual([])
+    expect(
+      await db.getAlignments({ path: chr1, start: 600, end: 1400 }),
+    ).toEqual([])
+    expect(
+      await db.getSubgraphs({ path: chr1, start: 600, end: 1400 }),
+    ).toEqual([])
   })
 
   it('spans the boundary by concatenating the per-fragment answers', async () => {
     const db = await openSplit()
-    const spanned = await db.getAlignmentsForRange(chr1, 400, 1600, {
+    const spanned = await db.getAlignments({
+      path: chr1,
+      start: 400,
+      end: 1600,
       context: 0,
     })
     const separate = [
-      ...(await db.getAlignmentsForRange(chr1, 400, 501, { context: 0 })),
-      ...(await db.getAlignmentsForRange(chr1, 1500, 1600, { context: 0 })),
+      ...(await db.getAlignments({
+        path: chr1,
+        start: 400,
+        end: 501,
+        context: 0,
+      })),
+      ...(await db.getAlignments({
+        path: chr1,
+        start: 1500,
+        end: 1600,
+        context: 0,
+      })),
     ]
     expect(spanned).toEqual(separate)
     expect(spanned.filter(a => a.refEnd <= 501)).toHaveLength(3)
@@ -67,12 +90,35 @@ describe('a reference contig stored as two fragments', () => {
     expect(labels).not.toContain('unresolved')
   })
 
-  it('refuses a subgraph window that spans two fragments, and cuts one that lies in one', async () => {
+  it('cuts one subgraph per fragment the window overlaps', async () => {
     const db = await openSplit()
-    await expect(
-      db.getSubgraphForRange(chr1, 400, 1600, { context: 0 }),
-    ).rejects.toThrow(/spans 2 fragments of GRCh38#0#chr1/)
-    const subgraph = await db.getSubgraphForRange(chr1, 400, 501, {
+    const spanned = await db.getSubgraphs({
+      path: chr1,
+      start: 400,
+      end: 1600,
+      context: 0,
+    })
+    expect(spanned.map(subgraph => subgraph.referenceInterval)).toEqual([
+      {
+        name: { sample: 'GRCh38', contig: 'chr1', haplotype: 0, fragment: 0 },
+        start: 321,
+        end: 501,
+      },
+      {
+        name: {
+          sample: 'GRCh38',
+          contig: 'chr1',
+          haplotype: 0,
+          fragment: 1500,
+        },
+        start: 1500,
+        end: 1650,
+      },
+    ])
+    const [subgraph] = await db.getSubgraphs({
+      path: chr1,
+      start: 400,
+      end: 501,
       context: 0,
     })
     expect(subgraph?.referenceInterval).toEqual({
@@ -84,13 +130,31 @@ describe('a reference contig stored as two fragments', () => {
     expect(gfa).toContain('W\tGRCh38\t0\tchr1\t321\t501\t>5')
     expect(gfa).toContain('W\tHG001\t1\tctg1\t321\t501\t>5')
     expect(
-      await db.getSubgraphForRange(chr1, 1500, 1600, { context: 0 }),
-    ).toBeDefined()
+      await db.getSubgraphs({ path: chr1, start: 1500, end: 1600, context: 0 }),
+    ).toHaveLength(1)
+  })
+
+  it('reports the node limit from the start of the window, not of the fragment that tripped it', async () => {
+    const db = await openSplit()
+    const error = await db
+      .getSubgraphs({
+        path: chr1,
+        start: 1000,
+        end: 2001,
+        context: 0,
+        limit: 3,
+      })
+      .catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(SubgraphLimitError)
+    expect(error).toMatchObject({ windowBp: 1001, walkedBp: 861 })
   })
 
   it('names a haplotype in the second fragment in its own coordinates', async () => {
     const db = await openSplit()
-    const alignments = await db.getAlignmentsForRange(chr1, 1500, 2001, {
+    const alignments = await db.getAlignments({
+      path: chr1,
+      start: 1500,
+      end: 2001,
       context: 0,
     })
     const hg001Hap2 = alignments.filter(
@@ -104,7 +168,10 @@ describe('a reference contig stored as two fragments', () => {
 
   it('leaves names unresolved without the index', async () => {
     const db = await openSplit(false)
-    const spanned = await db.getAlignmentsForRange(chr1, 400, 1600, {
+    const spanned = await db.getAlignments({
+      path: chr1,
+      start: 400,
+      end: 1600,
       context: 0,
     })
     expect(spanned).toHaveLength(6)
@@ -114,7 +181,10 @@ describe('a reference contig stored as two fragments', () => {
   it('walks off the fragment in the lower-level query, as upstream does', async () => {
     const db = await openSplit()
     await expect(
-      subgraphInInterval(db, { sample: 'GRCh38', contig: 'chr1' }, 400, 1600, {
+      db.subgraphInInterval({
+        path: { sample: 'GRCh38', contig: 'chr1' },
+        start: 400,
+        end: 1600,
         context: 0,
       }),
     ).rejects.toThrow(/No successor for GBWT position/)

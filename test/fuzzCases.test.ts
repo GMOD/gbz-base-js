@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 
 import { dataDir } from './fixtures.ts'
 import { GBZBase } from '../src/db.ts'
-import { subgraphForHaplotypes, subgraphInInterval } from '../src/query.ts'
 
 import type { PathName } from '../src/pathName.ts'
 
@@ -18,10 +17,15 @@ describe('cases the fuzzer found', () => {
   // window on node 2 starts on a reverse handle, and its twin >3<2>1 starts
   // on a forward one.
   it('finds a reference walk that starts on a reverse handle before the window', async () => {
-    const db = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'reverse-reference.gbz.db')),
-    )
-    const subgraph = await subgraphInInterval(db, chr1, 12, 18, { context: 10 })
+    const db = await GBZBase.open({
+      source: new LocalFile(path.join(dataDir, 'reverse-reference.gbz.db')),
+    })
+    const subgraph = await db.subgraphInInterval({
+      path: chr1,
+      start: 12,
+      end: 18,
+      context: 10,
+    })
     expect(subgraph.nodeCount).toBe(3)
     expect(subgraph.referenceInterval).toMatchObject({ start: 0, end: 30 })
   })
@@ -30,21 +34,25 @@ describe('cases the fuzzer found', () => {
   // passes that node 4,767 bp along its second fragment, in a stray row of one
   // visit that starts where the walk from the anchor before it stops.
   it('walks a stray row whose last visit starts where an earlier walk stopped', async () => {
-    const db = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'stray-end.gbz.db')),
-      {
-        haplotypeIndex: new LocalFile(
-          path.join(dataDir, 'stray-end.haplotype-index.db'),
-        ),
-      },
-    )
+    const db = await GBZBase.open({
+      source: new LocalFile(path.join(dataDir, 'stray-end.gbz.db')),
+      haplotypeIndex: new LocalFile(
+        path.join(dataDir, 'stray-end.haplotype-index.db'),
+      ),
+    })
     const keep = (name: PathName) =>
       name.sample === 'HG002' && name.haplotype === 1
-    const kept = await subgraphForHaplotypes(db, chr1, 15498, 15870, {
+    const kept = await db.subgraphInInterval({
+      path: chr1,
+      start: 15498,
+      end: 15870,
       context: 1,
       keep,
     })
-    const sampled = await subgraphInInterval(db, chr1, 15498, 15870, {
+    const sampled = await db.subgraphInInterval({
+      path: chr1,
+      start: 15498,
+      end: 15870,
       context: 1,
     })
     await sampled.identifyPaths()
@@ -68,20 +76,24 @@ describe('cases the fuzzer found', () => {
   // The reader used to stop reading anchors at 13 and never planned that
   // section, and no sample lay on node 10 to show the piece missing.
   it('reads the anchor past the one that starts exactly `bound` outside the bins', async () => {
-    const db = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'anchor-at-bound.gbz.db')),
-      {
-        haplotypeIndex: new LocalFile(
-          path.join(dataDir, 'anchor-at-bound.haplotype-index.db'),
-        ),
-      },
-    )
+    const db = await GBZBase.open({
+      source: new LocalFile(path.join(dataDir, 'anchor-at-bound.gbz.db')),
+      haplotypeIndex: new LocalFile(
+        path.join(dataDir, 'anchor-at-bound.haplotype-index.db'),
+      ),
+    })
     const keep = (name: PathName) => name.sample === 'HG001'
-    const kept = await subgraphForHaplotypes(db, chr1, 3800, 3900, {
+    const kept = await db.subgraphInInterval({
+      path: chr1,
+      start: 3800,
+      end: 3900,
       context: 100,
       keep,
     })
-    const sampled = await subgraphInInterval(db, chr1, 3800, 3900, {
+    const sampled = await db.subgraphInInterval({
+      path: chr1,
+      start: 3800,
+      end: 3900,
       context: 100,
     })
     await sampled.identifyPaths()
@@ -110,20 +122,26 @@ describe('the boundaries of the keep route', () => {
     end: number,
     context: number,
   ) => {
-    const db = await GBZBase.open(
-      new LocalFile(path.join(dataDir, 'keep-bounds.gbz.db')),
-      {
-        haplotypeIndex: new LocalFile(
-          path.join(dataDir, 'keep-bounds.haplotype-index.db'),
-        ),
-      },
-    )
+    const db = await GBZBase.open({
+      source: new LocalFile(path.join(dataDir, 'keep-bounds.gbz.db')),
+      haplotypeIndex: new LocalFile(
+        path.join(dataDir, 'keep-bounds.haplotype-index.db'),
+      ),
+    })
     const keep = (name: PathName) => name.sample === sample
-    const kept = await subgraphForHaplotypes(db, chr1, start, end, {
+    const kept = await db.subgraphInInterval({
+      path: chr1,
+      start,
+      end,
       context,
       keep,
     })
-    const sampled = await subgraphInInterval(db, chr1, start, end, { context })
+    const sampled = await db.subgraphInInterval({
+      path: chr1,
+      start,
+      end,
+      context,
+    })
     await sampled.identifyPaths()
     sampled.keepHaplotypes(keep)
     expect(kept.stats.keep?.fallback).toBeUndefined()

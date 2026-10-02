@@ -7,7 +7,6 @@ import { openSampled } from './fixtures.ts'
 import { cigarConsumption, walkBack } from './walkBack.ts'
 import { ForwardOnlyIndexError, GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode } from '../src/gbwt/node.ts'
-import { subgraphInInterval } from '../src/query.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
 
@@ -20,13 +19,12 @@ async function checkIdentities(
   context: number,
 ) {
   const db = await openSampled(file)
-  const subgraph = await subgraphInInterval(
-    db,
-    { contig, ...(sample === undefined ? {} : { sample }) },
+  const subgraph = await db.subgraphInInterval({
+    path: { contig, ...(sample === undefined ? {} : { sample }) },
     start,
     end,
-    { context },
-  )
+    context,
+  })
   await subgraph.identifyPaths()
   const alignments = subgraph.alignments()
   expect(alignments.length).toBeGreaterThan(0)
@@ -158,20 +156,20 @@ describe('companion haplotype index', () => {
   const companion = path.join(dataDir, 'micb-kir3dl1.haplotype-index.db')
 
   async function alignmentsWith(db: GBZBase) {
-    const subgraph = await subgraphInInterval(
-      db,
-      { sample: 'GRCh38', contig: 'chr6' },
-      31500000,
-      31501000,
-      { context: 100 },
-    )
+    const subgraph = await db.subgraphInInterval({
+      path: { sample: 'GRCh38', contig: 'chr6' },
+      start: 31500000,
+      end: 31501000,
+      context: 100,
+    })
     await subgraph.identifyPaths()
     return subgraph.alignments().map(a => ({ ...a, start: undefined }))
   }
 
   it('names haplotypes the same with or without anchors', async () => {
     const sampled = await openSampled('micb-kir3dl1.gbz.db')
-    const withCompanion = await GBZBase.open(new LocalFile(graph), {
+    const withCompanion = await GBZBase.open({
+      source: new LocalFile(graph),
       haplotypeIndex: new LocalFile(companion),
     })
     expect(withCompanion.hasHaplotypeIndex).toBe(true)
@@ -183,7 +181,8 @@ describe('companion haplotype index', () => {
 
   it('rejects a companion built for a different graph', async () => {
     await expect(
-      GBZBase.open(new LocalFile(path.join(dataDir, 'example.gbz.db')), {
+      GBZBase.open({
+        source: new LocalFile(path.join(dataDir, 'example.gbz.db')),
         haplotypeIndex: new LocalFile(companion),
       }),
     ).rejects.toThrow(/built for 169 paths but the graph has 6/)
@@ -215,13 +214,12 @@ function parseSteps(body: string) {
 describe('named walks in output', () => {
   it('list every resolved W line and JSON path in the haplotype direction', async () => {
     const db = await openSampled('micb-kir3dl1.gbz.db')
-    const subgraph = await subgraphInInterval(
-      db,
-      { sample: 'GRCh38', contig: 'chr6' },
-      31500000,
-      31501000,
-      { context: 100 },
-    )
+    const subgraph = await db.subgraphInInterval({
+      path: { sample: 'GRCh38', contig: 'chr6' },
+      start: 31500000,
+      end: 31501000,
+      context: 100,
+    })
     await subgraph.identifyPaths()
     const handleOfWalk = new Map<string, number>()
     for (const alignment of subgraph.alignments()) {
@@ -271,7 +269,8 @@ describe('named walks in output', () => {
 describe('a forward-only haplotype index', () => {
   it('is refused at open, since it cannot name walks stored against the reference', async () => {
     await expect(
-      GBZBase.open(new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')), {
+      GBZBase.open({
+        source: new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
         haplotypeIndex: new LocalFile(
           path.join(dataDir, 'micb-kir3dl1.forward-only.haplotype-index.db'),
         ),
@@ -283,13 +282,12 @@ describe('a forward-only haplotype index', () => {
 describe('keepHaplotypes', () => {
   it('keeps the reference and the wanted walks with only the nodes they visit', async () => {
     const db = await openSampled('micb-kir3dl1.gbz.db')
-    const subgraph = await subgraphInInterval(
-      db,
-      { sample: 'GRCh38', contig: 'chr6' },
-      31500000,
-      31501000,
-      { context: 100 },
-    )
+    const subgraph = await db.subgraphInInterval({
+      path: { sample: 'GRCh38', contig: 'chr6' },
+      start: 31500000,
+      end: 31501000,
+      context: 100,
+    })
     await subgraph.identifyPaths()
     const before = { nodes: subgraph.nodeCount, paths: subgraph.pathCount }
     subgraph.keepHaplotypes(name => name.sample === 'HG01106')

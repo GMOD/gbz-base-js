@@ -8,17 +8,17 @@ import { checkResolvedRecord, walkBack } from './walkBack.ts'
 import { keepTuning } from '../src/chosenPaths.ts'
 import { GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode, nodeId } from '../src/gbwt/node.ts'
-import { subgraphForHaplotypes, subgraphInInterval } from '../src/query.ts'
 
 import type { HaplotypeSample } from '../src/db.ts'
 import type { PathName } from '../src/pathName.ts'
-import type { HaplotypeQueryOptions } from '../src/query.ts'
+import type { IntervalQuery } from '../src/query.ts'
 import type { HaplotypeAlignment } from '../src/subgraph.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
 
 function openWithCompanion(graph: string, companion: string) {
-  return GBZBase.open(new LocalFile(path.join(dataDir, graph)), {
+  return GBZBase.open({
+    source: new LocalFile(path.join(dataDir, graph)),
     haplotypeIndex: new LocalFile(path.join(dataDir, companion)),
   })
 }
@@ -242,10 +242,17 @@ async function expectParity(
   query: { sample: string; contig: string },
   start: number,
   end: number,
-  opts: HaplotypeQueryOptions,
+  opts: Omit<IntervalQuery, 'path' | 'start' | 'end'> & {
+    keep: (name: PathName) => boolean
+  },
 ) {
-  const kept = await subgraphForHaplotypes(db, query, start, end, opts)
-  const sampled = await subgraphInInterval(db, query, start, end, opts)
+  const window = { path: query, start, end }
+  const kept = await db.subgraphInInterval({ ...opts, ...window })
+  const sampled = await db.subgraphInInterval({
+    ...opts,
+    ...window,
+    keep: undefined,
+  })
   await sampled.identifyPaths()
   sampled.keepHaplotypes(opts.keep)
   expect(await kept.toGFA({ names: 'resolved' })).toBe(
@@ -498,7 +505,10 @@ describe('a query that uses the keep option', () => {
       },
     })
     await expect(
-      subgraphForHaplotypes(db, chr6, 31500000, 31501000, {
+      db.subgraphInInterval({
+        path: chr6,
+        start: 31500000,
+        end: 31501000,
         keep: name => name.sample === 'HG01106',
       }),
     ).rejects.toThrow(/no anchor row for the reference path/)
@@ -508,27 +518,31 @@ describe('a query that uses the keep option', () => {
     const chr6Name = 'GRCh38#0#chr6'
     const keep = (name: PathName) => name.sample === 'HG01106'
     const db = await openMicb()
-    const kept = await db.getSubgraphForRange(chr6Name, 31500000, 31501000, {
+    const [kept] = await db.getSubgraphs({
+      path: chr6Name,
+      start: 31500000,
+      end: 31501000,
       keep,
     })
     expect(kept?.stats.keep?.fallback).toBeUndefined()
-    const alignments = await db.getAlignmentsForRange(
-      chr6Name,
-      31500000,
-      31501000,
-      { keep },
-    )
-    const plain = await (
+    const alignments = await db.getAlignments({
+      path: chr6Name,
+      start: 31500000,
+      end: 31501000,
+      keep,
+    })
+    const [plain] = await (
       await openSampled('micb-kir3dl1.gbz.db')
-    ).getSubgraphForRange(chr6Name, 31500000, 31501000, { keep })
+    ).getSubgraphs({ path: chr6Name, start: 31500000, end: 31501000, keep })
     expect(plain?.stats.keep?.fallback).toMatch(/no stray rows/)
     expect(alignments).toEqual(plain!.alignments())
-    const distinct = await db.getSubgraphForRange(
-      chr6Name,
-      31500000,
-      31501000,
-      { keep, haplotypes: 'distinct' },
-    )
+    const [distinct] = await db.getSubgraphs({
+      path: chr6Name,
+      start: 31500000,
+      end: 31501000,
+      keep,
+      haplotypes: 'distinct',
+    })
     expect(distinct?.stats.keep?.fallback).toBeUndefined()
     expect(distinct!.pathCount).toBeLessThanOrEqual(kept!.pathCount)
   })

@@ -5,7 +5,10 @@ import { GBZBase, Subgraph } from '../dist/index.js'
 const [graph, index, contig, start, end, context] = process.argv.slice(2)
 const open = file =>
   /^https?:\/\//.test(file) ? new RemoteFile(file) : new LocalFile(file)
-const db = await GBZBase.open(open(graph), { haplotypeIndex: open(index) })
+const db = await GBZBase.open({
+  source: open(graph),
+  haplotypeIndex: open(index),
+})
 const subgraph = new Subgraph(db)
 const t = label => {
   const now = performance.now()
@@ -46,5 +49,5 @@ console.log(
   'records',
   alignments.length,
   'graph fetches',
-  db.sqlite.pager.fetches,
+  db.fetchStats().graph.fetches,
 )

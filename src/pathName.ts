@@ -6,17 +6,18 @@ export interface PathName {
 }
 
 export interface PathQuery {
-  sample?: string
+  sample?: string | undefined
   contig: string
-  haplotype?: number
+  haplotype?: number | undefined
 }
 
 export type PathRef = string | PathQuery
 
 export const GENERIC_SAMPLE = '_gbwt_ref'
 
-export function formatPathName(name: PathName, end: number) {
-  return `${name.sample}#${name.haplotype}#${name.contig}[${name.fragment}-${end}]`
+export function formatPathName(name: PathName & { end?: number | undefined }) {
+  const base = `${name.sample}#${name.haplotype}#${name.contig}`
+  return name.end === undefined ? base : `${base}[${name.fragment}-${name.end}]`
 }
 
 const PAN_SN = /^([^#]+)#(\d+)#([^#]+?)(?:\[\d+-\d+\])?$/

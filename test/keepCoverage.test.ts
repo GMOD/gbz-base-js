@@ -4,7 +4,6 @@ import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
 import { GBZBase } from '../src/db.ts'
-import { subgraphForHaplotypes, subgraphInInterval } from '../src/query.ts'
 
 import type { PathName } from '../src/pathName.ts'
 
@@ -26,7 +25,8 @@ import type { PathName } from '../src/pathName.ts'
 const dataDir = path.join(import.meta.dirname, 'data')
 
 function open(fixture: string) {
-  return GBZBase.open(new LocalFile(path.join(dataDir, `${fixture}.gbz.db`)), {
+  return GBZBase.open({
+    source: new LocalFile(path.join(dataDir, `${fixture}.gbz.db`)),
     haplotypeIndex: new LocalFile(
       path.join(dataDir, `${fixture}.haplotype-index.db`),
     ),
@@ -47,11 +47,17 @@ async function routes(
       for (const set of keepSets) {
         const keep = (name: PathName) =>
           set.includes(`${name.sample}#${name.haplotype}`)
-        const kept = await subgraphForHaplotypes(db, chr1, start, end, {
+        const kept = await db.subgraphInInterval({
+          path: chr1,
+          start,
+          end,
           context,
           keep,
         })
-        const sampled = await subgraphInInterval(db, chr1, start, end, {
+        const sampled = await db.subgraphInInterval({
+          path: chr1,
+          start,
+          end,
           context,
         })
         await sampled.identifyPaths()
@@ -118,7 +124,10 @@ describe('the keep route', () => {
     Object.defineProperty(db, 'haplotypeStrayOptions', {
       value: () => Promise.resolve(undefined),
     })
-    const kept = await subgraphForHaplotypes(db, chr1, 36000, 40000, {
+    const kept = await db.subgraphInInterval({
+      path: chr1,
+      start: 36000,
+      end: 40000,
       context: 100,
       keep: name => name.sample === 'HG006',
     })

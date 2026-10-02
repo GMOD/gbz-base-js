@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { openSampled } from './fixtures.ts'
+import { UnknownPathError } from '../src/db.ts'
 import { parsePathName } from '../src/pathName.ts'
 import { SubgraphLimitError } from '../src/subgraph.ts'
 
@@ -39,7 +40,11 @@ describe('parsePathName', () => {
 describe('pathFragmentsForRange', () => {
   it('bounds a fragment by its own length', async () => {
     const db = await openMicb()
-    const [fragment] = await db.pathFragmentsForRange(chr6, 31500000, 31501000)
+    const [fragment] = await db.getPathFragments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
     expect(fragment?.start).toBe(31498140)
     expect(fragment?.end).toBe(31498140 + 13033)
   })
@@ -56,10 +61,14 @@ describe('pathFragmentsForRange', () => {
     }
   })
 
-  it('reports nothing outside the fragment, and nothing for an unknown path', async () => {
+  it('reports nothing outside the fragment, and throws for an unknown path', async () => {
     const db = await openMicb()
-    expect(await db.pathFragmentsForRange(chr6, 0, 1000)).toEqual([])
-    expect(await db.pathFragmentsForRange('nonexistent', 0, 1000)).toEqual([])
+    expect(
+      await db.getPathFragments({ path: chr6, start: 0, end: 1000 }),
+    ).toEqual([])
+    await expect(
+      db.getPathFragments({ path: 'nonexistent', start: 0, end: 1000 }),
+    ).rejects.toThrow(UnknownPathError)
     expect(await db.hasPath(chr6)).toBe(true)
     expect(await db.hasPath('nonexistent')).toBe(false)
   })
@@ -95,7 +104,9 @@ describe('fragment selection', () => {
 
   async function starts(start: number, end: number) {
     const db = await splitContig()
-    return (await db.pathFragmentsForRange(chr6, start, end)).map(f => f.start)
+    return (await db.getPathFragments({ path: chr6, start, end })).map(
+      f => f.start,
+    )
   }
 
   it('spans the fragments a window touches', async () => {
@@ -125,7 +136,7 @@ describe('getAlignmentsForRange', () => {
   it('says how far into the window the node limit tripped', async () => {
     const db = await openMicb()
     const error = await db
-      .getAlignmentsForRange(chr6, 31500000, 31501000, { limit: 3 })
+      .getAlignments({ path: chr6, start: 31500000, end: 31501000, limit: 3 })
       .then(() => undefined)
       .catch((e: unknown) => e)
     expect(error).toBeInstanceOf(SubgraphLimitError)
@@ -140,7 +151,11 @@ describe('getAlignmentsForRange', () => {
 
   it('takes a PanSN string and resolves names in one call', async () => {
     const db = await openMicb()
-    const alignments = await db.getAlignmentsForRange(chr6, 31500000, 31501000)
+    const alignments = await db.getAlignments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
     expect(alignments.length).toBeGreaterThan(0)
     for (const alignment of alignments) {
       expect(alignment.resolved).toBe(true)
@@ -156,40 +171,49 @@ describe('getAlignmentsForRange', () => {
   it('matches the object form of the path reference', async () => {
     const db = await openMicb()
     const [fromString, fromObject] = await Promise.all([
-      db.getAlignmentsForRange(chr6, 31500000, 31501000),
-      db.getAlignmentsForRange(
-        { sample: 'GRCh38', haplotype: 0, contig: 'chr6' },
-        31500000,
-        31501000,
-      ),
+      db.getAlignments({ path: chr6, start: 31500000, end: 31501000 }),
+      db.getAlignments({
+        path: { sample: 'GRCh38', haplotype: 0, contig: 'chr6' },
+        start: 31500000,
+        end: 31501000,
+      }),
     ])
     expect(fromString).toEqual(fromObject)
   })
 
   it('clamps the window to the fragment rather than walking off its end', async () => {
     const db = await openMicb()
-    const [fragment] = await db.pathFragmentsForRange(chr6, 31500000, 31501000)
-    const alignments = await db.getAlignmentsForRange(
-      chr6,
-      fragment!.end - 200,
-      fragment!.end + 100000,
-    )
+    const [fragment] = await db.getPathFragments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
+    const alignments = await db.getAlignments({
+      path: chr6,
+      start: fragment!.end - 200,
+      end: fragment!.end + 100000,
+    })
     expect(alignments.length).toBeGreaterThan(0)
     expect(Math.max(...alignments.map(a => a.refEnd))).toBeLessThanOrEqual(
       fragment!.end,
     )
   })
 
-  it('returns nothing for a window or path with no fragment', async () => {
+  it('returns nothing for a window no fragment covers', async () => {
     const db = await openMicb()
-    expect(await db.getAlignmentsForRange('nonexistent', 0, 1000)).toEqual([])
-    expect(await db.getAlignmentsForRange(chr6, 0, 1000)).toEqual([])
+    expect(await db.getAlignments({ path: chr6, start: 0, end: 1000 })).toEqual(
+      [],
+    )
   })
 
   it('leaves haplotypes unresolved on a database with no index', async () => {
     const db = await openMicb()
     Object.defineProperty(db, 'hasHaplotypeIndex', { value: false })
-    const alignments = await db.getAlignmentsForRange(chr6, 31500000, 31501000)
+    const alignments = await db.getAlignments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
     expect(alignments.length).toBeGreaterThan(0)
     expect(alignments.every(a => !a.resolved)).toBe(true)
   })
@@ -197,7 +221,10 @@ describe('getAlignmentsForRange', () => {
   it('rejects an aborted signal', async () => {
     const db = await openMicb()
     await expect(
-      db.getAlignmentsForRange(chr6, 31500000, 31501000, {
+      db.getAlignments({
+        path: chr6,
+        start: 31500000,
+        end: 31501000,
         signal: AbortSignal.abort(),
       }),
     ).rejects.toThrow()
@@ -205,8 +232,15 @@ describe('getAlignmentsForRange', () => {
 
   it('collapses identical walks under distinct, and only accepts outputs it can align', async () => {
     const db = await openMicb()
-    const all = await db.getAlignmentsForRange(chr6, 31500000, 31501000)
-    const distinct = await db.getAlignmentsForRange(chr6, 31500000, 31501000, {
+    const all = await db.getAlignments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
+    const distinct = await db.getAlignments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
       haplotypes: 'distinct',
     })
     expect(distinct.length).toBeLessThan(all.length)
@@ -215,47 +249,76 @@ describe('getAlignmentsForRange', () => {
       true,
     )
     // @ts-expect-error alignments need haplotypes to align
-    void db.getAlignmentsForRange(chr6, 0, 1, { haplotypes: 'none' })
+    void db.getAlignments({ path: chr6, start: 0, end: 1, haplotypes: 'none' })
     // @ts-expect-error snarls do not shape an alignment record
-    void db.getAlignmentsForRange(chr6, 0, 1, { snarls: 'contained' })
+    void db.getAlignments({ path: chr6, start: 0, end: 1, snarls: 'contained' })
   })
 })
 
 describe('getSubgraphForRange', () => {
   it('hands back a query object with names already resolved', async () => {
     const db = await openMicb()
-    const subgraph = await db.getSubgraphForRange(chr6, 31500000, 31501000)
-    const gfa = await subgraph!.toGFA({ names: 'resolved' })
+    const [subgraph] = await db.getSubgraphs({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
+    const gfa = await subgraph!.toGFA()
     expect(gfa).not.toMatch(/\bunknown#/)
-    const json = subgraph!.toSubgraphJson({ cigar: true, names: 'resolved' })
+    expect(
+      subgraph!.toSubgraphJson({ names: 'anonymous' }).paths[1]?.name,
+    ).toMatch(/^unknown#/)
+    const json = subgraph!.toSubgraphJson({ cigar: true })
     expect(json.nodes.length).toBeGreaterThan(0)
     expect(json.paths[0]?.name).toMatch(/^GRCh38#0#chr6\[\d+-\d+\]$/)
   })
 
   it('reports the interval it actually answered', async () => {
     const db = await openMicb()
-    const [fragment] = await db.pathFragmentsForRange(chr6, 31500000, 31501000)
-    const subgraph = await db.getSubgraphForRange(
-      chr6,
-      31500000,
-      fragment!.end + 100000,
-      { context: 0 },
-    )
+    const [fragment] = await db.getPathFragments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
+    const [subgraph] = await db.getSubgraphs({
+      path: chr6,
+      start: 31500000,
+      end: fragment!.end + 100000,
+      context: 0,
+    })
     expect(subgraph?.referenceInterval?.end).toBe(fragment!.end)
   })
 
-  it('is undefined when no fragment covers the window', async () => {
+  it('is empty when no fragment covers the window, and throws for a path the graph lacks', async () => {
     const db = await openMicb()
-    expect(await db.getSubgraphForRange('nonexistent', 0, 1000)).toBeUndefined()
-    expect(await db.getSubgraphForRange(chr6, 0, 1000)).toBeUndefined()
+    expect(await db.getSubgraphs({ path: chr6, start: 0, end: 1000 })).toEqual(
+      [],
+    )
+    expect(
+      await db.getSubgraphs({ path: chr6, start: 1000, end: 1000 }),
+    ).toEqual([])
+    const unknown = db.getSubgraphs({ path: 'chr6', start: 0, end: 1000 })
+    await expect(unknown).rejects.toThrow(UnknownPathError)
+    await expect(unknown).rejects.toThrow(
+      'the graph has no path named _gbwt_ref#0#chr6',
+    )
+    await expect(
+      db.getAlignments({ path: 'nonexistent', start: 0, end: 1000 }),
+    ).rejects.toThrow(UnknownPathError)
   })
 
   it('reports a reference interval that runs to node boundaries and through context', async () => {
     const db = await openMicb()
-    const tight = await db.getSubgraphForRange(chr6, 31500000, 31501000, {
+    const [tight] = await db.getSubgraphs({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
       context: 0,
     })
-    const wide = await db.getSubgraphForRange(chr6, 31500000, 31501000, {
+    const [wide] = await db.getSubgraphs({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
       context: 100,
     })
     expect(tight?.referenceInterval?.start).toBeLessThanOrEqual(31500000)
@@ -271,8 +334,15 @@ describe('keep', () => {
 
   it('narrows a range subgraph to the reference and the kept walks', async () => {
     const db = await openMicb()
-    const whole = await db.getSubgraphForRange(chr6, 31500000, 31501000)
-    const kept = await db.getSubgraphForRange(chr6, 31500000, 31501000, {
+    const [whole] = await db.getSubgraphs({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
+    const [kept] = await db.getSubgraphs({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
       keep: wanted,
     })
     expect(kept?.pathCount).toBe(3)
@@ -286,8 +356,15 @@ describe('keep', () => {
 
   it('aligns only the kept walks, and each the same as in the whole window', async () => {
     const db = await openMicb()
-    const whole = await db.getAlignmentsForRange(chr6, 31500000, 31501000)
-    const kept = await db.getAlignmentsForRange(chr6, 31500000, 31501000, {
+    const whole = await db.getAlignments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
+    })
+    const kept = await db.getAlignments({
+      path: chr6,
+      start: 31500000,
+      end: 31501000,
       keep: wanted,
     })
     expect(kept.length).toBe(2)
@@ -300,7 +377,12 @@ describe('keep', () => {
     const db = await openMicb()
     Object.defineProperty(db, 'hasHaplotypeIndex', { value: false })
     await expect(
-      db.getAlignmentsForRange(chr6, 31500000, 31501000, { keep: wanted }),
+      db.getAlignments({
+        path: chr6,
+        start: 31500000,
+        end: 31501000,
+        keep: wanted,
+      }),
     ).rejects.toThrow(/keep needs the haplotype index/)
   })
 })

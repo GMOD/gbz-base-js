@@ -4,16 +4,10 @@ import { LocalFile, RemoteFile } from 'generic-filehandle2'
 
 import { GBZBase } from './db.ts'
 import { encodeNode } from './gbwt/node.ts'
-import {
-  subgraphAroundNodes,
-  subgraphAtOffset,
-  subgraphBetween,
-  subgraphForHaplotypes,
-  subgraphInInterval,
-} from './query.ts'
 
 import type { KeepStats } from './chosenPaths.ts'
 import type { PathName } from './pathName.ts'
+import type { NodeHaplotypeOutput } from './query.ts'
 import type {
   ChainEnd,
   HaplotypeAlignment,
@@ -371,22 +365,22 @@ export async function main(argv: string[]) {
   const args = parseArgs(argv)
   const open = (file: string) =>
     /^https?:\/\//.test(file) ? new RemoteFile(file) : new LocalFile(file)
-  const db = await GBZBase.open(open(args.file), {
+  const db = await GBZBase.open({
+    source: open(args.file),
+    haplotypeIndex:
+      args.haplotypeIndex === undefined ? undefined : open(args.haplotypeIndex),
     blockSize: args.blockSize,
-    ...(args.haplotypeIndex === undefined
-      ? {}
-      : { haplotypeIndex: open(args.haplotypeIndex) }),
   })
   const opts = {
     context: args.context,
     haplotypes: args.haplotypes,
     snarls: args.snarls,
-    ...(args.limit === undefined ? {} : { limit: args.limit }),
+    limit: args.limit,
   }
-  const query = {
+  const path = {
     contig: args.contig ?? '',
     haplotype: args.haplotype,
-    ...(args.sample === undefined ? {} : { sample: args.sample }),
+    sample: args.sample,
   }
   if (args.against !== undefined && args.stack !== undefined) {
     throw new Error('--against and --stack cannot be combined')
@@ -407,27 +401,28 @@ export async function main(argv: string[]) {
     opts.haplotypes = 'all'
   }
   const subgraph = args.between
-    ? await subgraphBetween(db, args.between[0], args.between[1], opts)
+    ? await db.subgraphBetween({
+        ...opts,
+        haplotypes: opts.haplotypes as NodeHaplotypeOutput,
+        startHandle: args.between[0],
+        endHandle: args.between[1],
+      })
     : args.nodes.length > 0
-      ? await subgraphAroundNodes(db, args.nodes, opts)
+      ? await db.subgraphAroundNodes({
+          ...opts,
+          haplotypes: opts.haplotypes as NodeHaplotypeOutput,
+          nodeIds: args.nodes,
+        })
       : args.interval
-        ? keep === undefined
-          ? await subgraphInInterval(
-              db,
-              query,
-              args.interval[0],
-              args.interval[1],
-              opts,
-            )
-          : await subgraphForHaplotypes(
-              db,
-              query,
-              args.interval[0],
-              args.interval[1],
-              { ...opts, keep },
-            )
+        ? await db.subgraphInInterval({
+            ...opts,
+            path,
+            start: args.interval[0],
+            end: args.interval[1],
+            keep,
+          })
         : args.offset !== undefined
-          ? await subgraphAtOffset(db, query, args.offset, opts)
+          ? await db.subgraphAtOffset({ ...opts, path, offset: args.offset })
           : undefined
   if (!subgraph) {
     throw new Error(
@@ -480,9 +475,10 @@ export async function main(argv: string[]) {
     )
   }
   if (args.stats) {
-    const { fetches, bytesFetched } = db.sqlite.pager
-    const index = db.index
-      ? ` (haplotype index: ${db.index.pager.fetches} fetches, ${db.index.pager.bytesFetched} bytes)`
+    const { graph, haplotypeIndex } = db.fetchStats()
+    const { fetches, bytesFetched } = graph
+    const index = haplotypeIndex
+      ? ` (haplotype index: ${haplotypeIndex.fetches} fetches, ${haplotypeIndex.bytesFetched} bytes)`
       : ''
     const {
       orderedAlignments,

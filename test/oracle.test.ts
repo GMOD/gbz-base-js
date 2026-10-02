@@ -7,13 +7,8 @@ import { describe, expect, it } from 'vitest'
 import { GBZBase } from '../src/db.ts'
 import { encodeNode } from '../src/gbwt/node.ts'
 import * as nodes from '../src/gbwt/node.ts'
-import {
-  subgraphAroundNodes,
-  subgraphAtOffset,
-  subgraphBetween,
-  subgraphInInterval,
-} from '../src/query.ts'
 
+import type { NodeHaplotypeOutput } from '../src/query.ts'
 import type {
   CompactSubgraph,
   HaplotypeOutput,
@@ -47,7 +42,9 @@ function option(args: string[], flag: string) {
 }
 
 async function runQuery(query: OracleQuery) {
-  const db = await GBZBase.open(new LocalFile(path.join(dataDir, query.db)))
+  const db = await GBZBase.open({
+    source: new LocalFile(path.join(dataDir, query.db)),
+  })
   const context = Number(option(query.args, '--context') ?? 100)
   const haplotypes = (option(query.args, '--haplotypes') ??
     'all') as HaplotypeOutput
@@ -68,21 +65,30 @@ async function runQuery(query: OracleQuery) {
     arg === '--node' ? [Number(query.args[i + 1])] : [],
   )
   const subgraph = interval
-    ? await subgraphInInterval(
-        db,
-        pathQuery,
-        ...(interval.split('..').map(Number) as [number, number]),
-        opts,
-      )
+    ? await db.subgraphInInterval({
+        ...opts,
+        path: pathQuery,
+        start: Number(interval.split('..')[0]),
+        end: Number(interval.split('..')[1]),
+      })
     : offset
-      ? await subgraphAtOffset(db, pathQuery, Number(offset), opts)
+      ? await db.subgraphAtOffset({
+          path: pathQuery,
+          offset: Number(offset),
+          ...opts,
+        })
       : between
-        ? await subgraphBetween(
-            db,
-            ...(between.split(':').map(parseHandle) as [number, number]),
-            opts,
-          )
-        : await subgraphAroundNodes(db, nodes, opts)
+        ? await db.subgraphBetween({
+            ...opts,
+            haplotypes: opts.haplotypes as NodeHaplotypeOutput,
+            startHandle: parseHandle(between.split(':')[0]!),
+            endHandle: parseHandle(between.split(':')[1]!),
+          })
+        : await db.subgraphAroundNodes({
+            ...opts,
+            haplotypes: opts.haplotypes as NodeHaplotypeOutput,
+            nodeIds: nodes,
+          })
   return {
     json: subgraph.toSubgraphJson({ cigar }),
     compact: subgraph.toCompactSubgraph({ cigar }),

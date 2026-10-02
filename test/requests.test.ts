@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 
 import { sampledCompanion } from './fixtures.ts'
 import { GBZBase } from '../src/db.ts'
-import { subgraphInInterval } from '../src/query.ts'
 
 import type { ByteSource } from '../src/filehandle.ts'
 
@@ -21,10 +20,6 @@ class CountingSource implements ByteSource {
     this.requests.push([position, length])
     return this.inner.read(length, position)
   }
-
-  stat() {
-    return this.inner.stat()
-  }
 }
 
 describe('request pattern', () => {
@@ -34,18 +29,18 @@ describe('request pattern', () => {
         path.join(import.meta.dirname, 'data', 'micb-kir3dl1.gbz.db'),
       ),
     )
-    const db = await GBZBase.open(source, {
+    const db = await GBZBase.open({
+      source,
       blockSize: 16384,
       haplotypeIndex: new LocalFile(sampledCompanion('micb-kir3dl1.gbz.db')),
     })
     expect(source.requests).toEqual([[0, 16384]])
-    const subgraph = await subgraphInInterval(
-      db,
-      { sample: 'GRCh38', contig: 'chr6' },
-      31500000,
-      31501000,
-      { context: 0 },
-    )
+    const subgraph = await db.subgraphInInterval({
+      path: { sample: 'GRCh38', contig: 'chr6' },
+      start: 31500000,
+      end: 31501000,
+      context: 0,
+    })
     await subgraph.identifyPaths()
     expect(subgraph.alignments().length).toBeGreaterThan(0)
     expect(source.requests.length).toBeLessThan(12)

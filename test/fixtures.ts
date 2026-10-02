@@ -17,7 +17,8 @@ export function sampledCompanion(graph: string) {
 }
 
 export function openSampled(graph: string) {
-  return GBZBase.open(new LocalFile(path.join(dataDir, graph)), {
+  return GBZBase.open({
+    source: new LocalFile(path.join(dataDir, graph)),
     haplotypeIndex: new LocalFile(sampledCompanion(graph)),
   })
 }

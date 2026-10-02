@@ -34,7 +34,10 @@ async function openRetrying() {
   let attempt = 0
   for (;;) {
     try {
-      return await GBZBase.open(open(graph), { haplotypeIndex: open(index) })
+      return await GBZBase.open({
+        source: open(graph),
+        haplotypeIndex: open(index),
+      })
     } catch (error) {
       attempt += 1
       if (attempt >= 5) {
@@ -47,31 +50,29 @@ async function openRetrying() {
 
 async function run(db, contig, start, end, set) {
   const t0 = performance.now()
-  const graphFetches = db.sqlite.pager.fetches
-  const graphBytes = db.sqlite.pager.bytesFetched
-  const indexFetches = db.index.pager.fetches
-  const indexBytes = db.index.pager.bytesFetched
-  const subgraph = await db.getSubgraphForRange(
-    `GRCh38#0#${contig}`,
+  const before = db.fetchStats()
+  const [subgraph] = await db.getSubgraphs({
+    path: `GRCh38#0#${contig}`,
     start,
     end,
-    {
-      context: 1000,
-      snarls: 'contained',
-      ...(set === 'eight' ? { keep: keepEight } : {}),
-    },
-  )
+    context: 1000,
+    snarls: 'contained',
+    keep: set === 'eight' ? keepEight : undefined,
+  })
   const alignments = subgraph.alignments()
   const ms = performance.now() - t0
   const keep = subgraph.stats.keep
+  const after = db.fetchStats()
   return {
     ms,
     records: alignments.length,
     nodes: subgraph.nodeCount,
-    graphRequests: db.sqlite.pager.fetches - graphFetches,
-    graphMB: (db.sqlite.pager.bytesFetched - graphBytes) / 1e6,
-    indexRequests: db.index.pager.fetches - indexFetches,
-    indexMB: (db.index.pager.bytesFetched - indexBytes) / 1e6,
+    graphRequests: after.graph.fetches - before.graph.fetches,
+    graphMB: (after.graph.bytesFetched - before.graph.bytesFetched) / 1e6,
+    indexRequests: after.haplotypeIndex.fetches - before.haplotypeIndex.fetches,
+    indexMB:
+      (after.haplotypeIndex.bytesFetched - before.haplotypeIndex.bytesFetched) /
+      1e6,
     route: keep
       ? keep.fallback
         ? `every walk: ${keep.fallback}`

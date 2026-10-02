@@ -29,11 +29,7 @@ export class SqliteDatabase {
   }
 
   static async open(source: ByteSource, opts: PagerOptions = {}) {
-    const { size } = await source.stat()
-    const firstBlock = await source.read(
-      Math.min(opts.blockSize ?? 65536, size),
-      0,
-    )
+    const firstBlock = await source.read(opts.blockSize ?? 65536, 0)
     const header = firstBlock.subarray(0, 100)
     const magic = new TextDecoder().decode(header.subarray(0, 15))
     if (magic !== 'SQLite format 3') {
@@ -51,6 +47,13 @@ export class SqliteDatabase {
     if (encoding !== 1) {
       throw new Error(`SQLite text encoding ${encoding} is not UTF-8`)
     }
+    const pageCount = view.getUint32(28)
+    if (pageCount === 0 || view.getUint32(24) !== view.getUint32(92)) {
+      throw new Error(
+        'SQLite header has no valid database size; the file was written by SQLite older than 3.7.0',
+      )
+    }
+    const size = pageCount * pageSize
     const pager = new Pager(source, pageSize, size, opts)
     pager.seed(0, firstBlock)
     pager.fetches += 1

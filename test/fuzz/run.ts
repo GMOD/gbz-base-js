@@ -16,7 +16,6 @@ import type { Gfa, GfaPath, Piece } from './truth.ts'
 import type * as ChosenPaths from '../../src/chosenPaths.ts'
 import type * as Db from '../../src/db.ts'
 import type { PathName } from '../../src/pathName.ts'
-import type * as Query from '../../src/query.ts'
 import type { PathIdentity, SnarlOutput, Subgraph } from '../../src/subgraph.ts'
 
 const defaultIndexArgs =
@@ -67,25 +66,18 @@ interface Args {
 }
 
 type Library = Pick<typeof ChosenPaths, 'keepTuning'> &
-  Pick<typeof Db, 'GBZBase'> &
-  Pick<typeof Query, 'subgraphForHaplotypes' | 'subgraphInInterval'>
+  Pick<typeof Db, 'GBZBase'>
 
 type GBZBase = Db.GBZBase
 
 async function loadLibrary(src: string): Promise<Library> {
   const load = <T>(file: string) =>
     import(pathToFileURL(path.resolve(src, file)).href) as Promise<T>
-  const [chosenPaths, db, query] = await Promise.all([
+  const [chosenPaths, db] = await Promise.all([
     load<typeof ChosenPaths>('chosenPaths.ts'),
     load<typeof Db>('db.ts'),
-    load<typeof Query>('query.ts'),
   ])
-  return {
-    keepTuning: chosenPaths.keepTuning,
-    GBZBase: db.GBZBase,
-    subgraphForHaplotypes: query.subgraphForHaplotypes,
-    subgraphInInterval: query.subgraphInInterval,
-  }
+  return { keepTuning: chosenPaths.keepTuning, GBZBase: db.GBZBase }
 }
 
 interface Tally {
@@ -670,7 +662,8 @@ async function runSeed(
     const builtAt = performance.now()
     tally.buildMs += builtAt - generatedAt
     files.push(new LocalFile(built.graph), new LocalFile(built.index))
-    const db = await library.GBZBase.open(files[0]!, {
+    const db = await library.GBZBase.open({
+      source: files[0]!,
       haplotypeIndex: files[1]!,
     })
     await checkGraph(db, gfa)
@@ -739,13 +732,12 @@ async function runSeed(
           let truth: Piece[]
           let sampled: Subgraph
           try {
-            sampled = await library.subgraphInInterval(
-              db,
-              query,
+            sampled = await db.subgraphInInterval({
+              ...opts,
+              path: query,
               start,
               end,
-              opts,
-            )
+            })
             const nodes = new Set(
               [...internals(sampled).records.keys()].map(handle => handle >> 1),
             )
@@ -801,13 +793,13 @@ async function runSeed(
             let fallback: string | undefined
             let route = 'keep'
             try {
-              const subgraph = await library.subgraphForHaplotypes(
-                db,
-                query,
+              const subgraph = await db.subgraphInInterval({
+                ...opts,
+                path: query,
                 start,
                 end,
-                { ...opts, keep },
-              )
+                keep,
+              })
               fallback = subgraph.stats.keep
                 ? subgraph.stats.keep.fallback
                 : 'no keep statistics'

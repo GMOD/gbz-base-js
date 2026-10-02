@@ -2,9 +2,11 @@ import { LocalFile } from 'generic-filehandle2'
 import { GBZBase } from '../src/db.ts'
 import { Subgraph } from '../src/subgraph.ts'
 
-const db = await GBZBase.open(
-  new LocalFile('/Users/colin/src/gbz-base-js/test/data/micb-kir3dl1.gbz.db'),
-)
+const db = await GBZBase.open({
+  source: new LocalFile(
+    '/Users/colin/src/gbz-base-js/test/data/micb-kir3dl1.gbz.db',
+  ),
+})
 const subgraph = new Subgraph(db)
 console.time('pathPosition')
 const ref = await subgraph.pathPosition({
@@ -29,7 +31,7 @@ subgraph.toJSON(true)
 console.timeEnd('toJSON cigar')
 console.log(
   'fetches',
-  db.sqlite.pager.fetches,
+  db.fetchStats().graph.fetches,
   'bytes',
-  db.sqlite.pager.bytesFetched,
+  db.fetchStats().graph.bytesFetched,
 )

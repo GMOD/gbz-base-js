@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { LocalFile } from 'generic-filehandle2'
@@ -23,6 +24,21 @@ describe('sqlite reader', () => {
     )
   })
 
+  it('takes the file size from the header, and refuses a header that does not carry it', async () => {
+    const bytes = await readFile(file)
+    const source = (data: Uint8Array) => ({
+      read: async (length: number, position: number) =>
+        data.subarray(position, position + length),
+    })
+    const db = await SqliteDatabase.open(source(bytes))
+    expect(db.objects.has('Nodes')).toBe(true)
+    const stale = Uint8Array.from(bytes)
+    stale[95] = stale[95]! ^ 1
+    await expect(SqliteDatabase.open(source(stale))).rejects.toThrow(
+      /no valid database size/,
+    )
+  })
+
   it('scans every node row', async () => {
     const db = await SqliteDatabase.open(new LocalFile(file))
     let count = 0
@@ -41,16 +57,16 @@ describe('sqlite reader', () => {
       'data',
       'example-future-schema.gbz.db',
     )
-    await expect(GBZBase.open(new LocalFile(future))).rejects.toBeInstanceOf(
-      SchemaVersionError,
-    )
-    await expect(GBZBase.open(new LocalFile(future))).rejects.toThrow(
-      'GBZ-base version 99',
-    )
+    await expect(
+      GBZBase.open({ source: new LocalFile(future) }),
+    ).rejects.toBeInstanceOf(SchemaVersionError)
+    await expect(
+      GBZBase.open({ source: new LocalFile(future) }),
+    ).rejects.toThrow('GBZ-base version 99')
   })
 
   it('reads tags and paths', async () => {
-    const db = await GBZBase.open(new LocalFile(file))
+    const db = await GBZBase.open({ source: new LocalFile(file) })
     expect(await db.tag('nodes')).toBe('2891')
     expect(await db.tag('gbwt_reference_samples')).toBe('CHM13 GRCh38')
     const paths = await db.paths()
@@ -67,7 +83,7 @@ describe('sqlite reader', () => {
   })
 
   it('seeks the reference index', async () => {
-    const db = await GBZBase.open(new LocalFile(file))
+    const db = await GBZBase.open({ source: new LocalFile(file) })
     expect(await db.indexedPosition(0, 0)).toEqual({
       pathOffset: 0,
       pos: { node: 2, offset: 0 },
@@ -88,7 +104,7 @@ describe('sqlite reader', () => {
   })
 
   it('decodes a node record', async () => {
-    const db = await GBZBase.open(new LocalFile(file))
+    const db = await GBZBase.open({ source: new LocalFile(file) })
     const record = await db.getRecord(2)
     expect(record?.id).toBe(1)
     expect(record?.orientation).toBe('forward')

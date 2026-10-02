@@ -143,9 +143,10 @@ export interface HaplotypeRef {
 
 export interface PairAlignmentOptions {
   target: HaplotypeRef
-  query?: HaplotypeRef
-  maxGap?: number
-  bases?: boolean
+  query?: HaplotypeRef | undefined
+  maxGap?: number | undefined
+  minMatch?: number | undefined
+  bases?: boolean | undefined
 }
 
 export interface PairAlignment {
@@ -508,6 +509,7 @@ export class Subgraph {
   private snarlMode: SnarlOutput = 'none'
   private snarlFills: SnarlFill[] = []
   private snarlNodes = new Set<number>()
+  /** @internal */
   readonly stats: SubgraphStats = {
     orderedAlignments: 0,
     lcsAlignments: 0,
@@ -532,6 +534,7 @@ export class Subgraph {
   private readonly limit: number | undefined
   private readonly signal: AbortSignal | undefined
 
+  /** @internal */
   constructor(db: GBZBase, opts: SubgraphOptions = {}) {
     this.db = db
     this.limit = opts.limit
@@ -608,23 +611,22 @@ export class Subgraph {
     this.refPrefixCache = undefined
   }
 
+  /** @internal */
   async pathPosition(query: PathName): Promise<ReferencePath> {
     const path = await this.db.findPath(query)
     if (!path) {
-      throw new Error(
-        `Cannot find a path covering ${formatPathName(query, query.fragment)}`,
-      )
+      throw new Error(`Cannot find a path covering ${formatPathName(query)}`)
     }
     if (!path.isIndexed) {
       throw new Error(
-        `Path ${formatPathName(path.name, path.name.fragment)} has not been indexed for random access`,
+        `Path ${formatPathName(path.name)} has not been indexed for random access`,
       )
     }
     const queryOffset = query.fragment - path.name.fragment
     const indexed = await this.db.indexedPosition(path.handle, queryOffset)
     if (!indexed) {
       throw new Error(
-        `Path ${formatPathName(path.name, path.name.fragment)} has not been indexed for random access`,
+        `Path ${formatPathName(path.name)} has not been indexed for random access`,
       )
     }
     return this.findPathPosition(
@@ -662,13 +664,14 @@ export class Subgraph {
       const next = record.gbwt().lf(pos.offset)
       if (!next) {
         throw new Error(
-          `Path ${formatPathName(path.name, path.name.fragment)} does not contain offset ${queryOffset}`,
+          `Path ${formatPathName(path.name)} does not contain offset ${queryOffset}`,
         )
       }
       pos = next
     }
   }
 
+  /** @internal */
   async aroundPosition(handle: number, nodeOffset: number, context: number) {
     const id = nodeId(handle)
     await this.ensureNode(id)
@@ -680,6 +683,7 @@ export class Subgraph {
     return this.insertContext(active, context)
   }
 
+  /** @internal */
   prefetchReferenceWalk(reference: ReferencePath, len: number) {
     return this.prefetchReferenceRange(
       reference.handle,
@@ -723,6 +727,7 @@ export class Subgraph {
     return first
   }
 
+  /** @internal */
   async aroundInterval(start: PathPosition, len: number, context: number) {
     if (len === 0) {
       throw new Error('Interval length must be greater than 0')
@@ -740,6 +745,7 @@ export class Subgraph {
     }
   }
 
+  /** @internal */
   get referenceWalkedBp() {
     return this.walkedBp
   }
@@ -789,6 +795,7 @@ export class Subgraph {
     return this.insertContext(active, context)
   }
 
+  /** @internal */
   async aroundNodes(nodes: Iterable<number>, context: number) {
     const active = new SideQueue()
     for (const id of nodes) {
@@ -850,6 +857,7 @@ export class Subgraph {
     return { inserted, removed: toRemove.size }
   }
 
+  /** @internal */
   async betweenNodes(start: number, end: number) {
     return (await this.fillBetween(start, end)).inserted.length
   }
@@ -877,6 +885,7 @@ export class Subgraph {
     return { inserted, nodes: visited.size - 2 }
   }
 
+  /** @internal */
   async extractSnarls(snarls: SnarlOutput) {
     let total = 0
     this.snarlMode = snarls
@@ -1015,6 +1024,7 @@ export class Subgraph {
     return result
   }
 
+  /** @internal */
   extractPaths(reference: ReferencePath | undefined, output: HaplotypeOutput) {
     this.clearPaths()
     if (output === 'none') {
@@ -1349,6 +1359,7 @@ export class Subgraph {
   // the others. Returns false, leaving no walks, when the haplotype index
   // cannot show that the walks it found are all of them; the caller then
   // extracts and identifies every walk, and stats.keep.fallback says why.
+  /** @internal */
   async extractChosenPaths(
     reference: ReferencePath,
     len: number,
@@ -1875,6 +1886,7 @@ export class Subgraph {
     return result
   }
 
+  /** @internal */
   alignToRef(pathIndex: number) {
     return this.alignment(pathIndex)
       ?.edits.map(([op, len]) => `${len}${op}`)
@@ -2024,10 +2036,11 @@ export class Subgraph {
             ...span,
             resolved: true,
             name: identity.name,
-            label: formatPathName(
-              { ...identity.name, fragment: identity.hapStart },
-              identity.hapEnd,
-            ),
+            label: formatPathName({
+              ...identity.name,
+              fragment: identity.hapStart,
+              end: identity.hapEnd,
+            }),
             pathHandle: identity.pathHandle,
             hapStart: identity.hapStart,
             hapEnd: identity.hapEnd,
@@ -2066,12 +2079,12 @@ export class Subgraph {
         walks
           .filter(walk => isQuery(walk.name))
           .flatMap(queryWalk =>
-            pairAlignments(
-              queryWalk.steps,
-              targetWalk.steps,
+            pairAlignments({
+              ...pairOptions,
+              query: queryWalk.steps,
+              target: targetWalk.steps,
               sequenceOf,
-              pairOptions,
-            ).map(chain => ({
+            }).map(chain => ({
               query: queryWalk.name,
               queryStart: queryWalk.start + chain.queryStart,
               queryEnd: queryWalk.start + chain.queryEnd,
@@ -2187,7 +2200,7 @@ export class Subgraph {
     let haplotype = 1
     this.paths.forEach((info, index) => {
       if (index !== this.refId) {
-        const resolved = opts.names === 'resolved' ? info.identity : undefined
+        const resolved = opts.names !== 'anonymous' ? info.identity : undefined
         const cigarString = cigar ? this.alignToRef(index) : undefined
         lines.push(
           resolved
@@ -2236,10 +2249,10 @@ export class Subgraph {
       entries.push({
         info: this.paths[this.refId]!,
         identity: undefined,
-        name: formatPathName(
-          start,
-          this.refPath.fragment + this.refInterval[1],
-        ),
+        name: formatPathName({
+          ...start,
+          end: this.refPath.fragment + this.refInterval[1],
+        }),
         cigar: undefined,
       })
     }
@@ -2248,22 +2261,23 @@ export class Subgraph {
       if (index === this.refId) {
         return
       }
-      const identity = opts.names === 'resolved' ? info.identity : undefined
+      const identity = opts.names !== 'anonymous' ? info.identity : undefined
       entries.push({
         info,
         identity,
         name: identity
-          ? formatPathName(
-              {
-                ...identity.name,
-                fragment: identity.name.fragment + identity.hapStart,
-              },
-              identity.name.fragment + identity.hapEnd,
-            )
-          : formatPathName(
-              { sample: 'unknown', contig, haplotype, fragment: 0 },
-              info.len,
-            ),
+          ? formatPathName({
+              ...identity.name,
+              fragment: identity.name.fragment + identity.hapStart,
+              end: identity.name.fragment + identity.hapEnd,
+            })
+          : formatPathName({
+              sample: 'unknown',
+              contig,
+              haplotype,
+              fragment: 0,
+              end: info.len,
+            }),
         cigar: cigar ? this.alignToRef(index) : undefined,
       })
       haplotype += 1

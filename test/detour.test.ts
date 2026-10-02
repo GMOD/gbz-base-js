@@ -17,15 +17,16 @@ import type { HaplotypeAlignment } from '../src/subgraph.ts'
 const dataDir = path.join(import.meta.dirname, 'data')
 
 async function records() {
-  const db = await GBZBase.open(
-    new LocalFile(path.join(dataDir, 'detour.gbz.db')),
-    {
-      haplotypeIndex: new LocalFile(
-        path.join(dataDir, 'detour.haplotype-index.db'),
-      ),
-    },
-  )
-  return db.getAlignmentsForRange('GRCh38#0#chr1', 500, 10500, {
+  const db = await GBZBase.open({
+    source: new LocalFile(path.join(dataDir, 'detour.gbz.db')),
+    haplotypeIndex: new LocalFile(
+      path.join(dataDir, 'detour.haplotype-index.db'),
+    ),
+  })
+  return db.getAlignments({
+    path: 'GRCh38#0#chr1',
+    start: 500,
+    end: 10500,
     context: 1000,
   })
 }
