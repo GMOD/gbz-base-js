@@ -28,3 +28,4 @@ build stray-end --interval 256 --anchor-spacing 2048 --stray-context 100 --stray
 build anchor-at-bound --interval 1000 --anchor-spacing 500 --stray-context 1000 --stray-bin 1000 --stray-bound 2000 --stray-gap 64
 build keep-bounds --interval 4096 --anchor-spacing 1000 --stray-context 1 --stray-bin 2000 --stray-bound 1000 --stray-gap 64
 build reverse-reference --interval 16384
+build shared-hairpin --interval 16384

@@ -42,6 +42,5 @@ files with an upstream binary.
   shares more sequence. Without a haplotype index the twins stay, as upstream
   prints them. With `haplotypes: 'distinct'` and a haplotype index, the walks a
   twin would merge with, those of haplotypes stored against the reference and
-  walks that read the same both ways, merge after identification rather than
-  before, so the merged record's name and weight are those of the walks that
-  remain.
+  walks canonical both ways, merge after identification rather than before, so
+  the merged record's name and weight are those of the walks that remain.

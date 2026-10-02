@@ -209,3 +209,46 @@ describe('a walk through a hairpin', () => {
     ])
   })
 })
+
+// shared-hairpin.gfa: HG001#1 and HG002#1 both walk >1>2>4<2<1 through the
+// window, a hairpin at node 1, and differ only outside it.
+describe('a hairpin two haplotypes share', () => {
+  const openShared = () =>
+    GBZBase.open({
+      source: new LocalFile(path.join(dataDir, 'shared-hairpin.gbz.db')),
+      haplotypeIndex: new LocalFile(
+        path.join(dataDir, 'shared-hairpin.haplotype-index.db'),
+      ),
+    })
+  const window = { path: grch38, start: 10, end: 50, context: 0 }
+  const merged = [
+    'GRCh38\t0\tchr1\t10\t50\t>1>2>4>3\tWT:i:1',
+    'HG002\t1\tctg1\t20\t70\t>1>2>4<2<1\tWT:i:2',
+  ]
+
+  it('is one record of weight 2 under distinct, on every route', async () => {
+    const db = await openShared()
+    const [distinct] = await db.getSubgraphs({
+      ...window,
+      haplotypes: 'distinct',
+    })
+    expect(walks(await distinct!.toGFA())).toEqual(merged)
+    const records = await db.getAlignments({
+      ...window,
+      haplotypes: 'distinct',
+    })
+    expect(records.map(r => [r.resolved ? r.label : '?', r.weight])).toEqual([
+      ['HG002#1#ctg1[20-70]', 2],
+    ])
+    const [kept] = await db.getSubgraphs({
+      ...window,
+      haplotypes: 'distinct',
+      keep: () => true,
+    })
+    expect(kept!.stats.keep?.fallback).toBeUndefined()
+    expect(walks(await kept!.toGFA())).toEqual(merged)
+    const [all] = await db.getSubgraphs(window)
+    all!.mergeDistinct()
+    expect(walks(await all!.toGFA())).toEqual(merged)
+  })
+})

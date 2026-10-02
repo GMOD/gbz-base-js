@@ -1231,8 +1231,8 @@ export class Subgraph {
   // (dropTwins) stay apart until then, so that the record they would have
   // merged into keeps a name and a weight of its own: the twin of a reference
   // walk that is not canonical, which a haplotype stored against the reference
-  // walks handle for handle, and a walk that reads the same in both
-  // orientations, which extractPaths keeps twice.
+  // walks handle for handle, and a walk canonical in both orientations, as
+  // through a hairpin, which extractPaths keeps twice.
   private distinctPaths(deferTwins: boolean) {
     const refInfo =
       this.refId === undefined ? undefined : this.paths[this.refId]
@@ -1242,7 +1242,7 @@ export class Subgraph {
     const deferred = (path: number[]) =>
       (referenceTwin !== undefined &&
         comparePaths(path, referenceTwin) === 0) ||
-      comparePaths(path, flipPath(path)) === 0
+      pathIsCanonical(flipPath(path))
     const defer = deferTwins && this.db.hasHaplotypeIndex
     this.twinDeferred = false
     this.paths.sort(
