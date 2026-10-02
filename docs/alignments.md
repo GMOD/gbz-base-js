@@ -1,7 +1,7 @@
 # Alignment records
 
-`getAlignmentsForRange` returns one record each time a haplotype crosses the
-window, aligned to the reference path you queried.
+`getAlignments` returns one record each time a haplotype crosses the window,
+aligned to the reference path you queried.
 
 ```ts
 for (const alignment of alignments) {

@@ -24,24 +24,17 @@ npm install @gmod/gbz-base
 import { RemoteFile } from 'generic-filehandle2'
 import { GBZBase } from '@gmod/gbz-base'
 
-const db = await GBZBase.open(
-  new RemoteFile('https://example.org/graph.gbz.db'),
-)
+const db = await GBZBase.open({
+  source: new RemoteFile('https://example.org/graph.gbz.db'),
+})
+const window = { path: 'GRCh38#0#chr6', start: 31500000, end: 31501000 }
 
 // one alignment record per haplotype crossing the window
-const alignments = await db.getAlignmentsForRange(
-  'GRCh38#0#chr6',
-  31500000,
-  31501000,
-)
+const alignments = await db.getAlignments(window)
 
-// the same window as a graph
-const subgraph = await db.getSubgraphForRange(
-  'GRCh38#0#chr6',
-  31500000,
-  31501000,
-)
-const gfa = await subgraph?.toGFA({ names: 'resolved' })
+// the same window as a graph, one subgraph per path fragment it overlaps
+const [subgraph] = await db.getSubgraphs(window)
+const gfa = await subgraph?.toGFA()
 ```
 
 Coordinates are 0-based half-open offsets along the named path. The
@@ -75,14 +68,18 @@ This creates a separate file alongside the .gbz.db file
 Example usage:
 
 ```ts
-const db = await GBZBase.open(new RemoteFile(graphUrl), {
+const db = await GBZBase.open({
+  source: new RemoteFile(graphUrl),
   haplotypeIndex: new RemoteFile(indexUrl),
 })
 // return all haplotypes
-const records = await db.getAlignmentsForRange(region, start, end)
+const records = await db.getAlignments({ path, start, end })
 
 // or, restrict to particular haplotype. can match multiple haplotypes here in callback
-const records = await db.getAlignmentsForRange(region, start, end, {
+const records = await db.getAlignments({
+  path,
+  start,
+  end,
   keep: name => name.sample === 'HG00097',
 })
 ```

@@ -5,10 +5,10 @@ as a GBWT. gbz-base puts a GBZ into SQLite, with one row per node orientation, a
 table of paths, and an index from offsets along the reference and generic paths
 to GBWT positions. This package reads the rows around one region of such a path.
 
-This package computes alignments at query time. `getAlignmentsForRange` aligns
-each walk to the reference ([alignments.md](alignments.md)), and
-`pairAlignments` aligns haplotypes to each other. The sample and haplotype of
-each walk come from the haplotype index, a second file built once per graph
+This package computes alignments at query time. `getAlignments` aligns each walk
+to the reference ([alignments.md](alignments.md)), and `pairAlignments` aligns
+haplotypes to each other. The sample and haplotype of each walk come from the
+haplotype index, a second file built once per graph
 ([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md)).
 
 ## Limitations

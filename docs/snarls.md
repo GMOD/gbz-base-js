@@ -19,15 +19,13 @@ whole snarls instead, using the stored chains.
 A top-level snarl includes every snarl nested inside it.
 
 ```ts
-const subgraph = await db.getSubgraphForRange(
-  'GRCh38#0#chr6',
-  31500000,
-  31501000,
-  {
-    context: 0,
-    snarls: 'contained',
-  },
-)
+const [subgraph] = await db.getSubgraphs({
+  path: 'GRCh38#0#chr6',
+  start: 31500000,
+  end: 31501000,
+  context: 0,
+  snarls: 'contained',
+})
 ```
 
 On the `micb-kir3dl1` test database, the 1 kb window above returns these counts:
@@ -45,10 +43,10 @@ query returns each haplotype as one walk.
 
 A snarl can be far larger than the window, so pair `overlapping` with `limit`.
 
-`getSubgraphForRange` and the lower-level `subgraphInInterval`,
-`subgraphAtOffset` and `subgraphAroundNodes` take `snarls`. A query that uses
-the `keep` option takes it too, and returns the walks of the same subgraph for
-the chosen haplotypes. With `overlapping` it identifies every walk to find them
+`getSubgraphs` and the lower-level `subgraphInInterval`, `subgraphAtOffset` and
+`subgraphAroundNodes` take `snarls`. A query that uses the `keep` option takes
+it too, and returns the walks of the same subgraph for the chosen haplotypes.
+With `overlapping` it identifies every walk to find them
 ([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md#keep)).
 
 ## Between two boundary nodes
@@ -58,13 +56,12 @@ the boundaries of a snarl. The command-line equivalent is `--between`, as in
 upstream.
 
 ```ts
-import { nodes, subgraphBetween } from '@gmod/gbz-base'
+import { encodeNode } from '@gmod/gbz-base'
 
-const subgraph = await subgraphBetween(
-  db,
-  nodes.encodeNode(129, 'forward'),
-  nodes.encodeNode(160, 'forward'),
-)
+const subgraph = await db.subgraphBetween({
+  startHandle: encodeNode(129, 'forward'),
+  endHandle: encodeNode(160, 'forward'),
+})
 await subgraph.identifyPaths()
 ```
 

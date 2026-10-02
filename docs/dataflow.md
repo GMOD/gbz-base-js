@@ -5,14 +5,14 @@
 The source is [dataflow.dot](img/dataflow.dot); see
 [CONTRIBUTING.md](../CONTRIBUTING.md#the-data-flow-diagram) to re-render it.
 
-`getAlignmentsForRange` runs every step below. `getSubgraphForRange` stops after
-step 7 and returns the `Subgraph`. A query that uses the `keep` option replaces
+`getAlignments` runs every step below. `getSubgraphs` stops after step 7 and
+returns a `Subgraph` per fragment. A query that uses the `keep` option replaces
 steps 6 and 7 with the keep route, which finds the walks of the chosen
 haplotypes in the same subgraph from the haplotype index
 ([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md#keep)).
 
-1. **`pathFragmentsForRange`** finds the path fragments overlapping the window.
-   A contig can be stored as several fragments with gaps between them.
+1. **`getPathFragments`** finds the path fragments overlapping the window. A
+   contig can be stored as several fragments with gaps between them.
 2. **`pathPosition`** looks up the GBWT position at the window's start in
    `ReferenceIndex`.
 3. **Prefetch** reads the reference walk's node records, one range request per
