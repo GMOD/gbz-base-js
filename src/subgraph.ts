@@ -499,6 +499,8 @@ export class Subgraph {
   private paths: PathInfo[] = []
   private twinStarts = new Set<string>()
   private twinDeferred = false
+  private unsettled:
+    { paths: PathInfo[]; refId: number | undefined } | undefined
   private refId: number | undefined
   private refPath: PathName | undefined
   private refHandle: number | undefined
@@ -550,6 +552,7 @@ export class Subgraph {
   }
 
   get pathCount() {
+    this.settleDeferred()
     return this.paths.length
   }
 
@@ -607,6 +610,7 @@ export class Subgraph {
     this.paths = []
     this.twinStarts.clear()
     this.twinDeferred = false
+    this.unsettled = undefined
     this.refId = undefined
     this.refPath = undefined
     this.refHandle = undefined
@@ -1276,6 +1280,15 @@ export class Subgraph {
     this.distinctPaths(false)
   }
 
+  // Output read before identifyPaths sees the walks merged as they would be
+  // without a haplotype index; identifyPaths takes them apart again.
+  private settleDeferred() {
+    if (this.twinDeferred) {
+      this.unsettled = { paths: [...this.paths], refId: this.refId }
+      this.distinctPaths(false)
+    }
+  }
+
   // extractPaths keeps the canonical orientation of each walk, and both
   // orientations are canonical when a walk starts and ends at one node in
   // opposite orientations, as through a hairpin; the twin of a reference walk
@@ -1431,6 +1444,11 @@ export class Subgraph {
       throw new Error(
         'The database has no HaplotypeSamples table; run gbz-haplotype-index on it',
       )
+    }
+    if (this.unsettled) {
+      ;({ paths: this.paths, refId: this.refId } = this.unsettled)
+      this.unsettled = undefined
+      this.twinDeferred = true
     }
     const interval = (await this.db.haplotypeSampleGap()) ?? 4096
     const runs = handleRuns(this.sortedHandles())
@@ -1900,6 +1918,7 @@ export class Subgraph {
   }
 
   alignments(): HaplotypeAlignment[] {
+    this.settleDeferred()
     const reference = this.referenceInterval
     if (this.refId === undefined || !reference) {
       throw new Error('Alignments need a reference path')
@@ -2151,6 +2170,7 @@ export class Subgraph {
   }
 
   async toGFA(opts: SubgraphOutputOptions = {}) {
+    this.settleDeferred()
     const cigar = opts.cigar ?? false
     const lines = [
       this.refPath ? `H\tVN:Z:1.1\tRS:Z:${this.refPath.sample}` : 'H\tVN:Z:1.1',
@@ -2239,6 +2259,7 @@ export class Subgraph {
   // or a CIGAR cannot mean one thing in the upstream JSON and another in the
   // compact form.
   private outputPaths(opts: SubgraphOutputOptions) {
+    this.settleDeferred()
     const cigar = opts.cigar ?? false
     const entries: {
       info: PathInfo

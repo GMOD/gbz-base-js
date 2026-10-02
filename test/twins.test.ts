@@ -252,3 +252,54 @@ describe('a hairpin two haplotypes share', () => {
     expect(walks(await all!.toGFA())).toEqual(merged)
   })
 })
+
+describe('distinct from a lower-level query', () => {
+  const fixtures = [
+    { name: 'reverse-reference', start: 12, end: 18, context: 10 },
+    { name: 'shared-hairpin', start: 10, end: 50, context: 0 },
+  ]
+  const openFixture = (name: string, indexed: boolean) =>
+    GBZBase.open({
+      source: new LocalFile(path.join(dataDir, `${name}.gbz.db`)),
+      ...(indexed
+        ? {
+            haplotypeIndex: new LocalFile(
+              path.join(dataDir, `${name}.haplotype-index.db`),
+            ),
+          }
+        : {}),
+    })
+
+  it.each(fixtures)(
+    'is the same with or without a haplotype index until identifyPaths runs: $name',
+    async ({ name, ...window }) => {
+      const query = { path: grch38, ...window, haplotypes: 'distinct' as const }
+      const plain = await (
+        await openFixture(name, false)
+      ).subgraphInInterval(query)
+      const indexed = await (
+        await openFixture(name, true)
+      ).subgraphInInterval(query)
+      expect(indexed.pathCount).toBe(plain.pathCount)
+      expect(await indexed.toGFA()).toBe(await plain.toGFA())
+      expect(indexed.toSubgraphJson()).toEqual(plain.toSubgraphJson())
+      expect(indexed.alignments()).toEqual(plain.alignments())
+    },
+  )
+
+  it.each(fixtures)(
+    'names the same walks whether output was read before identifyPaths: $name',
+    async ({ name, ...window }) => {
+      const db = await openFixture(name, true)
+      const query = { path: grch38, ...window, haplotypes: 'distinct' as const }
+      const early = await db.subgraphInInterval(query)
+      await early.toGFA()
+      await early.identifyPaths()
+      const late = await db.subgraphInInterval(query)
+      await late.identifyPaths()
+      expect(walks(await early.toGFA({ names: 'resolved' }))).toEqual(
+        walks(await late.toGFA({ names: 'resolved' })),
+      )
+    },
+  )
+})
