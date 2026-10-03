@@ -175,6 +175,8 @@ reference for 50 bp or more there, turns against its own direction along the
 reference, steps back or jumps to another reference path, and reference-like
 otherwise; a contig aligned on either strand is an alignment. The whole of chr22
 for the 464 HPRC haplotypes at 16 kb bins is 3,102 bins, 1.4 MB.
+[`tools/overview/`](../tools/overview/README.md) draws it, to a PNG from Node or
+on a canvas in a page, with the requests each view costs.
 
 ## Errors
 
