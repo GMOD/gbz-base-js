@@ -66,3 +66,21 @@ once per browser session.
 
 In the page, which keeps the session open, whole chr1 is 11 requests, 1.6 MB and
 161 ms of fetching; the 1 Mb MHC window 12 requests, 0.8 MB and 149 ms.
+
+## Whole genome from local disk, production index
+
+The same views from the production format 3 index (5.1 GB, both reference
+samples, stray rows, 467 MB overview) with the graph database on the same disk,
+on a 24-core machine, each a fresh process:
+
+| view                               | requests (graph + index) |  MB |    ms |
+| ---------------------------------- | -----------------------: | --: | ----: |
+| whole GRCh38 chr1, 249 Mb          |              21 (6 + 15) | 4.8 |    97 |
+| whole GRCh38 chr6, 171 Mb          |              20 (6 + 14) | 4.5 |    90 |
+| whole CHM13 chr1 fragment, 122 Mb  |              20 (6 + 14) | 4.3 |    87 |
+| chr1 100-103 Mb, 3 Mb              |              20 (6 + 14) | 4.0 |    84 |
+| chr6 31.5-32.5 Mb (MHC), 1 Mb      |              19 (6 + 13) | 3.7 |    82 |
+| chr1 103.7-103.8 Mb (AMY1), 100 kb |             53 (29 + 24) | 7.0 | 1,496 |
+
+A 10 kb window that keeps HG002 reads 13 index requests and 0.85 MB on the keep
+route; a 1 Mb one keeping HG002 returns its 10 pieces from 2 index scans.
