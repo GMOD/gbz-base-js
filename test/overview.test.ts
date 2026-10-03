@@ -4,7 +4,7 @@ import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
 import { dataDir } from './fixtures.ts'
-import { GBZBase, OVERVIEW_REFERENCE, OVERVIEW_VARIANT } from '../src/db.ts'
+import { GBZBase, OVERVIEW_REFERENCE, OVERVIEW_VARIANT } from '../src/index.ts'
 
 function openMicb() {
   return GBZBase.open({

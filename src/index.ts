@@ -1,6 +1,10 @@
 export {
   ForwardOnlyIndexError,
   GBZBase,
+  OVERVIEW_ABSENT,
+  OVERVIEW_PARTIAL,
+  OVERVIEW_REFERENCE,
+  OVERVIEW_VARIANT,
   SCHEMA_VERSION,
   SchemaVersionError,
   UnknownPathError,
@@ -9,7 +13,10 @@ export type {
   AlignmentQuery,
   FetchStats,
   GbzPath,
+  HaplotypeOverview,
   OpenOptions,
+  OverviewBin,
+  OverviewQuery,
   PathFragment,
   WindowQuery,
 } from './db.ts'
