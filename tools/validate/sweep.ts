@@ -16,9 +16,6 @@ const src = process.env.GBZ_SRC ?? path.join(import.meta.dirname, '../../src')
 const { LocalFile } = await import('generic-filehandle2')
 const { keepTuning } = await import(`${src}/chosenPaths.ts`)
 const { GBZBase } = await import(`${src}/db.ts`)
-const { subgraphForHaplotypes, subgraphInInterval } = await import(
-  `${src}/query.ts`
-)
 
 interface Name {
   sample: string
@@ -59,7 +56,8 @@ const config = JSON.parse(await readFile(process.argv[2]!, 'utf8')) as {
 if (config.unlimited) {
   keepTuning.mostChosenPaths = Number.POSITIVE_INFINITY
 }
-const db = await GBZBase.open(new LocalFile(config.graph), {
+const db = await GBZBase.open({
+  source: new LocalFile(config.graph),
   haplotypeIndex: new LocalFile(process.env.INDEX ?? config.index),
 })
 const prefix = process.env.TRUTH_PREFIX
@@ -78,7 +76,10 @@ for (const [index, w] of config.rows.entries()) {
     const sampledFor = async (keep: (name: Name) => boolean) => {
       if (!all) {
         const t = performance.now()
-        const subgraph = await subgraphInInterval(db, query, w.start, w.end, {
+        const subgraph = await db.subgraphInInterval({
+          path: query,
+          start: w.start,
+          end: w.end,
           context,
           snarls,
         })
@@ -142,7 +143,10 @@ for (const [index, w] of config.rows.entries()) {
       }
       try {
         const t0 = performance.now()
-        const kept = await subgraphForHaplotypes(db, query, w.start, w.end, {
+        const kept = await db.subgraphInInterval({
+          path: query,
+          start: w.start,
+          end: w.end,
           context,
           snarls,
           keep,
