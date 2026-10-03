@@ -62,6 +62,18 @@ const keep =
     ? (n: { sample: string }) => n.sample === 'HG002'
     : undefined
 const [sample, haplotype, name] = contig!.split('#')
+if (process.env.OVERVIEW) {
+  const overview = await db.haplotypeOverview({
+    path: { sample: sample!, haplotype: Number(haplotype), contig: name! },
+    start,
+    end,
+    bpPerPixel: Number(process.env.OVERVIEW),
+  })
+  log.push(`--- overview done (${overview?.bins.length} bins)`)
+  console.log(log.join('\n'))
+  console.log(JSON.stringify(db.fetchStats()))
+  process.exit(0)
+}
 const subgraphs = await db.getSubgraphs({
   path: { sample: sample!, haplotype: Number(haplotype), contig: name! },
   start,

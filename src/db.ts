@@ -106,6 +106,57 @@ export interface HaplotypeAnchorRow extends HaplotypeAnchor {
   visits: HaplotypeSample[]
 }
 
+// One bin of a reference path in the haplotype index's overview: how many
+// haplotypes fall in each class there, and the excursions from the reference
+// that start in it.
+export interface OverviewBin {
+  start: number
+  end: number
+  // haplotypes that are absent, reference-like, partial and variant
+  classes: [number, number, number, number]
+  excursions: number
+  variants: number
+  longestExcursion: number
+}
+
+export const OVERVIEW_ABSENT = 0
+export const OVERVIEW_REFERENCE = 1
+export const OVERVIEW_PARTIAL = 2
+export const OVERVIEW_VARIANT = 3
+
+// A binned summary of every haplotype along a stretch of a reference path,
+// at one zoom level. `cells` holds bins.length × haplotypes.length entries,
+// bin by bin: the class in the low two bits, and for a variant cell a bucket
+// of the bin's variant marks in the next two (1, 2 to 3, 4 to 15, 16 or
+// more).
+export interface HaplotypeOverview {
+  level: number
+  bin: number
+  haplotypes: { sample: string; haplotype: number }[]
+  bins: OverviewBin[]
+  cells: Uint8Array
+}
+
+export interface OverviewQuery extends PathWindow {
+  // The zoom level, or the bp per pixel to choose the coarsest level whose
+  // bins are no larger than it. Level 0 without either.
+  level?: number | undefined
+  bpPerPixel?: number | undefined
+}
+
+function concatBytes(parts: Uint8Array[]) {
+  if (parts.length === 1) {
+    return parts[0]!
+  }
+  const whole = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+  let at = 0
+  for (const part of parts) {
+    whole.set(part, at)
+    at += part.length
+  }
+  return whole
+}
+
 // The formats of the haplotype index this reader understands. Format 3 keeps
 // the samples in their key b-tree, each anchor's visits with the anchor and
 // each bin's stray rows with its node list.
@@ -383,6 +434,8 @@ export class GBZBase {
   private indexTags = new Map<string, string>()
   private indexFormat = 2
   private samplesInline = false
+  private overviewRowsCache:
+    Promise<{ sample: string; haplotype: number }[]> | undefined
 
   /** @internal */
   readonly sqlite: SqliteDatabase
@@ -782,6 +835,38 @@ export class GBZBase {
     }
   }
 
+  // The rows of a format 3 table with blobs whose keys lie in low..high: a
+  // key scan of its index, then its rows, which the indexer wrote in key
+  // order, prefetched as one range. A table without a rowid yields its rows
+  // from the scan itself.
+  private async blobRows(table: string, low: number[], high: number[]) {
+    const rows: SqlValue[][] = []
+    if (this.companion.withoutRowid(table)) {
+      for await (const row of this.companion.indexScanFrom(table, low, high)) {
+        rows.push(row)
+      }
+      return rows
+    }
+    const rowids: number[] = []
+    for await (const key of this.companion.indexScanFrom(table, low, high)) {
+      rowids.push(num(key[key.length - 1], `${table} rowid`))
+    }
+    if (rowids.length > 1) {
+      await this.companion.prefetchRows(
+        table,
+        [[Math.min(...rowids), Math.max(...rowids) + 1]],
+        true,
+      )
+    }
+    for (const rowid of rowids) {
+      const row = await this.companion.byRowid(table, rowid)
+      if (row) {
+        rows.push(row)
+      }
+    }
+    return rows
+  }
+
   // The node lists and stray rows of the bins firstBin..lastBin of one
   // reference path: a test of whether a node id is listed, and the rows.
   /** @internal */
@@ -793,7 +878,7 @@ export class GBZBase {
     const runs: [number, number][] = []
     const strays: HaplotypeStray[] = []
     if (this.indexFormat >= 3) {
-      for await (const row of this.companion.indexScanFrom(
+      for (const row of await this.blobRows(
         'HaplotypeBins',
         [referenceHandle, firstBin],
         [referenceHandle, lastBin],
@@ -856,7 +941,7 @@ export class GBZBase {
         }
         parts = []
       }
-      for await (const row of this.companion.indexScanFrom(
+      for (const row of await this.blobRows(
         'HaplotypeAnchors',
         [pathHandle, lowOffset],
         [pathHandle, highOffset],
@@ -1008,6 +1093,137 @@ export class GBZBase {
       num(key[2], 'HaplotypeSamples rowid'),
     )
     return row ? this.sampleFromRow(row) : undefined
+  }
+
+  private overviewRows() {
+    this.overviewRowsCache ??= forgetOnRejection(
+      (async () => {
+        const rows: { sample: string; haplotype: number }[] = []
+        for await (const { rowid, values } of this.companion.scan(
+          'HaplotypeOverviewRows',
+        )) {
+          rows[rowid] = {
+            sample: str(values[1], 'HaplotypeOverviewRows.sample'),
+            haplotype: num(values[2], 'HaplotypeOverviewRows.haplotype'),
+          }
+        }
+        return rows
+      })(),
+      () => {
+        this.overviewRowsCache = undefined
+      },
+    )
+    return this.overviewRowsCache
+  }
+
+  // The parts of one overview table for the chunks firstChunk..lastChunk of
+  // one reference path at one level, joined per chunk.
+  private async overviewChunks(
+    table: string,
+    pathHandle: number,
+    level: number,
+    firstChunk: number,
+    lastChunk: number,
+  ) {
+    const parts = new Map<number, Uint8Array[]>()
+    for (const row of await this.blobRows(
+      table,
+      [pathHandle, level, firstChunk],
+      [pathHandle, level, lastChunk],
+    )) {
+      const chunk = num(row[2], `${table}.chunk`)
+      const list = parts.get(chunk) ?? []
+      list.push(blob(row[4], `${table} blob`))
+      parts.set(chunk, list)
+    }
+    return new Map(
+      [...parts].map(([chunk, list]) => [chunk, concatBytes(list)]),
+    )
+  }
+
+  // The haplotype index's binned summary of every haplotype over a window of
+  // a reference path, or undefined when the index has none.
+  async haplotypeOverview(
+    opts: OverviewQuery,
+  ): Promise<HaplotypeOverview | undefined> {
+    const tag = (key: string) =>
+      this.indexTags.get(`haplotype_index_overview_${key}`)
+    if (!this.index?.has('HaplotypeOverviewClasses') || tag('format') !== '1') {
+      return undefined
+    }
+    const baseBin = Number(tag('bin'))
+    const chunkBins = Number(tag('chunk'))
+    const levels = Number(tag('levels'))
+    let level = Math.min(opts.level ?? 0, levels - 1)
+    if (opts.level === undefined && opts.bpPerPixel !== undefined) {
+      while (
+        level + 1 < levels &&
+        baseBin * 4 ** (level + 1) <= opts.bpPerPixel
+      ) {
+        level += 1
+      }
+    }
+    const bin = baseBin * 4 ** level
+    const [fragments, haplotypes] = await Promise.all([
+      this.getPathFragments(opts),
+      this.overviewRows(),
+    ])
+    const bytesPerBin = Math.ceil(haplotypes.length / 2)
+    const bins: OverviewBin[] = []
+    const cellRows: Uint8Array[] = []
+    for (const fragment of fragments) {
+      const length = fragment.end - fragment.start
+      const from = Math.max(opts.start, fragment.start) - fragment.start
+      const to = Math.min(opts.end, fragment.end) - fragment.start
+      const firstBin = Math.floor(from / bin)
+      const lastBin = Math.floor((to - 1) / bin)
+      const firstChunk = Math.floor(firstBin / chunkBins)
+      const lastChunk = Math.floor(lastBin / chunkBins)
+      const [summaries, cells] = await Promise.all([
+        this.overviewChunks(
+          'HaplotypeOverviewBins',
+          fragment.path.handle,
+          level,
+          firstChunk,
+          lastChunk,
+        ),
+        this.overviewChunks(
+          'HaplotypeOverviewClasses',
+          fragment.path.handle,
+          level,
+          firstChunk,
+          lastChunk,
+        ),
+      ])
+      for (let chunk = firstChunk; chunk <= lastChunk; chunk++) {
+        const reader = new Varints(summaries.get(chunk) ?? new Uint8Array())
+        const packed = cells.get(chunk) ?? new Uint8Array()
+        for (let b = chunk * chunkBins; !reader.done; b++) {
+          const values = Array.from({ length: 7 }, () => reader.next())
+          if (b < firstBin || b > lastBin) {
+            continue
+          }
+          bins.push({
+            start: fragment.start + b * bin,
+            end: fragment.start + Math.min((b + 1) * bin, length),
+            classes: [values[0]!, values[1]!, values[2]!, values[3]!],
+            excursions: values[4]!,
+            variants: values[5]!,
+            longestExcursion: values[6]!,
+          })
+          const at = (b - chunk * chunkBins) * bytesPerBin
+          cellRows.push(packed.subarray(at, at + bytesPerBin))
+        }
+      }
+    }
+    const cells = new Uint8Array(bins.length * haplotypes.length)
+    cellRows.forEach((packed, b) => {
+      for (let row = 0; row < haplotypes.length; row++) {
+        cells[b * haplotypes.length + row] =
+          ((packed[row >> 1] ?? 0) >> (4 * (row % 2))) & 0xf
+      }
+    })
+    return { level, bin, haplotypes, bins, cells }
   }
 
   /** @internal */

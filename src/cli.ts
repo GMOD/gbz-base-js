@@ -42,6 +42,7 @@ const USAGE = `Usage: gbz-base-query [options] graph.gbz.db
   --max-gap INT        cap the bases a PAF record skips on nodes only one walk visits (default: none)
   --contig-lengths F   chrom.sizes or .fai giving PAF columns 2 and 7, keyed by contig or sample#haplotype#contig
   --haplotype-index F  haplotype index written by gbz-haplotype-index
+  --overview BP        print the haplotype index's overview of --interval at the coarsest level whose bins are at most BP, instead of the subgraph
   --block-size INT     bytes fetched per range request (default: 65536)
   --stats              print fetch statistics to stderr
 `
@@ -70,6 +71,7 @@ interface Args {
   bases: boolean
   contigLengths?: string
   blockSize: number
+  overview?: number
   haplotypeIndex?: string
   stats: boolean
 }
@@ -221,6 +223,9 @@ function parseArgs(argv: string[]): Args {
         break
       case '--no-bases':
         args.bases = false
+        break
+      case '--overview':
+        args.overview = number(i++, 1)
         break
       case '--block-size':
         args.blockSize = number(i++, 1)
@@ -422,6 +427,32 @@ export async function main(argv: string[]) {
       ? []
       : [args.against]),
   ]
+  if (args.overview !== undefined) {
+    if (!args.interval) {
+      throw new Error('--overview needs --interval')
+    }
+    const overview = await db.haplotypeOverview({
+      path,
+      start: args.interval[0],
+      end: args.interval[1],
+      bpPerPixel: args.overview,
+    })
+    if (!overview) {
+      throw new Error(
+        'the haplotype index has no overview tables; rebuild it with gbz-haplotype-index 0.3',
+      )
+    }
+    process.stdout.write(
+      `${JSON.stringify({ ...overview, cells: Array.from(overview.cells) })}\n`,
+    )
+    if (args.stats) {
+      const { graph, haplotypeIndex } = db.fetchStats()
+      process.stderr.write(
+        `Overview of ${overview.bins.length} bins of ${overview.bin} bp at level ${overview.level} for ${overview.haplotypes.length} haplotypes; ${graph.fetches} graph fetches, ${graph.bytesFetched} bytes; ${haplotypeIndex?.fetches} index fetches, ${haplotypeIndex?.bytesFetched} bytes\n`,
+      )
+    }
+    return
+  }
   const keep = kept.length > 0 ? keepPredicate(kept) : undefined
   const anchoredQuery = keep !== undefined && args.interval !== undefined
   // Walks merge after the haplotypes to keep are chosen, since a merged
