@@ -1,82 +1,82 @@
 [
- {
-  "stratum": "large",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 37068127,
-  "end": 37368127,
-  "size": 300000
- },
- {
-  "stratum": "large",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 153794500,
-  "end": 154094500,
-  "size": 300000
- },
- {
-  "stratum": "large",
-  "label": "chr6-2",
-  "contig": "GRCh38#0#chr6",
-  "start": 17940109,
-  "end": 18240109,
-  "size": 300000
- },
- {
-  "stratum": "large",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 69469571,
-  "end": 70469571,
-  "size": 1000000
- },
- {
-  "stratum": "large",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 32653560,
-  "end": 33653560,
-  "size": 1000000
- },
- {
-  "stratum": "large",
-  "label": "chr6-2",
-  "contig": "GRCh38#0#chr6",
-  "start": 133992343,
-  "end": 134992343,
-  "size": 1000000
- },
- {
-  "stratum": "large",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 121659338,
-  "end": 124659338,
-  "size": 3000000
- },
- {
-  "stratum": "large",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 127767366,
-  "end": 130767366,
-  "size": 3000000
- },
- {
-  "stratum": "large",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 102902185,
-  "end": 112902185,
-  "size": 10000000
- },
- {
-  "stratum": "large",
-  "label": "chr6-whole",
-  "contig": "GRCh38#0#chr6",
-  "start": 0,
-  "end": 170805979,
-  "size": 170805979
- }
+  {
+    "stratum": "large",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 37068127,
+    "end": 37368127,
+    "size": 300000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 153794500,
+    "end": 154094500,
+    "size": 300000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-2",
+    "contig": "GRCh38#0#chr6",
+    "start": 17940109,
+    "end": 18240109,
+    "size": 300000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 69469571,
+    "end": 70469571,
+    "size": 1000000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 32653560,
+    "end": 33653560,
+    "size": 1000000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-2",
+    "contig": "GRCh38#0#chr6",
+    "start": 133992343,
+    "end": 134992343,
+    "size": 1000000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 121659338,
+    "end": 124659338,
+    "size": 3000000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 127767366,
+    "end": 130767366,
+    "size": 3000000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 102902185,
+    "end": 112902185,
+    "size": 10000000
+  },
+  {
+    "stratum": "large",
+    "label": "chr6-whole",
+    "contig": "GRCh38#0#chr6",
+    "start": 0,
+    "end": 170805979,
+    "size": 170805979
+  }
 ]

@@ -19,7 +19,9 @@ describe('the haplotype index format', () => {
   it('refuses an index from before format 3', async () => {
     await expect(
       openWith('micb-kir3dl1.format2.haplotype-index.db'),
-    ).rejects.toThrow(/predates format 3; rebuild it with gbz-haplotype-index 0.3/)
+    ).rejects.toThrow(
+      /predates format 3; rebuild it with gbz-haplotype-index 0.3/,
+    )
   })
 
   it('opens a format 3 index with 64 KiB pages', async () => {

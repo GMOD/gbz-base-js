@@ -1,674 +1,674 @@
 [
- {
-  "stratum": "random-chr6",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 37068127,
-  "end": 37068427,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 153794500,
-  "end": 153794800,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-2",
-  "contig": "GRCh38#0#chr6",
-  "start": 17940109,
-  "end": 17940409,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-3",
-  "contig": "GRCh38#0#chr6",
-  "start": 69469571,
-  "end": 69469871,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-4",
-  "contig": "GRCh38#0#chr6",
-  "start": 32653560,
-  "end": 32653860,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-5",
-  "contig": "GRCh38#0#chr6",
-  "start": 133992343,
-  "end": 133992643,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-6",
-  "contig": "GRCh38#0#chr6",
-  "start": 121659338,
-  "end": 121659638,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-7",
-  "contig": "GRCh38#0#chr6",
-  "start": 127767366,
-  "end": 127767666,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-8",
-  "contig": "GRCh38#0#chr6",
-  "start": 102902185,
-  "end": 102902485,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-9",
-  "contig": "GRCh38#0#chr6",
-  "start": 57359314,
-  "end": 57359614,
-  "size": 300
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-0",
-  "contig": "GRCh38#0#chr1",
-  "start": 26195240,
-  "end": 26195540,
-  "size": 300
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-1",
-  "contig": "GRCh38#0#chr1",
-  "start": 8609466,
-  "end": 8609766,
-  "size": 300
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-0",
-  "contig": "GRCh38#0#chr17",
-  "start": 53319252,
-  "end": 53319552,
-  "size": 300
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-1",
-  "contig": "GRCh38#0#chr17",
-  "start": 59085012,
-  "end": 59085312,
-  "size": 300
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 164057895,
-  "end": 164058895,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 1565338,
-  "end": 1566338,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-2",
-  "contig": "GRCh38#0#chr6",
-  "start": 120557714,
-  "end": 120558714,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-3",
-  "contig": "GRCh38#0#chr6",
-  "start": 72492564,
-  "end": 72493564,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-4",
-  "contig": "GRCh38#0#chr6",
-  "start": 159686540,
-  "end": 159687540,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-5",
-  "contig": "GRCh38#0#chr6",
-  "start": 28441393,
-  "end": 28442393,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-6",
-  "contig": "GRCh38#0#chr6",
-  "start": 86209369,
-  "end": 86210369,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-7",
-  "contig": "GRCh38#0#chr6",
-  "start": 9211437,
-  "end": 9212437,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-8",
-  "contig": "GRCh38#0#chr6",
-  "start": 6992046,
-  "end": 6993046,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-9",
-  "contig": "GRCh38#0#chr6",
-  "start": 7830571,
-  "end": 7831571,
-  "size": 1000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-0",
-  "contig": "GRCh38#0#chr1",
-  "start": 175361213,
-  "end": 175362213,
-  "size": 1000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-1",
-  "contig": "GRCh38#0#chr1",
-  "start": 146334305,
-  "end": 146335305,
-  "size": 1000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-0",
-  "contig": "GRCh38#0#chr17",
-  "start": 2235465,
-  "end": 2236465,
-  "size": 1000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-1",
-  "contig": "GRCh38#0#chr17",
-  "start": 52164366,
-  "end": 52165366,
-  "size": 1000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 114311055,
-  "end": 114314055,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 8795576,
-  "end": 8798576,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-2",
-  "contig": "GRCh38#0#chr6",
-  "start": 142634443,
-  "end": 142637443,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-3",
-  "contig": "GRCh38#0#chr6",
-  "start": 118544554,
-  "end": 118547554,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-4",
-  "contig": "GRCh38#0#chr6",
-  "start": 134093585,
-  "end": 134096585,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-5",
-  "contig": "GRCh38#0#chr6",
-  "start": 149407112,
-  "end": 149410112,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-6",
-  "contig": "GRCh38#0#chr6",
-  "start": 63568131,
-  "end": 63571131,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-7",
-  "contig": "GRCh38#0#chr6",
-  "start": 93798248,
-  "end": 93801248,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-8",
-  "contig": "GRCh38#0#chr6",
-  "start": 62972765,
-  "end": 62975765,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-9",
-  "contig": "GRCh38#0#chr6",
-  "start": 124373865,
-  "end": 124376865,
-  "size": 3000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-0",
-  "contig": "GRCh38#0#chr1",
-  "start": 78787658,
-  "end": 78790658,
-  "size": 3000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-1",
-  "contig": "GRCh38#0#chr1",
-  "start": 6768599,
-  "end": 6771599,
-  "size": 3000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-0",
-  "contig": "GRCh38#0#chr17",
-  "start": 56858725,
-  "end": 56861725,
-  "size": 3000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-1",
-  "contig": "GRCh38#0#chr17",
-  "start": 75686034,
-  "end": 75689034,
-  "size": 3000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 27843619,
-  "end": 27853619,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 50903832,
-  "end": 50913832,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-2",
-  "contig": "GRCh38#0#chr6",
-  "start": 80561691,
-  "end": 80571691,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-3",
-  "contig": "GRCh38#0#chr6",
-  "start": 33451151,
-  "end": 33461151,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-4",
-  "contig": "GRCh38#0#chr6",
-  "start": 90307183,
-  "end": 90317183,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-5",
-  "contig": "GRCh38#0#chr6",
-  "start": 135432395,
-  "end": 135442395,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-6",
-  "contig": "GRCh38#0#chr6",
-  "start": 114308485,
-  "end": 114318485,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-7",
-  "contig": "GRCh38#0#chr6",
-  "start": 137289311,
-  "end": 137299311,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-8",
-  "contig": "GRCh38#0#chr6",
-  "start": 51962399,
-  "end": 51972399,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-9",
-  "contig": "GRCh38#0#chr6",
-  "start": 82434865,
-  "end": 82444865,
-  "size": 10000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-0",
-  "contig": "GRCh38#0#chr1",
-  "start": 77278449,
-  "end": 77288449,
-  "size": 10000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-1",
-  "contig": "GRCh38#0#chr1",
-  "start": 158727466,
-  "end": 158737466,
-  "size": 10000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-0",
-  "contig": "GRCh38#0#chr17",
-  "start": 68023240,
-  "end": 68033240,
-  "size": 10000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-1",
-  "contig": "GRCh38#0#chr17",
-  "start": 68818046,
-  "end": 68828046,
-  "size": 10000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 106590059,
-  "end": 106620059,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 159109089,
-  "end": 159139089,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-2",
-  "contig": "GRCh38#0#chr6",
-  "start": 10267957,
-  "end": 10297957,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-3",
-  "contig": "GRCh38#0#chr6",
-  "start": 129909947,
-  "end": 129939947,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-4",
-  "contig": "GRCh38#0#chr6",
-  "start": 66160014,
-  "end": 66190014,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-5",
-  "contig": "GRCh38#0#chr6",
-  "start": 109525259,
-  "end": 109555259,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-6",
-  "contig": "GRCh38#0#chr6",
-  "start": 112216567,
-  "end": 112246567,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-7",
-  "contig": "GRCh38#0#chr6",
-  "start": 47441321,
-  "end": 47471321,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-8",
-  "contig": "GRCh38#0#chr6",
-  "start": 99549053,
-  "end": 99579053,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-9",
-  "contig": "GRCh38#0#chr6",
-  "start": 148317044,
-  "end": 148347044,
-  "size": 30000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-0",
-  "contig": "GRCh38#0#chr1",
-  "start": 237956573,
-  "end": 237986573,
-  "size": 30000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-1",
-  "contig": "GRCh38#0#chr1",
-  "start": 189721066,
-  "end": 189751066,
-  "size": 30000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-0",
-  "contig": "GRCh38#0#chr17",
-  "start": 51291788,
-  "end": 51321788,
-  "size": 30000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-1",
-  "contig": "GRCh38#0#chr17",
-  "start": 12605483,
-  "end": 12635483,
-  "size": 30000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-0",
-  "contig": "GRCh38#0#chr6",
-  "start": 118832865,
-  "end": 118932865,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-1",
-  "contig": "GRCh38#0#chr6",
-  "start": 137479697,
-  "end": 137579697,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-2",
-  "contig": "GRCh38#0#chr6",
-  "start": 29972577,
-  "end": 30072577,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-3",
-  "contig": "GRCh38#0#chr6",
-  "start": 44942426,
-  "end": 45042426,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-4",
-  "contig": "GRCh38#0#chr6",
-  "start": 140838340,
-  "end": 140938340,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-5",
-  "contig": "GRCh38#0#chr6",
-  "start": 106563611,
-  "end": 106663611,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-6",
-  "contig": "GRCh38#0#chr6",
-  "start": 100461421,
-  "end": 100561421,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-7",
-  "contig": "GRCh38#0#chr6",
-  "start": 132451103,
-  "end": 132551103,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-8",
-  "contig": "GRCh38#0#chr6",
-  "start": 8938968,
-  "end": 9038968,
-  "size": 100000
- },
- {
-  "stratum": "random-chr6",
-  "label": "chr6-9",
-  "contig": "GRCh38#0#chr6",
-  "start": 126982166,
-  "end": 127082166,
-  "size": 100000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-0",
-  "contig": "GRCh38#0#chr1",
-  "start": 12673530,
-  "end": 12773530,
-  "size": 100000
- },
- {
-  "stratum": "random-chr1",
-  "label": "chr1-1",
-  "contig": "GRCh38#0#chr1",
-  "start": 83820237,
-  "end": 83920237,
-  "size": 100000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-0",
-  "contig": "GRCh38#0#chr17",
-  "start": 80615772,
-  "end": 80715772,
-  "size": 100000
- },
- {
-  "stratum": "random-chr17",
-  "label": "chr17-1",
-  "contig": "GRCh38#0#chr17",
-  "start": 78601456,
-  "end": 78701456,
-  "size": 100000
- }
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 37068127,
+    "end": 37068427,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 153794500,
+    "end": 153794800,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-2",
+    "contig": "GRCh38#0#chr6",
+    "start": 17940109,
+    "end": 17940409,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-3",
+    "contig": "GRCh38#0#chr6",
+    "start": 69469571,
+    "end": 69469871,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-4",
+    "contig": "GRCh38#0#chr6",
+    "start": 32653560,
+    "end": 32653860,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-5",
+    "contig": "GRCh38#0#chr6",
+    "start": 133992343,
+    "end": 133992643,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-6",
+    "contig": "GRCh38#0#chr6",
+    "start": 121659338,
+    "end": 121659638,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-7",
+    "contig": "GRCh38#0#chr6",
+    "start": 127767366,
+    "end": 127767666,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-8",
+    "contig": "GRCh38#0#chr6",
+    "start": 102902185,
+    "end": 102902485,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-9",
+    "contig": "GRCh38#0#chr6",
+    "start": 57359314,
+    "end": 57359614,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-0",
+    "contig": "GRCh38#0#chr1",
+    "start": 26195240,
+    "end": 26195540,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-1",
+    "contig": "GRCh38#0#chr1",
+    "start": 8609466,
+    "end": 8609766,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-0",
+    "contig": "GRCh38#0#chr17",
+    "start": 53319252,
+    "end": 53319552,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-1",
+    "contig": "GRCh38#0#chr17",
+    "start": 59085012,
+    "end": 59085312,
+    "size": 300
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 164057895,
+    "end": 164058895,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 1565338,
+    "end": 1566338,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-2",
+    "contig": "GRCh38#0#chr6",
+    "start": 120557714,
+    "end": 120558714,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-3",
+    "contig": "GRCh38#0#chr6",
+    "start": 72492564,
+    "end": 72493564,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-4",
+    "contig": "GRCh38#0#chr6",
+    "start": 159686540,
+    "end": 159687540,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-5",
+    "contig": "GRCh38#0#chr6",
+    "start": 28441393,
+    "end": 28442393,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-6",
+    "contig": "GRCh38#0#chr6",
+    "start": 86209369,
+    "end": 86210369,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-7",
+    "contig": "GRCh38#0#chr6",
+    "start": 9211437,
+    "end": 9212437,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-8",
+    "contig": "GRCh38#0#chr6",
+    "start": 6992046,
+    "end": 6993046,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-9",
+    "contig": "GRCh38#0#chr6",
+    "start": 7830571,
+    "end": 7831571,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-0",
+    "contig": "GRCh38#0#chr1",
+    "start": 175361213,
+    "end": 175362213,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-1",
+    "contig": "GRCh38#0#chr1",
+    "start": 146334305,
+    "end": 146335305,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-0",
+    "contig": "GRCh38#0#chr17",
+    "start": 2235465,
+    "end": 2236465,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-1",
+    "contig": "GRCh38#0#chr17",
+    "start": 52164366,
+    "end": 52165366,
+    "size": 1000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 114311055,
+    "end": 114314055,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 8795576,
+    "end": 8798576,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-2",
+    "contig": "GRCh38#0#chr6",
+    "start": 142634443,
+    "end": 142637443,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-3",
+    "contig": "GRCh38#0#chr6",
+    "start": 118544554,
+    "end": 118547554,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-4",
+    "contig": "GRCh38#0#chr6",
+    "start": 134093585,
+    "end": 134096585,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-5",
+    "contig": "GRCh38#0#chr6",
+    "start": 149407112,
+    "end": 149410112,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-6",
+    "contig": "GRCh38#0#chr6",
+    "start": 63568131,
+    "end": 63571131,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-7",
+    "contig": "GRCh38#0#chr6",
+    "start": 93798248,
+    "end": 93801248,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-8",
+    "contig": "GRCh38#0#chr6",
+    "start": 62972765,
+    "end": 62975765,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-9",
+    "contig": "GRCh38#0#chr6",
+    "start": 124373865,
+    "end": 124376865,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-0",
+    "contig": "GRCh38#0#chr1",
+    "start": 78787658,
+    "end": 78790658,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-1",
+    "contig": "GRCh38#0#chr1",
+    "start": 6768599,
+    "end": 6771599,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-0",
+    "contig": "GRCh38#0#chr17",
+    "start": 56858725,
+    "end": 56861725,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-1",
+    "contig": "GRCh38#0#chr17",
+    "start": 75686034,
+    "end": 75689034,
+    "size": 3000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 27843619,
+    "end": 27853619,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 50903832,
+    "end": 50913832,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-2",
+    "contig": "GRCh38#0#chr6",
+    "start": 80561691,
+    "end": 80571691,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-3",
+    "contig": "GRCh38#0#chr6",
+    "start": 33451151,
+    "end": 33461151,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-4",
+    "contig": "GRCh38#0#chr6",
+    "start": 90307183,
+    "end": 90317183,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-5",
+    "contig": "GRCh38#0#chr6",
+    "start": 135432395,
+    "end": 135442395,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-6",
+    "contig": "GRCh38#0#chr6",
+    "start": 114308485,
+    "end": 114318485,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-7",
+    "contig": "GRCh38#0#chr6",
+    "start": 137289311,
+    "end": 137299311,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-8",
+    "contig": "GRCh38#0#chr6",
+    "start": 51962399,
+    "end": 51972399,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-9",
+    "contig": "GRCh38#0#chr6",
+    "start": 82434865,
+    "end": 82444865,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-0",
+    "contig": "GRCh38#0#chr1",
+    "start": 77278449,
+    "end": 77288449,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-1",
+    "contig": "GRCh38#0#chr1",
+    "start": 158727466,
+    "end": 158737466,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-0",
+    "contig": "GRCh38#0#chr17",
+    "start": 68023240,
+    "end": 68033240,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-1",
+    "contig": "GRCh38#0#chr17",
+    "start": 68818046,
+    "end": 68828046,
+    "size": 10000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 106590059,
+    "end": 106620059,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 159109089,
+    "end": 159139089,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-2",
+    "contig": "GRCh38#0#chr6",
+    "start": 10267957,
+    "end": 10297957,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-3",
+    "contig": "GRCh38#0#chr6",
+    "start": 129909947,
+    "end": 129939947,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-4",
+    "contig": "GRCh38#0#chr6",
+    "start": 66160014,
+    "end": 66190014,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-5",
+    "contig": "GRCh38#0#chr6",
+    "start": 109525259,
+    "end": 109555259,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-6",
+    "contig": "GRCh38#0#chr6",
+    "start": 112216567,
+    "end": 112246567,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-7",
+    "contig": "GRCh38#0#chr6",
+    "start": 47441321,
+    "end": 47471321,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-8",
+    "contig": "GRCh38#0#chr6",
+    "start": 99549053,
+    "end": 99579053,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-9",
+    "contig": "GRCh38#0#chr6",
+    "start": 148317044,
+    "end": 148347044,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-0",
+    "contig": "GRCh38#0#chr1",
+    "start": 237956573,
+    "end": 237986573,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-1",
+    "contig": "GRCh38#0#chr1",
+    "start": 189721066,
+    "end": 189751066,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-0",
+    "contig": "GRCh38#0#chr17",
+    "start": 51291788,
+    "end": 51321788,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-1",
+    "contig": "GRCh38#0#chr17",
+    "start": 12605483,
+    "end": 12635483,
+    "size": 30000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-0",
+    "contig": "GRCh38#0#chr6",
+    "start": 118832865,
+    "end": 118932865,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-1",
+    "contig": "GRCh38#0#chr6",
+    "start": 137479697,
+    "end": 137579697,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-2",
+    "contig": "GRCh38#0#chr6",
+    "start": 29972577,
+    "end": 30072577,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-3",
+    "contig": "GRCh38#0#chr6",
+    "start": 44942426,
+    "end": 45042426,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-4",
+    "contig": "GRCh38#0#chr6",
+    "start": 140838340,
+    "end": 140938340,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-5",
+    "contig": "GRCh38#0#chr6",
+    "start": 106563611,
+    "end": 106663611,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-6",
+    "contig": "GRCh38#0#chr6",
+    "start": 100461421,
+    "end": 100561421,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-7",
+    "contig": "GRCh38#0#chr6",
+    "start": 132451103,
+    "end": 132551103,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-8",
+    "contig": "GRCh38#0#chr6",
+    "start": 8938968,
+    "end": 9038968,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr6",
+    "label": "chr6-9",
+    "contig": "GRCh38#0#chr6",
+    "start": 126982166,
+    "end": 127082166,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-0",
+    "contig": "GRCh38#0#chr1",
+    "start": 12673530,
+    "end": 12773530,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr1",
+    "label": "chr1-1",
+    "contig": "GRCh38#0#chr1",
+    "start": 83820237,
+    "end": 83920237,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-0",
+    "contig": "GRCh38#0#chr17",
+    "start": 80615772,
+    "end": 80715772,
+    "size": 100000
+  },
+  {
+    "stratum": "random-chr17",
+    "label": "chr17-1",
+    "contig": "GRCh38#0#chr17",
+    "start": 78601456,
+    "end": 78701456,
+    "size": 100000
+  }
 ]

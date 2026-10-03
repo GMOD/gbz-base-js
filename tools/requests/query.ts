@@ -111,7 +111,10 @@ setInterval(() => {
 const settings = {
   context: Number(process.env.CONTEXT ?? 1000),
   snarls: (process.env.SNARLS ?? 'contained') as SnarlOutput,
-  limit: process.env.LIMIT === 'none' ? undefined : Number(process.env.LIMIT ?? 100_000),
+  limit:
+    process.env.LIMIT === 'none'
+      ? undefined
+      : Number(process.env.LIMIT ?? 100_000),
   blockSize: Number(process.env.BLOCK_SIZE ?? 65536),
   maxBlocks: Number(process.env.MAX_BLOCKS ?? 256),
 }
