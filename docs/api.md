@@ -156,8 +156,10 @@ const overview = await db.haplotypeOverview({
 
 The index holds the overview at zoom levels a factor of four apart, from
 `--overview-bin` bp (4,096 by default). The query takes the coarsest level whose
-bins are no larger than `bpPerPixel`, or `level` directly. The result is
-`undefined` when the index has no overview. Otherwise:
+bins are no larger than `bpPerPixel`, or `level` directly, clamped to the levels
+the index holds. The result is `undefined` when the index has no overview, or
+none for this path, which is then not a reference path of a sample with anchors.
+Otherwise:
 
 | field        | holds                                                                                                                                                                                                                                                                                                                  |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -169,10 +171,10 @@ bins are no larger than `bpPerPixel`, or `level` directly. The result is
 
 A haplotype is absent from a bin when none of its contigs covers it, partial
 when they cover less than nine tenths of it, variant when one of them leaves the
-reference for 50 bp or more there, visits a node against the reference's
-orientation, steps backwards or jumps to another reference path, and
-reference-like otherwise. The whole of chr22 for the 464 HPRC haplotypes at 16
-kb bins is 3,102 bins, 1.4 MB.
+reference for 50 bp or more there, turns against its own direction along the
+reference, steps back or jumps to another reference path, and reference-like
+otherwise; a contig aligned on either strand is an alignment. The whole of chr22
+for the 464 HPRC haplotypes at 16 kb bins is 3,102 bins, 1.4 MB.
 
 ## Errors
 

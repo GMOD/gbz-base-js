@@ -66,7 +66,9 @@ graph
 This creates a separate file alongside the .gbz.db file. It also names every
 haplotype's walk when a query keeps a few of them, and carries an
 [overview](docs/api.md#overview) of every haplotype in bins along each reference
-path, for views of megabases or a whole chromosome.
+path, for views of megabases or a whole chromosome. Versions before 6.1 read
+only the format 2 index that gbz-haplotype-index 0.2 wrote, and fail on a format
+3 file with "SQLite table b-tree contains an index page".
 
 Example usage:
 

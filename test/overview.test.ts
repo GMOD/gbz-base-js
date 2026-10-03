@@ -4,12 +4,7 @@ import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
 import { dataDir } from './fixtures.ts'
-import {
-  GBZBase,
-  OVERVIEW_ABSENT,
-  OVERVIEW_REFERENCE,
-  OVERVIEW_VARIANT,
-} from '../src/db.ts'
+import { GBZBase, OVERVIEW_REFERENCE, OVERVIEW_VARIANT } from '../src/db.ts'
 
 function openMicb() {
   return GBZBase.open({
@@ -61,14 +56,13 @@ describe('the haplotype overview', () => {
         if ((cell & 3) !== OVERVIEW_VARIANT) {
           expect(cell >> 2).toBe(0)
         }
-        counted[cell & 3] += 1
+        counted[cell & 3] = (counted[cell & 3] ?? 0) + 1
       }
       expect(counted).toEqual(summary.classes)
     })
-    const absent = cells.filter(cell => (cell & 3) === OVERVIEW_ABSENT).length
     const variant = cells.filter(cell => (cell & 3) === OVERVIEW_VARIANT).length
-    expect(absent).toBeGreaterThan(0)
-    expect(variant).toBeGreaterThan(0)
+    expect(variant).toBe(bins.reduce((n, b) => n + b.classes[3], 0))
+    expect(bins.some(b => b.excursions > 0)).toBe(true)
   })
 
   it('picks the coarsest level whose bins fit the bp per pixel', async () => {
@@ -106,6 +100,32 @@ describe('the haplotype overview', () => {
     expect(
       db.fetchStats().haplotypeIndex!.fetches - before,
     ).toBeLessThanOrEqual(8)
+  })
+
+  it('is undefined for a path without an overview, and clamps the level', async () => {
+    const db = await openMicb()
+    expect(
+      await db.haplotypeOverview({
+        path: { sample: 'HG01106', haplotype: 1, contig: 'JAHAMC010000024.1' },
+        start: 8357361,
+        end: 8358361,
+      }),
+    ).toBeUndefined()
+    const top = await db.haplotypeOverview({
+      path: chr6,
+      start: 31500000,
+      end: 31510000,
+      level: 99,
+    })
+    const below = await db.haplotypeOverview({
+      path: chr6,
+      start: 31500000,
+      end: 31510000,
+      level: -1,
+    })
+    expect(top!.level).toBeGreaterThan(1)
+    expect(below!.level).toBe(0)
+    expect(top!.bins.length).toBeGreaterThan(0)
   })
 
   it('is undefined for an index without overview tables', async () => {

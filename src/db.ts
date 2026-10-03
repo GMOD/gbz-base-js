@@ -138,8 +138,9 @@ export interface HaplotypeOverview {
 }
 
 export interface OverviewQuery extends PathWindow {
-  // The zoom level, or the bp per pixel to choose the coarsest level whose
-  // bins are no larger than it. Level 0 without either.
+  // The zoom level, clamped to those the index holds, or the bp per pixel to
+  // choose the coarsest level whose bins are no larger than it. Level 0
+  // without either.
   level?: number | undefined
   bpPerPixel?: number | undefined
 }
@@ -1142,7 +1143,8 @@ export class GBZBase {
   }
 
   // The haplotype index's binned summary of every haplotype over a window of
-  // a reference path, or undefined when the index has none.
+  // a reference path, or undefined when the index has no overview or none for
+  // this path, which is not a reference path of a sample with anchors.
   async haplotypeOverview(
     opts: OverviewQuery,
   ): Promise<HaplotypeOverview | undefined> {
@@ -1154,7 +1156,10 @@ export class GBZBase {
     const baseBin = Number(tag('bin'))
     const chunkBins = Number(tag('chunk'))
     const levels = Number(tag('levels'))
-    let level = Math.min(opts.level ?? 0, levels - 1)
+    let level = Math.max(
+      0,
+      Math.min(Math.floor(opts.level ?? 0) || 0, levels - 1),
+    )
     if (opts.level === undefined && opts.bpPerPixel !== undefined) {
       while (
         level + 1 < levels &&
@@ -1215,6 +1220,9 @@ export class GBZBase {
           cellRows.push(packed.subarray(at, at + bytesPerBin))
         }
       }
+    }
+    if (bins.length === 0) {
+      return undefined
     }
     const cells = new Uint8Array(bins.length * haplotypes.length)
     cellRows.forEach((packed, b) => {
