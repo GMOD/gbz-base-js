@@ -1,0 +1,146 @@
+[
+  {
+    "stratum": "chr22",
+    "label": "chr22-0",
+    "contig": "GRCh38#0#chr22",
+    "start": 38732048,
+    "end": 38732348,
+    "size": 300
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-1",
+    "contig": "GRCh38#0#chr22",
+    "start": 27123316,
+    "end": 27123616,
+    "size": 300
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-2",
+    "contig": "GRCh38#0#chr22",
+    "start": 43496156,
+    "end": 43496456,
+    "size": 300
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-0",
+    "contig": "GRCh38#0#chr22",
+    "start": 20240447,
+    "end": 20250447,
+    "size": 10000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-1",
+    "contig": "GRCh38#0#chr22",
+    "start": 21861116,
+    "end": 21871116,
+    "size": 10000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-2",
+    "contig": "GRCh38#0#chr22",
+    "start": 23316960,
+    "end": 23326960,
+    "size": 10000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-0",
+    "contig": "GRCh38#0#chr22",
+    "start": 41540967,
+    "end": 41640967,
+    "size": 100000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-1",
+    "contig": "GRCh38#0#chr22",
+    "start": 20892241,
+    "end": 20992241,
+    "size": 100000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-2",
+    "contig": "GRCh38#0#chr22",
+    "start": 31408151,
+    "end": 31508151,
+    "size": 100000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-0",
+    "contig": "GRCh38#0#chr22",
+    "start": 18258145,
+    "end": 18558145,
+    "size": 300000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-1",
+    "contig": "GRCh38#0#chr22",
+    "start": 19883910,
+    "end": 20183910,
+    "size": 300000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-2",
+    "contig": "GRCh38#0#chr22",
+    "start": 31550734,
+    "end": 31850734,
+    "size": 300000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-0",
+    "contig": "GRCh38#0#chr22",
+    "start": 31031529,
+    "end": 32031529,
+    "size": 1000000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-1",
+    "contig": "GRCh38#0#chr22",
+    "start": 19343959,
+    "end": 20343959,
+    "size": 1000000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-2",
+    "contig": "GRCh38#0#chr22",
+    "start": 25075310,
+    "end": 26075310,
+    "size": 1000000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-0",
+    "contig": "GRCh38#0#chr22",
+    "start": 20043823,
+    "end": 23043823,
+    "size": 3000000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-1",
+    "contig": "GRCh38#0#chr22",
+    "start": 35490077,
+    "end": 38490077,
+    "size": 3000000
+  },
+  {
+    "stratum": "chr22",
+    "label": "chr22-2",
+    "contig": "GRCh38#0#chr22",
+    "start": 31244500,
+    "end": 34244500,
+    "size": 3000000
+  }
+]
