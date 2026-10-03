@@ -141,5 +141,7 @@ if len(sys.argv) > 4:
         req = f"{(f['graphRequests'] or 0) + (f['indexRequests'] or 0)} ({f['graphRequests']} + {f['indexRequests']})" if f['graphRequests'] is not None else '-'
         byt = f"{mb((f['graphBytes'] or 0) + (f['indexBytes'] or 0))} ({mb(f['graphBytes'] or 0)} + {mb(f['indexBytes'] or 0)})" if f['graphBytes'] is not None else '-'
         phase_ms = ' / '.join('-' if f[f'{p}_ms'] is None else f"{f[f'{p}_ms']:,}" for p in PHASES)
-        note = f['status'] if f['status'] in ('ok',) else f"{f['status']}: {(f['keepFallback'] or f['error'] or '').splitlines()[0][:80] if (f['keepFallback'] or f['error']) else ''}"
+        failed_in = next((p for p in PHASES if f[f'{p}_ms'] is None), None)
+        detail = f['keepFallback'] if f['status'] == 'fallback' else f'in {failed_in}' + ('' if f['status'] != 'error' else f": {(f['error'] or '').splitlines()[0][:60]}")
+        note = 'ok' if f['status'] == 'ok' else f"{f['status']} {detail}"
         print(f"| {f['size']:,} | {f['route']} | {note} | {req} | {byt} | {f['nodes'] if f['nodes'] is not None else '-'} | {f['paths'] if f['paths'] is not None else '-'} | {phase_ms} | {(f['totalMs'] or 0) / 1000:.1f} | {f['maxRssMb']} |")

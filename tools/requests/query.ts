@@ -5,7 +5,7 @@
 //     "route":"sampled|keep1|keep8","prefetch":true, ...}'
 //
 // GRAPH and INDEX override the hosted HPRC v2.1 URLs; CONTEXT, SNARLS, LIMIT
-// (a number or none) and BLOCK_SIZE override the plugin's defaults. Each
+// (a number or none), BLOCK_SIZE and MAX_BLOCKS override the plugin's defaults. Each
 // finished phase and a 15 s heartbeat go to stderr, so a query that is killed
 // still shows how far it got.
 import { RemoteFile } from 'generic-filehandle2'
@@ -113,6 +113,7 @@ const settings = {
   snarls: (process.env.SNARLS ?? 'contained') as SnarlOutput,
   limit: process.env.LIMIT === 'none' ? undefined : Number(process.env.LIMIT ?? 100_000),
   blockSize: Number(process.env.BLOCK_SIZE ?? 65536),
+  maxBlocks: Number(process.env.MAX_BLOCKS ?? 256),
 }
 const keep = KEEP[query.route]
 const t0 = performance.now()
@@ -122,6 +123,7 @@ try {
     source: remote(GRAPH),
     haplotypeIndex: remote(INDEX),
     blockSize: settings.blockSize,
+    maxBlocks: settings.maxBlocks,
   })
   mark('open')
   await db.paths()
