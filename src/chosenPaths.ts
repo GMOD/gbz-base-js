@@ -557,6 +557,15 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         )
       }
     }
+    // The samples on the subgraph's nodes, for the check after the walks,
+    // read while the walks run.
+    stats.scans = handleRuns([...records.keys()].sort((x, y) => x - y))
+    const scanning = Promise.all(
+      stats.scans.map(([first, last]) =>
+        db.haplotypeSamplesInRange(first, last),
+      ),
+    )
+    scanning.catch(() => undefined)
     while (
       lowest > 0 &&
       (anchorOf.get(lowest)?.pathOffset ?? Number.POSITIVE_INFINITY) >=
@@ -852,13 +861,7 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     // would contradict the haplotype index's rows. A sample of the reverse
     // orientation gives a position of the piece's twin.
     const reversed: HaplotypeSample[] = []
-    stats.scans = handleRuns([...records.keys()].sort((x, y) => x - y))
-    const scanned = await Promise.all(
-      stats.scans.map(([first, last]) =>
-        db.haplotypeSamplesInRange(first, last),
-      ),
-    )
-    for (const samples of scanned) {
+    for (const samples of await scanning) {
       for (const sample of samples) {
         stats.scanRows += 1
         if (records.has(sample.node) && chosen(sample.pathHandle)) {
