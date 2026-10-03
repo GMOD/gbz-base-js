@@ -385,14 +385,17 @@ describe('a query that uses the keep option', () => {
   // the window touches: the stray rows cover visits to those nodes alone.
   it('identifies every walk when the subgraph holds a node the bins leave out', async () => {
     const db = await openInversion()
-    const listed = db.haplotypeBinNodes.bind(db)
+    const binData = db.haplotypeBinData.bind(db)
     let dropped: number | undefined
-    Object.defineProperty(db, 'haplotypeBinNodes', {
+    Object.defineProperty(db, 'haplotypeBinData', {
       value: async (reference: number, first: number, last: number) => {
-        const has = await listed(reference, first, last)
-        return (id: number) => {
-          dropped ??= id
-          return id !== dropped && has(id)
+        const data = await binData(reference, first, last)
+        return {
+          ...data,
+          listed: (id: number) => {
+            dropped ??= id
+            return id !== dropped && data.listed(id)
+          },
         }
       },
     })
@@ -497,12 +500,13 @@ describe('a query that uses the keep option', () => {
 
   it('refuses anchor rows that do not include the reference’s own visit', async () => {
     const db = await openMicb()
-    const anchor = db.haplotypeAnchor.bind(db)
-    Object.defineProperty(db, 'haplotypeAnchor', {
-      value: async (pathHandle: number, offset: number) => {
-        const named = await anchor(pathHandle, offset)
-        return named && { ...named, pathOffset: named.pathOffset + 1 }
-      },
+    const anchors = db.haplotypeAnchorsBetween.bind(db)
+    Object.defineProperty(db, 'haplotypeAnchorsBetween', {
+      value: async (...args: Parameters<typeof anchors>) =>
+        (await anchors(...args)).map(row => ({
+          ...row,
+          pathOffset: row.pathOffset + 1,
+        })),
     })
     await expect(
       db.subgraphInInterval({

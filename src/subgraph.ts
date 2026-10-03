@@ -732,6 +732,7 @@ export class Subgraph {
             lo,
             hi + 2,
           ]),
+          true,
         )
       }
     }
@@ -1461,10 +1462,11 @@ export class Subgraph {
       return
     }
     const samples = new Map<string, HaplotypeSample>()
-    for (const [first, last] of runs) {
-      for (const sample of await this.db.haplotypeSamplesInRange(first, last)) {
-        samples.set(posKey(sample), sample)
-      }
+    const fetched = await Promise.all(
+      runs.map(([first, last]) => this.db.haplotypeSamplesInRange(first, last)),
+    )
+    for (const sample of fetched.flat()) {
+      samples.set(posKey(sample), sample)
     }
     const scanned = (handle: number) => {
       let lo = 0

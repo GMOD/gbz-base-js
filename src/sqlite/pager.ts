@@ -20,10 +20,19 @@ export function checkPagerOptions({ blockSize, maxBlocks }: PagerOptions) {
   }
 }
 
+// Blocks a reader asked for ahead of time, fetched in chunks as its reads
+// approach the end of what has been fetched.
+interface Plan {
+  blocks: number[]
+  position: Map<number, number>
+  next: number
+}
+
 export class Pager {
   private blocks = new Map<number, Promise<Uint8Array>>()
   private readonly blockSize: number
   private readonly maxBlocks: number
+  private plan: Plan | undefined
   bytesFetched = 0
   fetches = 0
 
@@ -84,6 +93,7 @@ export class Pager {
   }
 
   private block(index: number) {
+    this.follow(index)
     const cached = this.touch(index)
     if (cached) {
       return cached
@@ -115,6 +125,11 @@ export class Pager {
     return Math.max(1, Math.floor(this.maxBlocks / 2))
   }
 
+  private get chunk() {
+    return Math.max(1, Math.floor(this.prefetchBudget / 2))
+  }
+
+  // Fetches the pages' blocks when they fit the budget together.
   prefetch(pageNumbers: number[]) {
     const indexes = new Set(pageNumbers.map(n => this.blockOf(n)))
     if (indexes.size > this.prefetchBudget) {
@@ -124,19 +139,43 @@ export class Pager {
     return true
   }
 
+  // Fetches the first pages' blocks now, up to the budget, and plans the rest
+  // in the pages' order, to be fetched chunk by chunk as reads approach them.
   prefetchLeading(pageNumbers: number[]) {
-    const indexes = new Set<number>()
-    let count = 0
+    const blocks: number[] = []
+    const position = new Map<number, number>()
     for (const pageNumber of pageNumbers) {
       const index = this.blockOf(pageNumber)
-      if (!indexes.has(index) && indexes.size === this.prefetchBudget) {
-        break
+      if (!position.has(index)) {
+        position.set(index, blocks.length)
+        blocks.push(index)
       }
-      indexes.add(index)
-      count += 1
     }
-    this.fetchBlocks(indexes)
-    return count
+    this.plan = { blocks, position, next: 0 }
+    this.advance(this.prefetchBudget)
+  }
+
+  private advance(count: number) {
+    const plan = this.plan
+    if (!plan) {
+      return
+    }
+    const slice = plan.blocks.slice(plan.next, plan.next + count)
+    plan.next += slice.length
+    if (plan.next >= plan.blocks.length) {
+      this.plan = undefined
+    }
+    this.fetchBlocks(new Set(slice))
+  }
+
+  // A read within half a chunk of the end of the fetched part of the plan
+  // brings in the next chunk.
+  private follow(index: number) {
+    const plan = this.plan
+    const at = plan?.position.get(index)
+    if (plan && at !== undefined && at >= plan.next - Math.ceil(this.chunk / 2)) {
+      this.advance(this.chunk)
+    }
   }
 
   private fetchBlocks(indexes: Set<number>) {

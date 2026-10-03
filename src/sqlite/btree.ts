@@ -160,7 +160,15 @@ export class BTree {
     return low
   }
 
-  async prefetchRowidRanges(root: number, ranges: [number, number][]) {
+  // Fetches the pages that hold the rows of the ranges, level by level. Up to
+  // the pager's budget they come at once; past it a strict prefetch gives up
+  // and returns false, and a streaming one fetches the leading blocks now and
+  // the rest in chunks as reads approach them.
+  async prefetchRowidRanges(
+    root: number,
+    ranges: [number, number][],
+    stream = false,
+  ) {
     if (ranges.length === 0) {
       return true
     }
@@ -170,7 +178,10 @@ export class BTree {
       frontiers = await Promise.all(
         frontiers.map((pages, r) => this.childrenInRange(pages, ...ranges[r]!)),
       )
-      if (!this.pager.prefetch(frontiers.flat())) {
+      const pages = frontiers.flat()
+      if (stream) {
+        this.pager.prefetchLeading(pages)
+      } else if (!this.pager.prefetch(pages)) {
         return false
       }
     }
@@ -274,13 +285,11 @@ export class BTree {
         children.push(readUint32(page, cellOffset(page, header, i)))
       }
       children.push(header.rightChild)
-      let i = 0
-      while (i < children.length) {
-        const end =
-          depth > 1 ? i + 1 : i + this.pager.prefetchLeading(children.slice(i))
-        for (; i < end; i++) {
-          yield* this.scanPage(children[i]!, depth - 1)
-        }
+      if (depth === 1) {
+        this.pager.prefetchLeading(children)
+      }
+      for (const child of children) {
+        yield* this.scanPage(child, depth - 1)
       }
     }
   }
@@ -323,31 +332,64 @@ export class BTree {
     return cell
   }
 
-  async *indexScanFrom(
-    root: number,
-    low: number[],
-  ): AsyncGenerator<SqlValue[]> {
-    const { page, header } = await this.pageAt(root)
-    let first = 0
+  // The first cell at or past `key`, by binary search from `from`.
+  private async lowerBound(
+    pageNumber: number,
+    page: Uint8Array,
+    header: PageHeader,
+    key: number[],
+    from: number,
+    inclusive: boolean,
+  ) {
+    let low = from
     let high = header.cellCount
-    while (first < high) {
-      const mid = (first + high) >> 1
-      const cell = await this.indexCell(root, page, header, mid)
-      if (compareKey(cell.values, low) < 0) {
-        first = mid + 1
+    while (low < high) {
+      const mid = (low + high) >> 1
+      const cell = await this.indexCell(pageNumber, page, header, mid)
+      const order = compareKey(cell.values, key)
+      if (order < 0 || (inclusive && order === 0)) {
+        low = mid + 1
       } else {
         high = mid
       }
     }
+    return low
+  }
+
+  // The entries from `low` on in key order, and with `high` only those up to
+  // it, their pages read ahead.
+  async *indexScanFrom(
+    root: number,
+    low: number[],
+    high?: number[],
+  ): AsyncGenerator<SqlValue[]> {
+    const { page, header } = await this.pageAt(root)
+    const first = await this.lowerBound(root, page, header, low, 0, false)
+    const interior = header.type === INTERIOR_INDEX
+    if (interior && high) {
+      const past = await this.lowerBound(root, page, header, high, first, true)
+      const children: number[] = []
+      for (let c = first; c <= past; c++) {
+        children.push(
+          c === header.cellCount
+            ? header.rightChild
+            : (await this.indexCell(root, page, header, c)).leftChild,
+        )
+      }
+      this.pager.prefetchLeading(children)
+    }
     for (let i = first; i < header.cellCount; i++) {
       const cell = await this.indexCell(root, page, header, i)
-      if (header.type === INTERIOR_INDEX) {
-        yield* this.indexScanFrom(cell.leftChild, low)
+      if (interior) {
+        yield* this.indexScanFrom(cell.leftChild, low, high)
+      }
+      if (high && compareKey(cell.values, high) > 0) {
+        return
       }
       yield cell.values
     }
-    if (header.type === INTERIOR_INDEX) {
-      yield* this.indexScanFrom(header.rightChild, low)
+    if (interior) {
+      yield* this.indexScanFrom(header.rightChild, low, high)
     }
   }
 

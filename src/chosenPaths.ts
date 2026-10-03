@@ -9,7 +9,7 @@ import {
 import type {
   GBZBase,
   GbzRecord,
-  HaplotypeAnchor,
+  HaplotypeAnchorRow,
   HaplotypeSample,
   HaplotypeStrayOptions,
 } from './db.ts'
@@ -419,11 +419,6 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     return { reference, pieces: emitted, stats }
   }
 
-  const visitsAt = (node: number) => {
-    const handle = node - (node % 2)
-    return db.haplotypeSamplesInRange(handle, handle + 1)
-  }
-
   // A chain from a piece, forward or backward, through every piece it lands
   // in, until it meets a known position or runs CHAIN_BOUND bp outside the
   // subgraph.
@@ -528,11 +523,32 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     const lastBin = Math.floor((input.window.end - 1) / bin)
     const lo = firstBin * bin
     const hi = (lastBin + 1) * bin
-    const listed = await db.haplotypeBinNodes(
-      input.referenceHandle,
-      firstBin,
-      lastBin,
-    )
+
+    // Every anchor within `bound` of the bins, and one beyond on each side.
+    // The indexer counts a section whose anchor lies exactly `bound` outside
+    // the bins as reaching the visits around it, so the anchor past that one
+    // must be read too, or the section between them is never planned. An
+    // anchor's node can start far before its multiple, so the first read
+    // does not settle it. The bins' node lists and stray rows come in the
+    // same round trip.
+    const anchorOf = new Map<number, HaplotypeAnchorRow>()
+    const readAnchors = async (fromK: number, toK: number) => {
+      const rows = await db.haplotypeAnchorsBetween(
+        input.referenceHandle,
+        fromK * spacing,
+        toK * spacing,
+        spacing,
+      )
+      for (const row of rows) {
+        anchorOf.set(row.anchorOffset / spacing, row)
+      }
+    }
+    let lowest = Math.max(0, Math.floor((lo - bound) / spacing) - 1)
+    let highest = Math.ceil((hi + bound) / spacing) + 1
+    const [{ listed, strays: found }] = await Promise.all([
+      db.haplotypeBinData(input.referenceHandle, firstBin, lastBin),
+      readAnchors(lowest, highest),
+    ])
     for (const handle of records.keys()) {
       const id = nodeId(handle)
       if (!isReverse(handle) && !listed(id) && !inserted.has(id)) {
@@ -541,45 +557,20 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         )
       }
     }
-
-    // Every anchor within `bound` of the bins, and one beyond on each side.
-    // The indexer counts a section whose anchor lies exactly `bound` outside
-    // the bins as reaching the visits around it, so the anchor past that one
-    // must be read too, or the section between them is never planned. An
-    // anchor's node can start far before its multiple, so the first read
-    // does not settle it.
-    const anchorOf = new Map<number, HaplotypeAnchor>()
-    const readAnchor = async (k: number) => {
-      const anchor = await db.haplotypeAnchor(
-        input.referenceHandle,
-        k * spacing,
-      )
-      if (anchor) {
-        anchorOf.set(k, anchor)
-      }
-      return anchor
-    }
-    let lowest = Math.max(0, Math.floor((lo - bound) / spacing) - 1)
-    let highest = Math.ceil((hi + bound) / spacing) + 1
-    await Promise.all(
-      Array.from({ length: highest - lowest + 1 }, (_, i) =>
-        readAnchor(lowest + i),
-      ),
-    )
     while (
       lowest > 0 &&
       (anchorOf.get(lowest)?.pathOffset ?? Number.POSITIVE_INFINITY) >=
         lo - bound
     ) {
       lowest -= 1
-      await readAnchor(lowest)
+      await readAnchors(lowest, lowest)
     }
     while (
       anchorOf.has(highest) &&
       anchorOf.get(highest)!.pathOffset <= hi + bound
     ) {
       highest += 1
-      await readAnchor(highest)
+      await readAnchors(highest, highest)
     }
     const multiples = [...anchorOf.keys()].sort((x, y) => x - y)
     const own = anchorOf.get(multiples[0] ?? -1)
@@ -594,8 +585,8 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       multiplesOf.set(id, [...(multiplesOf.get(id) ?? []), k])
     }
     const anchorNodes = [...multiplesOf.keys()]
-    const anchorRows = await Promise.all(
-      anchorNodes.map(id => visitsAt(2 * id)),
+    const anchorRows = anchorNodes.map(
+      id => anchorOf.get(multiplesOf.get(id)![0]!)!.visits,
     )
     if (
       !anchorRows[anchorNodes.indexOf(nodeId(own.node))]!.some(
@@ -685,11 +676,6 @@ export async function findChosenPieces(input: ChosenPathsInput) {
       }
     }
     const filled = new Set(fills.map(fill => `${fill.low}:${fill.high}`))
-    const found = await db.haplotypeStraysInBins(
-      input.referenceHandle,
-      firstBin,
-      lastBin,
-    )
     const rows = found
       .filter(
         row =>
@@ -867,8 +853,13 @@ export async function findChosenPieces(input: ChosenPathsInput) {
     // orientation gives a position of the piece's twin.
     const reversed: HaplotypeSample[] = []
     stats.scans = handleRuns([...records.keys()].sort((x, y) => x - y))
-    for (const [first, last] of stats.scans) {
-      for (const sample of await db.haplotypeSamplesInRange(first, last)) {
+    const scanned = await Promise.all(
+      stats.scans.map(([first, last]) =>
+        db.haplotypeSamplesInRange(first, last),
+      ),
+    )
+    for (const samples of scanned) {
+      for (const sample of samples) {
         stats.scanRows += 1
         if (records.has(sample.node) && chosen(sample.pathHandle)) {
           if (

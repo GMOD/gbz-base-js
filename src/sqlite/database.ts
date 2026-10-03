@@ -92,6 +92,12 @@ export class SqliteDatabase {
     return object.rootPage
   }
 
+  // Whether a table keeps its whole rows in the b-tree of its primary key.
+  withoutRowid(tableName: string) {
+    const table = this.objects.get(tableName)
+    return table?.type === 'table' && /without\s+rowid/i.test(table.sql)
+  }
+
   // The b-tree keyed by a table's primary key: its automatic index, or the
   // table itself when it is WITHOUT ROWID.
   indexOn(tableName: string) {
@@ -101,9 +107,8 @@ export class SqliteDatabase {
     if (index) {
       return index.rootPage
     }
-    const table = this.objects.get(tableName)
-    if (table?.type === 'table' && /without\s+rowid/i.test(table.sql)) {
-      return table.rootPage
+    if (this.withoutRowid(tableName)) {
+      return this.rootPage(tableName)
     }
     throw new Error(`SQLite table ${tableName} has no index`)
   }
@@ -112,8 +117,8 @@ export class SqliteDatabase {
     return this.btree.tableRowid(this.rootPage(table), rowid)
   }
 
-  prefetchRows(table: string, ranges: [number, number][]) {
-    return this.btree.prefetchRowidRanges(this.rootPage(table), ranges)
+  prefetchRows(table: string, ranges: [number, number][], stream = false) {
+    return this.btree.prefetchRowidRanges(this.rootPage(table), ranges, stream)
   }
 
   scan(table: string) {
@@ -124,8 +129,9 @@ export class SqliteDatabase {
     return this.btree.indexSeekLE(this.indexOn(table), key)
   }
 
-  indexScanFrom(table: string, low: number[]) {
-    return this.btree.indexScanFrom(this.indexOn(table), low)
+  // The entries of a table's primary key from `low` on, or up to `high`.
+  indexScanFrom(table: string, low: number[], high?: number[]) {
+    return this.btree.indexScanFrom(this.indexOn(table), low, high)
   }
 
   has(name: string) {

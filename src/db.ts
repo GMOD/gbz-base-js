@@ -98,6 +98,134 @@ export interface HaplotypeAnchor {
   pathOffset: number
 }
 
+// An anchor of a reference path with the forward samples at its node: one
+// visit of every haplotype that passes it, each with its GBWT position and
+// its offset along its own path.
+export interface HaplotypeAnchorRow extends HaplotypeAnchor {
+  anchorOffset: number
+  visits: HaplotypeSample[]
+}
+
+// The formats of the haplotype index this reader understands. Format 3 keeps
+// the samples in their key b-tree, each anchor's visits with the anchor and
+// each bin's stray rows with its node list.
+const INDEX_FORMATS = [2, 3]
+
+class Varints {
+  private at = 0
+  private bytes: Uint8Array
+
+  constructor(bytes: Uint8Array) {
+    this.bytes = bytes
+  }
+
+  get done() {
+    return this.at >= this.bytes.length
+  }
+
+  next() {
+    let value = 0
+    let scale = 1
+    for (;;) {
+      const byte = this.bytes[this.at++]
+      if (byte === undefined) {
+        throw new Error('a haplotype index blob ends inside a number')
+      }
+      value += (byte & 0x7f) * scale
+      scale *= 128
+      if ((byte & 0x80) === 0) {
+        return value
+      }
+    }
+  }
+}
+
+// Appends the runs of node ids a HaplotypeBins node-list part encodes: per
+// run, the gap from the previous run's last id and the length less one.
+function decodeRuns(bytes: Uint8Array, runs: [number, number][]) {
+  const reader = new Varints(bytes)
+  let previous = 0
+  while (!reader.done) {
+    const start = previous + reader.next()
+    previous = start + reader.next()
+    runs.push([start, previous])
+  }
+}
+
+// A test of membership in the union of the runs.
+function runTester(runs: [number, number][]) {
+  runs.sort((x, y) => x[0] - y[0])
+  const starts: number[] = []
+  const ends: number[] = []
+  for (const [start, end] of runs) {
+    const last = ends.length - 1
+    if (last >= 0 && start <= ends[last]! + 1) {
+      ends[last] = Math.max(ends[last]!, end)
+    } else {
+      starts.push(start)
+      ends.push(end)
+    }
+  }
+  return (id: number) => {
+    let lo = 0
+    let hi = starts.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (starts[mid]! <= id) {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    return lo > 0 && id <= ends[lo - 1]!
+  }
+}
+
+function decodeStrays(bin: number, bytes: Uint8Array, rows: HaplotypeStray[]) {
+  const reader = new Varints(bytes)
+  while (!reader.done) {
+    const pathHandle = reader.next()
+    const pathStart = reader.next()
+    const pathEnd = reader.next()
+    const low = reader.next()
+    const high = reader.next()
+    rows.push({
+      bin,
+      pathHandle,
+      pathStart,
+      pathEnd,
+      snarl: high > 0 ? [low, high] : undefined,
+      node: reader.next(),
+      offset: reader.next(),
+    })
+  }
+}
+
+// The visits of a format 3 anchor row: per visit, the path handle doubled
+// plus the orientation bit of the node handle, the node offset and the path
+// offset.
+function decodeVisits(
+  anchorNode: number,
+  parts: Uint8Array[],
+  visits: HaplotypeSample[],
+) {
+  const id = nodeId(anchorNode)
+  for (const part of parts) {
+    const reader = new Varints(part)
+    while (!reader.done) {
+      const pathAndBit = reader.next()
+      const bit = pathAndBit % 2
+      visits.push({
+        node: 2 * id + bit,
+        offset: reader.next(),
+        pathHandle: (pathAndBit - bit) / 2,
+        orientation: 'forward',
+        pathOffset: reader.next(),
+      })
+    }
+  }
+}
+
 // A row of HaplotypeStrays: a stretch of one path, from pathStart to the visit
 // at pathEnd, holding visits to nodes of one bin that the walks from anchor
 // visits can miss. `node` and `offset` are the GBWT position of its first
@@ -253,6 +381,8 @@ export class GBZBase {
   private pathCache: Promise<GbzPath[]> | undefined
   private pathMapCache: Promise<Map<number, GbzPath>> | undefined
   private indexTags = new Map<string, string>()
+  private indexFormat = 2
+  private samplesInline = false
 
   /** @internal */
   readonly sqlite: SqliteDatabase
@@ -317,6 +447,14 @@ export class GBZBase {
       if (db.indexTags.get('haplotype_index_orientations') === 'forward') {
         throw new ForwardOnlyIndexError()
       }
+      const format = Number(db.indexTags.get('haplotype_index_format') ?? '2')
+      if (!INDEX_FORMATS.includes(format)) {
+        throw new Error(
+          `the haplotype index has format ${format}, newer than the formats this version of @gmod/gbz-base reads (${INDEX_FORMATS.join(', ')}); update the package`,
+        )
+      }
+      db.indexFormat = format
+      db.samplesInline = index.withoutRowid('HaplotypeSamples')
     }
     return db
   }
@@ -330,8 +468,8 @@ export class GBZBase {
   }
 
   /** @internal */
-  prefetchRecords(ranges: [number, number][]) {
-    return this.sqlite.prefetchRows('Nodes', ranges)
+  prefetchRecords(ranges: [number, number][], stream = false) {
+    return this.sqlite.prefetchRows('Nodes', ranges, stream)
   }
 
   /** @internal */
@@ -617,15 +755,18 @@ export class GBZBase {
     return value === undefined ? undefined : Number(value)
   }
 
-  // How HaplotypeStrays and HaplotypeBinNodes were built, or undefined
-  // without them.
+  // How the bins' node lists and stray rows were built, or undefined without
+  // them.
   /** @internal */
   async haplotypeStrayOptions(): Promise<HaplotypeStrayOptions | undefined> {
     const tag = (key: string) =>
       this.indexTags.get(`haplotype_index_stray_${key}`)
+    const tables =
+      this.indexFormat >= 3
+        ? ['HaplotypeBins']
+        : ['HaplotypeStrays', 'HaplotypeBinNodes']
     if (
-      !this.index?.has('HaplotypeStrays') ||
-      !this.index.has('HaplotypeBinNodes') ||
+      !tables.every(table => this.index?.has(table)) ||
       tag('format') !== '2'
     ) {
       return undefined
@@ -641,106 +782,124 @@ export class GBZBase {
     }
   }
 
-  // The HaplotypeStrays rows of the bins firstBin..lastBin of one reference
-  // path.
+  // The node lists and stray rows of the bins firstBin..lastBin of one
+  // reference path: a test of whether a node id is listed, and the rows.
   /** @internal */
-  async haplotypeStraysInBins(
+  async haplotypeBinData(
     referenceHandle: number,
     firstBin: number,
     lastBin: number,
-  ) {
-    const rows: HaplotypeStray[] = []
-    for await (const row of this.companion.indexScanFrom('HaplotypeStrays', [
-      referenceHandle,
-      firstBin,
-    ])) {
-      const bin = num(row[1], 'HaplotypeStrays.bin')
-      if (row[0] !== referenceHandle || bin > lastBin) {
-        break
+  ): Promise<{ listed: (id: number) => boolean; strays: HaplotypeStray[] }> {
+    const runs: [number, number][] = []
+    const strays: HaplotypeStray[] = []
+    if (this.indexFormat >= 3) {
+      for await (const row of this.companion.indexScanFrom(
+        'HaplotypeBins',
+        [referenceHandle, firstBin],
+        [referenceHandle, lastBin],
+      )) {
+        const bin = num(row[1], 'HaplotypeBins.bin')
+        decodeRuns(blob(row[3], 'HaplotypeBins.nodes'), runs)
+        decodeStrays(bin, blob(row[4], 'HaplotypeBins.strays'), strays)
       }
-      const low = num(row[4], 'HaplotypeStrays.snarl_low')
-      const high = num(row[5], 'HaplotypeStrays.snarl_high')
-      rows.push({
-        bin,
-        pathHandle: num(row[2], 'HaplotypeStrays.path_handle'),
-        pathStart: num(row[3], 'HaplotypeStrays.path_start'),
-        snarl: high > 0 ? [low, high] : undefined,
-        pathEnd: num(row[6], 'HaplotypeStrays.path_end'),
-        node: num(row[7], 'HaplotypeStrays.node_handle'),
-        offset: num(row[8], 'HaplotypeStrays.node_offset'),
-      })
+      return { listed: runTester(runs), strays }
     }
-    return rows
+    await Promise.all([
+      (async () => {
+        for await (const row of this.companion.indexScanFrom(
+          'HaplotypeBinNodes',
+          [referenceHandle, firstBin],
+          [referenceHandle, lastBin],
+        )) {
+          decodeRuns(blob(row[3], 'HaplotypeBinNodes.nodes'), runs)
+        }
+      })(),
+      (async () => {
+        for await (const row of this.companion.indexScanFrom(
+          'HaplotypeStrays',
+          [referenceHandle, firstBin],
+          [referenceHandle, lastBin],
+        )) {
+          const low = num(row[4], 'HaplotypeStrays.snarl_low')
+          const high = num(row[5], 'HaplotypeStrays.snarl_high')
+          strays.push({
+            bin: num(row[1], 'HaplotypeStrays.bin'),
+            pathHandle: num(row[2], 'HaplotypeStrays.path_handle'),
+            pathStart: num(row[3], 'HaplotypeStrays.path_start'),
+            snarl: high > 0 ? [low, high] : undefined,
+            pathEnd: num(row[6], 'HaplotypeStrays.path_end'),
+            node: num(row[7], 'HaplotypeStrays.node_handle'),
+            offset: num(row[8], 'HaplotypeStrays.node_offset'),
+          })
+        }
+      })(),
+    ])
+    return { listed: runTester(runs), strays }
   }
 
-  // The nodes HaplotypeBinNodes lists for the bins firstBin..lastBin of one
-  // reference path, as a test of one node id.
+  // The anchors of one reference path at offsets from lowOffset to
+  // highOffset, each with the forward samples at its node.
   /** @internal */
-  async haplotypeBinNodes(
-    referenceHandle: number,
-    firstBin: number,
-    lastBin: number,
-  ) {
-    const runs: [number, number][] = []
-    for await (const row of this.companion.indexScanFrom('HaplotypeBinNodes', [
-      referenceHandle,
-      firstBin,
-    ])) {
-      if (
-        row[0] !== referenceHandle ||
-        num(row[1], 'HaplotypeBinNodes.bin') > lastBin
-      ) {
-        break
-      }
-      const bytes = blob(row[3], 'HaplotypeBinNodes.nodes')
-      let previous = 0
-      let at = 0
-      const read = () => {
-        let value = 0
-        let scale = 1
-        for (;;) {
-          const byte = bytes[at++]
-          if (byte === undefined) {
-            throw new Error('HaplotypeBinNodes.nodes ends inside a number')
-          }
-          value += (byte & 0x7f) * scale
-          scale *= 128
-          if ((byte & 0x80) === 0) {
-            return value
-          }
+  async haplotypeAnchorsBetween(
+    pathHandle: number,
+    lowOffset: number,
+    highOffset: number,
+    spacing: number,
+  ): Promise<HaplotypeAnchorRow[]> {
+    if (this.indexFormat >= 3) {
+      const rows: HaplotypeAnchorRow[] = []
+      let parts: Uint8Array[] = []
+      const flush = () => {
+        const last = rows[rows.length - 1]
+        if (last) {
+          decodeVisits(last.node, parts, last.visits)
         }
+        parts = []
       }
-      while (at < bytes.length) {
-        const start = previous + read()
-        previous = start + read()
-        runs.push([start, previous])
-      }
-    }
-    runs.sort((x, y) => x[0] - y[0])
-    const starts: number[] = []
-    const ends: number[] = []
-    for (const [start, end] of runs) {
-      const last = ends.length - 1
-      if (last >= 0 && start <= ends[last]! + 1) {
-        ends[last] = Math.max(ends[last]!, end)
-      } else {
-        starts.push(start)
-        ends.push(end)
-      }
-    }
-    return (id: number) => {
-      let lo = 0
-      let hi = starts.length
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1
-        if (starts[mid]! <= id) {
-          lo = mid + 1
-        } else {
-          hi = mid
+      for await (const row of this.companion.indexScanFrom(
+        'HaplotypeAnchors',
+        [pathHandle, lowOffset],
+        [pathHandle, highOffset],
+      )) {
+        const anchorOffset = num(row[1], 'HaplotypeAnchors.anchor_offset')
+        if (rows[rows.length - 1]?.anchorOffset !== anchorOffset) {
+          flush()
+          rows.push({
+            anchorOffset,
+            node: num(row[3], 'HaplotypeAnchors.node_handle'),
+            pathOffset: num(row[4], 'HaplotypeAnchors.path_offset'),
+            visits: [],
+          })
         }
+        parts.push(blob(row[5], 'HaplotypeAnchors.visits'))
       }
-      return lo > 0 && id <= ends[lo - 1]!
+      flush()
+      return rows
     }
+    const offsets: number[] = []
+    for (let offset = lowOffset; offset <= highOffset; offset += spacing) {
+      offsets.push(offset)
+    }
+    const found = await Promise.all(
+      offsets.map(async anchorOffset => {
+        const anchor = await this.haplotypeAnchor(pathHandle, anchorOffset)
+        return anchor ? { ...anchor, anchorOffset } : undefined
+      }),
+    )
+    const anchors = found.filter(anchor => anchor !== undefined)
+    const nodes = [...new Set(anchors.map(anchor => nodeId(anchor.node)))]
+    const visits = new Map(
+      await Promise.all(
+        nodes.map(
+          async id =>
+            [id, await this.haplotypeSamplesInRange(2 * id, 2 * id + 1)] as const,
+        ),
+      ),
+    )
+    return anchors.map(anchor => ({
+      ...anchor,
+      visits: visits.get(nodeId(anchor.node))!,
+    }))
   }
 
   /** @internal */
@@ -748,6 +907,15 @@ export class GBZBase {
     pathHandle: number,
     anchorOffset: number,
   ): Promise<HaplotypeAnchor | undefined> {
+    if (this.indexFormat >= 3) {
+      const [row] = await this.haplotypeAnchorsBetween(
+        pathHandle,
+        anchorOffset,
+        anchorOffset,
+        1,
+      )
+      return row && { node: row.node, pathOffset: row.pathOffset }
+    }
     const key = await this.companion.indexSeekLE('HaplotypeAnchors', [
       pathHandle,
       anchorOffset,
@@ -785,21 +953,34 @@ export class GBZBase {
     }
   }
 
+  // The samples at the node handles minHandle..maxHandle. A format 2 index
+  // keeps them in a rowid table in key order, so their rows are prefetched as
+  // one range after the key scan.
   /** @internal */
   async haplotypeSamplesInRange(minHandle: number, maxHandle: number) {
     const samples: HaplotypeSample[] = []
-    for await (const key of this.companion.indexScanFrom('HaplotypeSamples', [
-      minHandle,
-      0,
-    ])) {
-      const node = num(key[0], 'HaplotypeSamples.node_handle')
-      if (node > maxHandle) {
-        break
+    const keys = this.companion.indexScanFrom(
+      'HaplotypeSamples',
+      [minHandle, 0],
+      [maxHandle, Number.MAX_SAFE_INTEGER],
+    )
+    if (this.samplesInline) {
+      for await (const row of keys) {
+        samples.push(this.sampleFromRow(row))
       }
-      const row = await this.companion.byRowid(
-        'HaplotypeSamples',
-        num(key[2], 'HaplotypeSamples rowid'),
-      )
+      return samples
+    }
+    const rowids: number[] = []
+    for await (const key of keys) {
+      rowids.push(num(key[2], 'HaplotypeSamples rowid'))
+    }
+    if (rowids.length > 1) {
+      await this.companion.prefetchRows('HaplotypeSamples', [
+        [Math.min(...rowids), Math.max(...rowids) + 1],
+      ])
+    }
+    for (const rowid of rowids) {
+      const row = await this.companion.byRowid('HaplotypeSamples', rowid)
       if (row) {
         samples.push(this.sampleFromRow(row))
       }
@@ -815,6 +996,9 @@ export class GBZBase {
     ])
     if (key?.[0] !== node || key[1] !== offset) {
       return undefined
+    }
+    if (this.samplesInline) {
+      return this.sampleFromRow(key)
     }
     const row = await this.companion.byRowid(
       'HaplotypeSamples',
