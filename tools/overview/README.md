@@ -45,3 +45,24 @@ by halves; a window under 300 kb switches to the alignments.
 
 The same 3 Mb window read through the graph alone cost 70 to 307 requests and 17
 to 20 MB ([the request study](../requests/README.md)).
+
+## Whole genome, HPRC v2.1, 464 haplotypes, 139.5 M nodes
+
+The graph database hosted on S3 (10 GB) and a format 3 index of the whole graph
+served from local disk (4.25 GB, GRCh38 anchors, no stray rows, a 243 MB
+overview at 5 levels; built from the GBZ alone in 70 minutes on 14 threads).
+Each line is a fresh process, so the cost includes opening both files and the
+`Paths` table from S3: 10 requests, 2.9 MB and about 2.4 s of every line, paid
+once per browser session.
+
+| view                               | drawn from                    | requests (graph + index) |  MB |    ms |
+| ---------------------------------- | ----------------------------- | -----------------------: | --: | ----: |
+| whole chr1, 249 Mb                 | 3,799 bins of 65.5 kb         |              21 (6 + 15) | 4.8 | 2,393 |
+| whole chr6, 171 Mb                 | 2,607 bins of 65.5 kb         |              20 (6 + 14) | 4.4 | 2,432 |
+| whole chrX, 156 Mb                 | 2,381 bins of 65.5 kb         |              20 (6 + 14) | 4.3 | 2,411 |
+| chr1 100-103 Mb, 3 Mb              | 733 bins of 4 kb              |              20 (6 + 14) | 4.0 | 2,546 |
+| chr6 31.5-32.5 Mb (MHC), 1 Mb      | 245 bins of 4 kb              |              20 (6 + 14) | 3.8 | 2,553 |
+| chr1 103.7-103.8 Mb (AMY1), 100 kb | 1,463 alignments over 25 bins |             53 (29 + 24) | 6.9 | 8,089 |
+
+In the page, which keeps the session open, whole chr1 is 11 requests, 1.6 MB and
+161 ms of fetching; the 1 Mb MHC window 12 requests, 0.8 MB and 149 ms.
