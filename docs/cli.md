@@ -35,12 +35,13 @@ gbz-base-query https://host/graph.gbz.db \
 
 ## Output
 
-| flags                    | stdout                                                    |
-| ------------------------ | --------------------------------------------------------- |
-| none                     | the subgraph as JSON, matching upstream's `--format json` |
-| `--format gfa`           | the subgraph as GFA                                       |
-| `--alignments`           | a JSON array of [alignment records](alignments.md)        |
-| `--against` or `--stack` | [PAF](alignments.md#paf-output), one line per alignment   |
+| flags                    | stdout                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------- |
+| none                     | the subgraph as JSON, matching upstream's `--format json`                                           |
+| `--format gfa`           | the subgraph as GFA                                                                                 |
+| `--alignments`           | a JSON array of [alignment records](alignments.md)                                                  |
+| `--against` or `--stack` | [PAF](alignments.md#paf-output), one line per alignment                                             |
+| `--overview BP`          | the haplotype index's [overview](api.md#overview) of `--interval`, as JSON with `cells` as an array |
 
 `--stats` writes request and byte counts to stderr, with how many walks the
 library identified and how many it could not. For a query that uses the `keep`

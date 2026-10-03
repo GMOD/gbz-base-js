@@ -63,7 +63,10 @@ We created a custom approach called
 (`cargo install gbz-haplotype-index`), that adds haplotype walk metadata to the
 graph
 
-This creates a separate file alongside the .gbz.db file
+This creates a separate file alongside the .gbz.db file. It also names every
+haplotype's walk when a query keeps a few of them, and carries an
+[overview](docs/api.md#overview) of every haplotype in bins along each reference
+path, for views of megabases or a whole chromosome.
 
 Example usage:
 

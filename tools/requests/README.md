@@ -286,23 +286,27 @@ the format 3 index.
 |    window | route   | before: requests (graph + index) | before: MB | after: requests (graph + index) | after: MB |
 | --------: | ------- | -------------------------------: | ---------: | ------------------------------: | --------: |
 |       300 | sampled |                       14 (8 + 6) |        0.9 |                      13 (8 + 5) |       0.9 |
-|       300 | keep1   |                     28 (10 + 18) |        2.7 |                    21 (10 + 11) |       2.2 |
+|       300 | keep1   |                     28 (10 + 18) |        2.7 |                    23 (10 + 13) |       2.4 |
 |    10,000 | sampled |                       13 (8 + 5) |        0.9 |                      13 (8 + 5) |       0.9 |
-|    10,000 | keep1   |                     28 (11 + 17) |        2.3 |                    22 (11 + 11) |       2.0 |
+|    10,000 | keep1   |                     28 (11 + 17) |        2.3 |                    23 (11 + 12) |       2.0 |
 |   100,000 | sampled |                       17 (8 + 9) |        1.4 |                      13 (8 + 5) |       1.2 |
-|   100,000 | keep1   |                     31 (11 + 20) |        2.7 |                    22 (11 + 11) |       2.2 |
+|   100,000 | keep1   |                     31 (11 + 20) |        2.7 |                    23 (11 + 12) |       2.3 |
 |   300,000 | sampled |                     29 (11 + 18) |        2.9 |                     16 (11 + 5) |       2.6 |
-|   300,000 | keep1   |                     45 (14 + 31) |        4.5 |                    25 (14 + 11) |       3.6 |
+|   300,000 | keep1   |                     45 (14 + 31) |        4.5 |                    27 (14 + 13) |       3.7 |
 | 1,000,000 | sampled |                     56 (12 + 44) |        7.1 |                     17 (12 + 5) |       6.0 |
-| 1,000,000 | keep1   |                     70 (15 + 55) |        8.6 |                    27 (15 + 12) |       7.2 |
+| 1,000,000 | keep1   |                     70 (15 + 55) |        8.6 |                    28 (15 + 13) |       7.3 |
 | 3,000,000 | sampled |                  307 (181 + 126) |       20.1 |                     70 (63 + 7) |      16.6 |
-| 3,000,000 | keep1   |                  324 (188 + 136) |       21.2 |                    79 (66 + 13) |      17.6 |
+| 3,000,000 | keep1   |                  324 (188 + 136) |       21.2 |                    81 (66 + 15) |      17.7 |
 
-- The index side is now 11 requests for a keep query at any size up to 1 Mb: 2
-  to open, 1 for the path's length, 2 each for the bins' rows and the anchors'
-  rows, in parallel, and 3 for the samples on the window's nodes. Before, each
-  anchor cost a descent through the samples' automatic index and then the table,
-  4 levels each, and a 1 Mb window read 55.
+- The index side is now 12 or 13 requests for a keep query at any size up to 1
+  Mb: 2 to open, 1 for the path's length, 2 to 3 each for the bins' rows and the
+  anchors' rows (a key index and a rowid range, read in parallel), and 3 for the
+  samples on the window's nodes. Before, each anchor cost a descent through the
+  samples' automatic index and then the table, 4 levels each, and a 1 Mb window
+  read 55.
+- The overview of the whole of chr22 (`--overview 25000`, 3,102 bins of 16 kb
+  for 464 haplotypes) costs 11 index requests and 1.4 MB, 4 of the requests per
+  session, and 3 graph requests for the path fragments.
 - Identification on the sampled route reads the window's samples in one
   read-ahead range scan per run of node ids: 5 requests at every size, 44 at 1
   Mb before.

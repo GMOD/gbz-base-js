@@ -138,6 +138,42 @@ await subgraph.identifyPaths()
 
 `db.fetchStats()` reports the range requests and bytes each file has cost.
 
+## Overview
+
+A window of megabases, or a whole chromosome, is too much graph to read: the
+subgraph of 3 Mb of chr22 costs about 70 requests and 17 MB. For such views a
+haplotype index written by gbz-haplotype-index 0.3 carries an overview, which
+`haplotypeOverview` reads in about 7 requests whatever the window:
+
+```ts
+const overview = await db.haplotypeOverview({
+  path: { sample: 'GRCh38', contig: 'chr22' },
+  start: 0,
+  end: 50818468,
+  bpPerPixel: 25000,
+})
+```
+
+The index holds the overview at zoom levels a factor of four apart, from
+`--overview-bin` bp (4,096 by default). The query takes the coarsest level whose
+bins are no larger than `bpPerPixel`, or `level` directly. The result is
+`undefined` when the index has no overview. Otherwise:
+
+| field        | holds                                                                                                                                                                                                                                                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `level`      | the level chosen                                                                                                                                                                                                                                                                                                       |
+| `bin`        | its bin size in bp                                                                                                                                                                                                                                                                                                     |
+| `haplotypes` | every haplotype of the graph as `{ sample, haplotype }`, in the order of the cells                                                                                                                                                                                                                                     |
+| `bins`       | the bins the window touches: `start` and `end` on the path, `classes` as the count of haplotypes that are absent, reference-like, partial and variant there, `excursions` and `variants` as the number of stretches off the reference that start in the bin, the latter of 50 bp or more, and `longestExcursion` in bp |
+| `cells`      | a `Uint8Array` of `bins.length × haplotypes.length` entries, bin by bin: the class in the low two bits (`OVERVIEW_ABSENT`, `OVERVIEW_REFERENCE`, `OVERVIEW_PARTIAL`, `OVERVIEW_VARIANT`), and for a variant cell a bucket of how many variant marks the bin holds in the next two: 1, 2 to 3, 4 to 15, 16 or more      |
+
+A haplotype is absent from a bin when none of its contigs covers it, partial
+when they cover less than nine tenths of it, variant when one of them leaves the
+reference for 50 bp or more there, visits a node against the reference's
+orientation, steps backwards or jumps to another reference path, and
+reference-like otherwise. The whole of chr22 for the 464 HPRC haplotypes at 16
+kb bins is 3,102 bins, 1.4 MB.
+
 ## Errors
 
 | class                   | thrown by      | means                                                                        |
