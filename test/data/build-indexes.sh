@@ -29,3 +29,9 @@ build anchor-at-bound --interval 1000 --anchor-spacing 500 --stray-context 1000 
 build keep-bounds --interval 4096 --anchor-spacing 1000 --stray-context 1 --stray-bin 2000 --stray-bound 1000 --stray-gap 64 --page-size 4096
 build reverse-reference --interval 16384 --page-size 4096
 build shared-hairpin --interval 16384 --page-size 4096
+# Indexes without anchors, and one with one orientation, which open refuses.
+"$indexer" --interval 1000 --anchor-spacing 0 --page-size 4096 --overwrite --from-db detour.gbz.db detour.haplotype-index.db 2>&1 | tail -1
+"$indexer" --interval 1000 --anchor-spacing 0 --page-size 4096 --overwrite --from-db micb-kir3dl1.gbz.db micb-kir3dl1.sampled.haplotype-index.db 2>&1 | tail -1
+"$indexer" --interval 1000 --anchor-spacing 0 --forward-only --page-size 4096 --overwrite --from-db micb-kir3dl1.gbz.db micb-kir3dl1.forward-only.haplotype-index.db 2>&1 | tail -1
+"$indexer" --interval 3 --anchor-spacing 0 --page-size 4096 --overwrite --from-db example.gbz.db example.haplotype-index.db 2>&1 | tail -1
+"$indexer" --interval 3 --anchor-spacing 0 --page-size 4096 --overwrite --from-db example-v3.gbz.db example-v3.haplotype-index.db 2>&1 | tail -1

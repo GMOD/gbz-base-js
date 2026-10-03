@@ -141,9 +141,9 @@ await subgraph.identifyPaths()
 ## Overview
 
 A window of megabases, or a whole chromosome, is too much graph to read: the
-subgraph of 3 Mb of chr22 costs about 70 requests and 17 MB. For such views a
-haplotype index written by gbz-haplotype-index 0.3 carries an overview, which
-`haplotypeOverview` reads in about 7 requests whatever the window:
+subgraph of 3 Mb of chr22 costs about 70 requests and 17 MB. For such views the
+haplotype index carries an overview, which `haplotypeOverview` reads in about 7
+requests whatever the window:
 
 ```ts
 const overview = await db.haplotypeOverview({

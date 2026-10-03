@@ -537,7 +537,6 @@ export async function findChosenPieces(input: ChosenPathsInput) {
         input.referenceHandle,
         fromK * spacing,
         toK * spacing,
-        spacing,
       )
       for (const row of rows) {
         anchorOf.set(row.anchorOffset / spacing, row)

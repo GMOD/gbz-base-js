@@ -132,7 +132,7 @@ describe('the haplotype overview', () => {
     const db = await GBZBase.open({
       source: new LocalFile(path.join(dataDir, 'micb-kir3dl1.gbz.db')),
       haplotypeIndex: new LocalFile(
-        path.join(dataDir, 'micb-kir3dl1.format2.haplotype-index.db'),
+        path.join(dataDir, 'micb-kir3dl1.sampled.haplotype-index.db'),
       ),
     })
     expect(
