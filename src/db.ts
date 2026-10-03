@@ -892,7 +892,10 @@ export class GBZBase {
       await Promise.all(
         nodes.map(
           async id =>
-            [id, await this.haplotypeSamplesInRange(2 * id, 2 * id + 1)] as const,
+            [
+              id,
+              await this.haplotypeSamplesInRange(2 * id, 2 * id + 1),
+            ] as const,
         ),
       ),
     )

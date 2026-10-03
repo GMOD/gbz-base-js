@@ -173,7 +173,11 @@ export class Pager {
   private follow(index: number) {
     const plan = this.plan
     const at = plan?.position.get(index)
-    if (plan && at !== undefined && at >= plan.next - Math.ceil(this.chunk / 2)) {
+    if (
+      plan &&
+      at !== undefined &&
+      at >= plan.next - Math.ceil(this.chunk / 2)
+    ) {
       this.advance(this.chunk)
     }
   }
