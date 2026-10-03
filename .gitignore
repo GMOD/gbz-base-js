@@ -10,3 +10,4 @@ esm
 *.cpuprofile
 .claude/settings.local.json
 .claude/worktrees/
+dist-demo
