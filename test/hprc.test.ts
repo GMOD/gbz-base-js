@@ -11,7 +11,7 @@ import type { PathName } from '../src/pathName.ts'
 const graphUrl =
   'https://s3-us-west-2.amazonaws.com/human-pangenomics/pangenomes/freeze/release2/minigraph-cactus/v2.1/hprc-v2.1-mc-grch38/hprc-v2.1-mc-grch38.gbz.db'
 const hostedIndex =
-  'https://jbrowse.org/demos/hprc/hprc-v2.1-mc-grch38.haplotype-index.anchored.db'
+  'https://jbrowse.org/demos/hprc/hprc-v2.1-mc-grch38.haplotype-index.f3.db'
 const companion = process.env.GBZ_HPRC_INDEX ?? hostedIndex
 const anchoredCompanion = process.env.GBZ_HPRC_ANCHORED_INDEX ?? hostedIndex
 

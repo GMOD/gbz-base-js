@@ -12,7 +12,7 @@ const GRAPH =
   'https://s3-us-west-2.amazonaws.com/human-pangenomics/pangenomes/freeze/release2/minigraph-cactus/v2.1/hprc-v2.1-mc-grch38/hprc-v2.1-mc-grch38.gbz.db'
 const INDEX =
   process.env.INDEX ??
-  'https://jbrowse.org/demos/hprc/hprc-v2.1-mc-grch38.haplotype-index.anchored.db'
+  'https://jbrowse.org/demos/hprc/hprc-v2.1-mc-grch38.haplotype-index.f3.db'
 const [contig, startText, endText, route] = process.argv.slice(2)
 const start = Number(startText)
 const end = Number(endText)
