@@ -143,6 +143,7 @@ export interface OverviewQuery extends PathWindow {
   // without either.
   level?: number | undefined
   bpPerPixel?: number | undefined
+  signal?: AbortSignal | undefined
 }
 
 function concatBytes(parts: Uint8Array[]) {
@@ -1021,6 +1022,8 @@ export class GBZBase {
   async haplotypeOverview(
     opts: OverviewQuery,
   ): Promise<HaplotypeOverview | undefined> {
+    const { signal } = opts
+    signal?.throwIfAborted()
     const tag = (key: string) =>
       this.indexTags.get(`haplotype_index_overview_${key}`)
     if (!this.index?.has('HaplotypeOverviewClasses') || tag('format') !== '1') {
@@ -1046,6 +1049,7 @@ export class GBZBase {
       this.getPathFragments(opts),
       this.overviewRows(),
     ])
+    signal?.throwIfAborted()
     const bytesPerBin = Math.ceil(haplotypes.length / 2)
     const bins: OverviewBin[] = []
     const cellRows: Uint8Array[] = []
@@ -1073,6 +1077,7 @@ export class GBZBase {
           lastChunk,
         ),
       ])
+      signal?.throwIfAborted()
       for (let chunk = firstChunk; chunk <= lastChunk; chunk++) {
         const reader = new Varints(summaries.get(chunk) ?? new Uint8Array())
         const packed = cells.get(chunk) ?? new Uint8Array()

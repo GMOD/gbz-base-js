@@ -143,4 +143,27 @@ describe('the haplotype overview', () => {
       }),
     ).toBeUndefined()
   })
+
+  it('rejects an aborted signal, before and during the read', async () => {
+    const window = { path: chr6, start: 31500000, end: 31510000 }
+    const db = await openMicb()
+    await expect(
+      db.haplotypeOverview({ ...window, signal: AbortSignal.abort() }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    const controller = new AbortController()
+    const pending = db.haplotypeOverview({
+      ...window,
+      signal: controller.signal,
+    })
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(
+      await db.haplotypeOverview({
+        ...window,
+        signal: new AbortController().signal,
+      }),
+    ).toEqual(await (await openMicb()).haplotypeOverview(window))
+  })
 })

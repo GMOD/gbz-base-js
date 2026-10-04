@@ -157,7 +157,8 @@ const overview = await db.haplotypeOverview({
 The index holds the overview at zoom levels a factor of four apart, from
 `--overview-bin` bp (4,096 by default). The query takes the coarsest level whose
 bins are no larger than `bpPerPixel`, or `level` directly, clamped to the levels
-the index holds. The result is `undefined` when the index has no overview, or
+the index holds. It checks a `signal` option between range requests, as the
+queries above do. The result is `undefined` when the index has no overview, or
 none for this path, which is then not a reference path of a sample with anchors.
 Otherwise:
 
