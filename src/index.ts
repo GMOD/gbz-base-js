@@ -59,5 +59,6 @@ export type {
   SubgraphJson,
   SubgraphOutputOptions,
   SubgraphPath,
+  WalkSpan,
 } from './subgraph.ts'
 export type { GraphName } from './graphName.ts'

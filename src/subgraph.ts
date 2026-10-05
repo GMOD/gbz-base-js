@@ -76,6 +76,12 @@ interface PathInfo {
 type EditOp = 'M' | 'I' | 'D'
 type Edit = [EditOp, number]
 
+export interface WalkSpan {
+  name: PathName
+  start: number
+  end: number
+}
+
 export interface SubgraphPath {
   name: string
   weight?: number
@@ -2328,6 +2334,26 @@ export class Subgraph {
         }
       }
     }
+  }
+
+  // Each named walk the cut holds and its span on its own path. Two spans of
+  // one path with a gap between them are a walk that left the cut's nodes and
+  // came back: a window is cut by graph distance from the reference, so a
+  // haplotype's detour longer than the context is not in it.
+  walkSpans(): WalkSpan[] {
+    this.settleDeferred()
+    return this.paths.flatMap((info, index) => {
+      const identity = index === this.refId ? undefined : info.identity
+      return identity
+        ? [
+            {
+              name: identity.name,
+              start: identity.name.fragment + identity.hapStart,
+              end: identity.name.fragment + identity.hapEnd,
+            },
+          ]
+        : []
+    })
   }
 
   toSubgraphJson(opts: SubgraphOutputOptions = {}): SubgraphJson {
