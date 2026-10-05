@@ -1,3 +1,11 @@
+## [7.1.0](https://github.com/GMOD/gbz-base-js/compare/v7.0.0...v7.1.0) (2026-10-05)
+
+### Other Changes
+
+- HaplotypeOverview takes an abort signal ([0a869b7](https://github.com/GMOD/gbz-base-js/commit/0a869b70a8d3f7428487706b166b69620ecdb0c1))
+- The keep threshold stays at 32: on HPRC v2.1 its crossover moves with the window ([5cefee1](https://github.com/GMOD/gbz-base-js/commit/5cefee1a3f184ef066f63020054a0ceb5e7ce610))
+- Each named walk the cut holds and its span on its own path ([486ff07](https://github.com/GMOD/gbz-base-js/commit/486ff07b7f6b5e309471632d48c3688d45a8aece))
+
 ## [7.0.0](https://github.com/GMOD/gbz-base-js/compare/v6.0.1...v7.0.0) (2026-10-03)
 
 ### Other Changes
