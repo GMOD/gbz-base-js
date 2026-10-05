@@ -40,7 +40,10 @@ export const CHAIN_BOUND = 32768
 
 // Above this many chosen paths at the anchors, extracting and identifying
 // every walk took less time than walking the chosen ones, on HPRC chr22 windows
-// with 42 haplotypes. Tests raise it to run the walks on large sets.
+// with 42 haplotypes. On HPRC v2.1 the crossover moves with the window: about
+// 12 at C4 and a quiet chr20 window, where walking loses by under 80 ms at 32,
+// and past 32 at MHC class II and AMY1, where it still wins by 0.9 s and 0.2 s,
+// so 32 stays. Tests raise it to run the walks on large sets.
 export const keepTuning = { mostChosenPaths: 32 }
 
 export type ChosenPieceSource =
