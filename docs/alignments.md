@@ -111,6 +111,11 @@ console.log(chains.map(chain => pairCigar(chain.edits)))
 
 Coordinates count from each walk's first base.
 
+`weightedLcs(a, b, weight)` is the step underneath the reference alignment: the
+heaviest common subsequence of two walks' handles, as index pairs and their
+total weight, where `weight` gives a handle's node length. Unlike
+`pairAlignments` it also matches nodes a walk visits more than once.
+
 ## PAF output
 
 The command line prints `pairAlignments` records as PAF, with `sharedBases` as

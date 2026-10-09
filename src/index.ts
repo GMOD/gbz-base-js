@@ -63,6 +63,7 @@ export type {
 } from './subgraph.ts'
 export type { GraphName } from './graphName.ts'
 export { pairAlignments, pairCigar } from './pairAlignment.ts'
+export { weightedLcs } from './lcs.ts'
 export type {
   PairChain,
   PairEdit,
