@@ -62,3 +62,10 @@ export type {
   WalkSpan,
 } from './subgraph.ts'
 export type { GraphName } from './graphName.ts'
+export { pairAlignments, pairCigar } from './pairAlignment.ts'
+export type {
+  PairChain,
+  PairEdit,
+  PairOp,
+  PairOptions,
+} from './pairAlignment.ts'

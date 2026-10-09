@@ -90,6 +90,27 @@ first, which also finds inversions. Each base aligns in at most one record.
 | `maxGap` | the most bases a record may skip on nodes only one walk visits, unlimited by default |
 | `bases`  | `false` writes the sequence between shared nodes as `I` and `D`                      |
 
+## Walks from another source
+
+The package also exports the function underneath, `pairAlignments`, which takes
+two walks as arrays of handles and needs no database. With `bases: false` it
+reads only each node's length, so a reader holding walks and node lengths from
+another format can pass a `sequenceOf` that returns a string of that length:
+
+```ts
+import { encodeNode, pairAlignments, pairCigar } from '@gmod/gbz-base'
+
+const chains = pairAlignments({
+  query: [1, 3, 4].map(id => encodeNode(id, 'forward')),
+  target: [1, 2, 4].map(id => encodeNode(id, 'forward')),
+  sequenceOf: id => 'N'.repeat(lengthOf(id)),
+  bases: false,
+})
+console.log(chains.map(chain => pairCigar(chain.edits)))
+```
+
+Coordinates count from each walk's first base.
+
 ## PAF output
 
 The command line prints `pairAlignments` records as PAF, with `sharedBases` as
