@@ -1,3 +1,10 @@
+## [7.2.0](https://github.com/GMOD/gbz-base-js/compare/v7.1.0...v7.2.0) (2026-10-09)
+
+### Other Changes
+
+- Triage agent-docs to the ideas/handoffs convention, add agent-docs/CLAUDE.md ([cb83841](https://github.com/GMOD/gbz-base-js/commit/cb83841610f9888fea898aa2b335d3196c3aaf87))
+- Export pairAlignments and pairCigar, which align two walks from node lengths alone ([ddada98](https://github.com/GMOD/gbz-base-js/commit/ddada980725d44b28348fb81ee64f624d02ee8ec))
+
 ## [7.1.0](https://github.com/GMOD/gbz-base-js/compare/v7.0.0...v7.1.0) (2026-10-05)
 
 ### Other Changes
