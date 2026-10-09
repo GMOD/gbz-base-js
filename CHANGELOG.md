@@ -1,3 +1,9 @@
+## [7.3.0](https://github.com/GMOD/gbz-base-js/compare/v7.2.0...v7.3.0) (2026-10-09)
+
+### Other Changes
+
+- Export weightedLcs, the heaviest common subsequence of two walks ([3f2bb5a](https://github.com/GMOD/gbz-base-js/commit/3f2bb5a987527cca63ec7f559a0a3e357c920f38))
+
 ## [7.2.0](https://github.com/GMOD/gbz-base-js/compare/v7.1.0...v7.2.0) (2026-10-09)
 
 ### Other Changes
