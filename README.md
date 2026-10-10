@@ -139,6 +139,29 @@ Design:
 
 The project started from ideas at MemPanG 26 hackathon
 
+## See also
+
+- [jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer) -
+  JBrowse 2 plugin that browses these graphs by locus
+- [BandageJS](https://github.com/cmdcolin/BandageJS) - standalone page for GFA
+  and gbz-base graphs
+- [gbz-haplotype-index](https://github.com/GMOD/gbz-haplotype-index) - names
+  every walk in a gbz-base cut
+- [gfa-to-tabix](https://github.com/GMOD/gfa-to-tabix) - indexes a GFA by genome
+  coordinate
+- [@jbrowse/bandage-core](https://github.com/GMOD/bandage-core) - Bandage layout
+  and drawing engine
+- [@jbrowse/tubemap-core](https://github.com/GMOD/tubemap-core) -
+  sequenceTubeMap's layout, without the DOM
+- [sequenceTubeMap, MemPanG26 edition](https://github.com/cmdcolin/sequenceTubeMap) -
+  our fork of the tube map app
+
+Tutorials on [jbrowse.org](https://jbrowse.org/jb2/docs/tutorials/)
+
+- [HPRC part 1: graph alleles and haplotypes](https://jbrowse.org/jb2/docs/tutorials/pangenome_hprc/)
+- [HPRC part 3: repeat lengths](https://jbrowse.org/jb2/docs/tutorials/pangenome_hprc_repeats/)
+- [Hosting your own graph](https://jbrowse.org/jb2/docs/tutorials/pangenome_prepare_graph/)
+
 ## License
 
 MIT © [Colin Diesh](https://github.com/cmdcolin)
