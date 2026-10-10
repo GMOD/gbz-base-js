@@ -13,8 +13,18 @@
   },
   "main": "dist/index.js",
   "exports": {
-    "import": "./esm/index.js",
-    "require": "./dist/index.js"
+    ".": {
+      "import": "./esm/index.js",
+      "require": "./dist/index.js"
+    },
+    "./pairAlignment": {
+      "import": "./esm/pairAlignment.js",
+      "require": "./dist/pairAlignment.js"
+    },
+    "./lcs": {
+      "import": "./esm/lcs.js",
+      "require": "./dist/lcs.js"
+    }
   },
   "bin": {
     "gbz-base-query": "bin/query.js"

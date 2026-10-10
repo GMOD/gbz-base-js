@@ -48,8 +48,37 @@ GBZBase.open({ source: new LocalFile('$FIXTURE') })
   })
 JS
 
+cat >subpaths.mjs <<'JS'
+import { pairAlignments, pairCigar } from '@gmod/gbz-base/pairAlignment'
+import { weightedLcs } from '@gmod/gbz-base/lcs'
+const length = { 5: 24, 7: 40, 8: 40 }
+const [chain] = pairAlignments({
+  query: [14, 16],
+  target: [14, 10, 16],
+  sequenceOf: id => 'N'.repeat(length[id]),
+  minMatch: 1,
+  bases: false,
+})
+if (pairCigar(chain.edits) !== '40=24D40=') throw new Error('subpath pairAlignments')
+if (weightedLcs([14, 16], [14, 10, 16], h => length[h >> 1])[1] !== 80) {
+  throw new Error('subpath weightedLcs')
+}
+console.log('esm subpaths: ok')
+JS
+
+cat >subpaths.cjs <<'JS'
+const { pairAlignments } = require('@gmod/gbz-base/pairAlignment')
+const { weightedLcs } = require('@gmod/gbz-base/lcs')
+if (typeof pairAlignments !== 'function' || typeof weightedLcs !== 'function') {
+  throw new Error('cjs subpaths')
+}
+console.log('cjs subpaths: ok')
+JS
+
 node smoke.mjs
 node smoke.cjs
+node subpaths.mjs
+node subpaths.cjs
 npx --no-install gbz-base-query "$FIXTURE" --node 15 --context 1 >bin.json
 node -e "JSON.parse(require('fs').readFileSync('bin.json', 'utf8')).nodes.length || process.exit(1)"
 echo 'bin: ok'

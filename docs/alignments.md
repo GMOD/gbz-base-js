@@ -111,6 +111,10 @@ console.log(chains.map(chain => pairCigar(chain.edits)))
 
 Coordinates count from each walk's first base.
 
+Both are also exported on their own, as `@gmod/gbz-base/pairAlignment` and
+`@gmod/gbz-base/lcs`. A bundle that imports them from there leaves out the
+database reader, which the package root pulls in.
+
 `weightedLcs(a, b, weight)` is the step underneath the reference alignment: the
 heaviest common subsequence of two walks' handles, as index pairs and their
 total weight, where `weight` gives a handle's node length. Unlike
