@@ -1,3 +1,9 @@
+## [7.4.0](https://github.com/GMOD/gbz-base-js/compare/v7.3.0...v7.4.0) (2026-10-10)
+
+### Other Changes
+
+- PairAlignment and lcs are subpath exports, so a bundle can leave the database reader out ([ce037e3](https://github.com/GMOD/gbz-base-js/commit/ce037e3d9208b5c6c916e50575a42a7e3f10622c))
+
 ## [7.3.0](https://github.com/GMOD/gbz-base-js/compare/v7.2.0...v7.3.0) (2026-10-09)
 
 ### Other Changes
