@@ -54,6 +54,63 @@ npx -p @gmod/gbz-base gbz-base-query https://example.org/graph.gbz.db \
 [command-line reference](docs/cli.md) lists every flag with its library
 equivalent.
 
+## Output
+
+`getAlignments` returns an array of records, one per haplotype that crosses the
+window. Every record has the same span fields. A record is `resolved` when the
+haplotype index named its walk, and only then does it carry the name fields:
+
+```ts
+type HaplotypeAlignment = {
+  strand: '+' | '-'
+  refStart: number
+  refEnd: number
+  cigar: string
+  weight: number | undefined
+  path: number[] // GBWT handles: 2 * nodeId forward, 2 * nodeId + 1 reverse
+  start: { node: number; offset: number }
+} & (
+  | {
+      resolved: true
+      name: {
+        sample: string
+        contig: string
+        haplotype: number
+        fragment: number
+      }
+      label: string // e.g. HG02723#1#JAHEOU010000100.1[4392999-4393486]
+      pathHandle: number
+      hapStart: number
+      hapEnd: number
+    }
+  | { resolved: false }
+)
+```
+
+`getSubgraphs` returns `Subgraph` objects. `toSubgraphJson()` returns the same
+JSON as upstream's `gbz-base query --format json`:
+
+```ts
+{
+  nodes: { id: string; sequence: string }[]
+  edges: { from: string; from_is_reverse: boolean; to: string; to_is_reverse: boolean }[]
+  paths: {
+    name: string
+    weight?: number
+    cigar?: string
+    path: { id: string; is_reverse: boolean }[]
+  }[]
+}
+```
+
+`toGFA()` returns the same subgraph as a GFA string.
+
+The command line prints `--alignments` as a JSON array of the records above. It
+drops `start`, and a resolved record's `name` holds the label string instead of
+the `PathName` object. The default output is the subgraph JSON, and
+`--format gfa` prints GFA. The [API reference](docs/api.md#subgraph-output) and
+[alignment records](docs/alignments.md) document the remaining fields.
+
 ## Haplotype index
 
 Without a haplotype index, gbz-base queries returns each walk as `unknown#N`.
