@@ -1,7 +1,7 @@
 # @gmod/gbz-base
 
 [![NPM version](https://img.shields.io/npm/v/@gmod/gbz-base.svg?style=flat-square)](https://npmjs.org/package/@gmod/gbz-base)
-![Build Status](https://img.shields.io/github/actions/workflow/status/GMOD/gbz-base-js/publish.yml?branch=main)
+![Build Status](https://img.shields.io/github/actions/workflow/status/GMOD/gbz-base-js/push.yml?branch=main)
 
 A TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
 pangenome databases (`.gbz.db`). The reader fetches only the pages a query
