@@ -1,3 +1,20 @@
+## [7.4.1](https://github.com/GMOD/gbz-base-js/compare/v7.4.0...v7.4.1) (2026-10-11)
+
+### Documentation
+
+- Plainer README wording ([8d79d47](https://github.com/GMOD/gbz-base-js/commit/8d79d477225a95b8657e2737f50c7745f5980a6f))
+- Break up README walls of text ([d55cadc](https://github.com/GMOD/gbz-base-js/commit/d55cadccecc12e2fb083634d3efc47586baf488a))
+
+### Other Changes
+
+- README's see-also lists the graph repos and pangenome tutorials ([a3edd8d](https://github.com/GMOD/gbz-base-js/commit/a3edd8d1bdc139e43786141ed236a4bd9e525b92))
+- Point the build badge at the push workflow ([83bf666](https://github.com/GMOD/gbz-base-js/commit/83bf666e38f7f31fbcd23770a012a14d5a29ec04))
+- Document the library and CLI output shapes in the README ([b83f741](https://github.com/GMOD/gbz-base-js/commit/b83f741c30b0f4902c47f96c5ea7980f7341f972))
+
+### Tests
+
+- Fail when docs/api.md misses a public member or export ([378f09b](https://github.com/GMOD/gbz-base-js/commit/378f09b03bb6ec008cdd67b9b3399081bd6730d2))
+
 ## [7.4.0](https://github.com/GMOD/gbz-base-js/compare/v7.3.0...v7.4.0) (2026-10-10)
 
 ### Other Changes
