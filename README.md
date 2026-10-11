@@ -4,15 +4,15 @@
 ![Build Status](https://img.shields.io/github/actions/workflow/status/GMOD/gbz-base-js/push.yml?branch=main)
 
 A TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
-pangenome databases (`.gbz.db`). The reader fetches only the pages a query
-touches, so a multi-gigabyte database on a web server answers through range
-requests. Upstream's `gbz-base construct` builds the database from a `.gbz`
-file.
+pangenome databases (`.gbz.db`).
 
-The npm package contains a JavaScript library and a command-line program that
-runs the same queries. A separate Rust program in this repository builds the
-optional haplotype index, which tells the library the sample and haplotype of
-each walk a query returns.
+- The reader fetches only the pages a query touches, so a multi-gigabyte
+  database on a web server answers through range requests.
+- Upstream's `gbz-base construct` builds the database from a `.gbz` file.
+- The npm package contains a JavaScript library and a command-line program that
+  runs the same queries.
+- The optional haplotype index gives the sample and haplotype of each walk a
+  query returns. A separate Rust program in this repository builds it.
 
 ## Library
 
@@ -57,7 +57,7 @@ equivalent.
 ## Output
 
 `getAlignments` returns an array of records, one per haplotype that crosses the
-window. Every record has the same span fields. A record is `resolved` when the
+window. Every record has the span fields. A record is `resolved` when the
 haplotype index named its walk, and only a resolved record has the name fields:
 
 ```ts
@@ -105,27 +105,29 @@ JSON as upstream's `gbz-base query --format json`:
 
 `toGFA()` returns the same subgraph as a GFA string.
 
-The command line prints `--alignments` as a JSON array of the records above. It
-drops `start`, and a resolved record's `name` holds the label string instead of
-the `PathName` object. The default output is the subgraph JSON, and
-`--format gfa` prints GFA. The [API reference](docs/api.md#subgraph-output) and
+On the command line:
+
+- `--alignments` prints a JSON array of the records above, without `start`. A
+  resolved record's `name` holds the label string instead of the `PathName`
+  object.
+- The default output is the subgraph JSON, and `--format gfa` prints GFA.
+
+The [API reference](docs/api.md#subgraph-output) and
 [alignment records](docs/alignments.md) document the remaining fields.
 
 ## Haplotype index
 
 Without a haplotype index, gbz-base queries return each walk as `unknown#N`.
 
-We created a custom approach called
 [`gbz-haplotype-index`](https://github.com/GMOD/gbz-haplotype-index)
-(`cargo install gbz-haplotype-index`), that adds haplotype walk metadata to the
-graph.
+(`cargo install gbz-haplotype-index`) adds haplotype walk metadata to the graph.
 
-`gbz-haplotype-index` writes a separate file alongside the .gbz.db file. The
-index also names every haplotype's walk when a query keeps a few of them, and
-contains an [overview](docs/api.md#overview) of every haplotype in bins along
-each reference path, for views of megabases or a whole chromosome. The library
-reads the index format that gbz-haplotype-index 0.3 writes and refuses an older
-one at open.
+- It writes a separate file alongside the .gbz.db file.
+- The index names every haplotype's walk when a query keeps a few of them.
+- It holds an [overview](docs/api.md#overview) of every haplotype in bins along
+  each reference path, for views of megabases or a whole chromosome.
+- The library reads the index format that gbz-haplotype-index 0.3 writes and
+  refuses an older one at open.
 
 Example usage:
 
