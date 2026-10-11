@@ -8,6 +8,11 @@ pnpm test --run
 pnpm build
 ```
 
+[docs/api.md](docs/api.md) is written by hand, and `test/apiDocs.test.ts` fails
+when a public member of `GBZBase`, `Subgraph`, their options and record types,
+or an export, is missing from it. Document the new member, or add it to the
+test's `undocumented` list with the reason it is internal.
+
 ## Releasing
 
 `pnpm version patch` (or `minor`, `major`) runs lint, format check, typecheck,

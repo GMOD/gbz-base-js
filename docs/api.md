@@ -110,6 +110,53 @@ one. On a 200 kb HPRC chr20 window (5,943 nodes, 178 haplotypes), the compact
 form structured-clones in 1.9 ms against 295 ms for the JSON form. Transfer its
 buffers with `port.postMessage(compact, compactSubgraphTransferables(compact))`.
 
+In the JSON form, `nodes` lists `{ id, sequence }`, `edges` lists
+`{ from, from_is_reverse, to, to_is_reverse }`, and `paths` lists each walk as a
+`SubgraphPath` with its `name`, its `weight` and `cigar` when set, and `path` as
+`{ id, is_reverse }` steps. A `CompactSubgraph` holds `nodeIds` in ascending
+order with `nodeSequences` parallel to it, `edges` as handle pairs, and `paths`
+as `CompactPath` objects, which have the same `name`, `weight` and `cigar` and
+list the walk's handles in `steps`.
+
+`compactSubgraphTransferables` returns the buffers of `nodeIds`, `edges` and
+every path's `steps`. Transferring them detaches them, so the sending thread
+cannot read the subgraph afterwards.
+
+### `Subgraph` members
+
+| member                    | description                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `nodeCount`               | nodes in the subgraph                                                             |
+| `pathCount`               | walks in the subgraph, including the reference walk                               |
+| `referenceInterval`       | `{ name, start, end }` of the reference walk on its contig, or `undefined`        |
+| `hasNode(id)`             | `true` when the subgraph holds node `id`                                          |
+| `hasHandle(handle)`       | `true` when the subgraph holds the node of `handle`                               |
+| `identifyPaths()`         | looks up each walk's haplotype in the haplotype index                             |
+| `mergeDistinct()`         | merges identical walks into one with a `weight`, as `haplotypes: 'distinct'` does |
+| `keepHaplotypes(wanted)`  | keeps the reference walk and the walks whose `PathName` passes `wanted`           |
+| `alignments()`            | the walks aligned to the reference walk, as `getAlignments` returns them          |
+| `pairAlignments(opts)`    | haplotypes aligned to each other                                                  |
+| `walkSpans()`             | a `WalkSpan` of `name`, `start` and `end` for each identified walk                |
+| `stableName()`            | a SHA-256 hex digest of the nodes and edges                                       |
+| `toGFA(opts)`             | GFA 1.1 text, with each walk as a `W` line                                        |
+| `toSubgraphJson(opts)`    | a `SubgraphJson`                                                                  |
+| `toCompactSubgraph(opts)` | a `CompactSubgraph`                                                               |
+
+`referenceInterval` is `undefined` when the subgraph has no reference walk, as
+after a node query. `walkSpans` leaves out the reference walk and gives each
+span on the haplotype's contig. `keepHaplotypes` also drops the nodes that only
+the discarded walks visit. It throws when a walk has no name or the walks are
+merged, so call `identifyPaths()` before it and `mergeDistinct()` after it.
+`toGFA` writes the `stableName` digest as the graph name.
+
+`toGFA`, `toSubgraphJson` and `toCompactSubgraph` take a
+`SubgraphOutputOptions`:
+
+| option  | description                                                        |
+| ------- | ------------------------------------------------------------------ |
+| `cigar` | writes each walk's CIGAR against the reference, `false` by default |
+| `names` | `resolved` (default) or `anonymous`                                |
+
 ## Lower-level queries
 
 Four `GBZBase` methods run the query modes of upstream's `gbz-base query`, and
@@ -135,6 +182,12 @@ const subgraph = await db.subgraphInInterval({
 })
 await subgraph.identifyPaths()
 ```
+
+`offset` is a 0-based offset along `path`, `nodeIds` is an array of node ids,
+and `startHandle` and `endHandle` are the handles of the two boundary nodes.
+`subgraphAroundNodes` and `subgraphBetween` take `haplotypes` as a
+`NodeHaplotypeOutput`, which leaves out `reference-only`. `subgraphBetween`
+takes no `context` or `snarls`.
 
 `db.fetchStats()` reports the range requests and bytes each file has cost.
 
@@ -179,6 +232,76 @@ for the 464 HPRC haplotypes at 16 kb bins is 3,102 bins, 1.4 MB.
 [`tools/overview/`](../tools/overview/README.md) draws it, to a PNG from Node or
 on a canvas in a page, with the requests each view costs.
 
+## Paths and metadata
+
+| member                                   | returns                                                                     |
+| ---------------------------------------- | --------------------------------------------------------------------------- |
+| `paths()`                                | every path of the graph as a `GbzPath`, read once and cached                |
+| `hasPath(path)`                          | `true` when the graph has a path of that name                               |
+| `getPathFragments({ path, start, end })` | the `PathFragment` objects of `path` that overlap the window, in path order |
+| `tags()`                                 | the database's `Tags` table as a `Map`                                      |
+| `tag(key)`                               | one value of the `Tags` table, or `undefined`                               |
+| `graphName()`                            | the graph's name and relationships as a `GraphName`                         |
+| `hasChainLinks()`                        | `true` when the `chain_links` tag is above 0 ([snarls.md](snarls.md))       |
+| `hasHaplotypeIndex`                      | `true` when `open` received a `haplotypeIndex`                              |
+| `fetchStats()`                           | `{ graph, haplotypeIndex }`, each a `FetchStats`                            |
+
+A `FetchStats` counts the reads sent to the source in `fetches` and the bytes
+they returned in `bytesFetched`. `haplotypeIndex` is `undefined` when the
+database was opened without one.
+
+A `GbzPath` has three fields: `handle` is the path's row in the `Paths` table,
+`name` is a `PathName`, and `isIndexed` is `true` when the database holds a
+random-access index for the path. A `PathFragment` has the fragment's `path`,
+and its `start` and `end` on the contig.
+
+| `PathName` field | holds                                                              |
+| ---------------- | ------------------------------------------------------------------ |
+| `sample`         | the sample name, `GENERIC_SAMPLE` (`_gbwt_ref`) for a generic path |
+| `haplotype`      | the haplotype number                                               |
+| `contig`         | the contig name                                                    |
+| `fragment`       | the offset on the contig of the fragment's first base              |
+
+A `PathQuery` names a path by `contig`, with `sample` defaulting to
+`GENERIC_SAMPLE` and `haplotype` to 0. A `PathRef` is a `PathQuery` or a name
+string.
+
+A `GraphName` holds the graph's `pggname` tag as `name`, or `undefined`, and the
+`subgraph` and `translation` relationships as maps from a graph name to a set of
+other graph names. `graphName()` reads them from the database tags that start
+with `gbz_`, and returns an empty name when the parser rejects those tags.
+
+## Alignments
+
+`getAlignments` and `subgraph.alignments()` return `HaplotypeAlignment` records,
+which have the fields of an `AlignmentSpan`: `refStart`, `refEnd`, `strand`,
+`cigar`, `weight`, `path` and `start`.
+
+`subgraph.pairAlignments(opts)` takes a `PairAlignmentOptions` with `target`,
+`query`, `maxGap`, `minMatch` and `bases`. `target` and `query` are
+`HaplotypeRef`s, `{ sample, haplotype }`, and `minMatch` is the minimum matching
+bases per record, 100 by default. It returns `PairAlignment` records with
+`query`, `target`, `queryStart`, `queryEnd`, `targetStart`, `targetEnd`,
+`strand`, `cigar`, `matches`, `columns` and `sharedBases`, where `columns` is
+the total length of the CIGAR operations.
+
+[alignments.md](alignments.md) describes the other fields and options, and how
+the library aligns walks.
+
+The exported `pairAlignments(opts)` aligns two walks without a database
+([alignments.md](alignments.md#walks-from-another-source)). Its `PairOptions`
+take `query` and `target` as arrays of handles, a `sequenceOf` function that
+returns the sequence of a node id, and `maxGap`, `minMatch` and `bases` as
+above. It returns `PairChain` objects with `queryStart`, `queryEnd`,
+`targetStart`, `targetEnd`, `strand` and `sharedBases` counted from each walk's
+first base, and `edits` as a list of `PairEdit` pairs `[op, length]`, where a
+`PairOp` is `=`, `X`, `I` or `D`. `pairCigar(edits)` joins the edits into a
+CIGAR string.
+
+`weightedLcs(a, b, weight)` takes two handle arrays and a function that gives a
+handle's weight. It returns `[pairs, weight]`, the index pairs of the heaviest
+common subsequence and its total weight.
+
 ## Errors
 
 | class                   | thrown by      | means                                                                        |
@@ -188,6 +311,8 @@ on a canvas in a page, with the requests each view costs.
 | `UnknownPathError`      | range queries  | the graph has no path of that name; carries the resolved `path`              |
 | `SubgraphLimitError`    | any query      | `limit` reached; an interval query sets `windowBp` and `walkedBp`            |
 
+Each error class sets `name` to the class name.
+
 `SubgraphLimitError` counts `walkedBp` from the start of the window the caller
 asked for, across every fragment before the one that tripped.
 
@@ -195,3 +320,27 @@ Other errors are plain `Error`s with a message, for example a path the database
 has no random-access index for, `keep` without a haplotype index, `keep` over a
 walk that the haplotype index could not name, or a haplotype index built for a
 different graph.
+
+## Exports
+
+The package root also exports these names.
+
+| export                                              | what it is                                                                                     |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `SCHEMA_VERSION`                                    | the schema version string `GBZBase.open` accepts                                               |
+| `GENERIC_SAMPLE`                                    | `_gbwt_ref`, the sample of a generic path                                                      |
+| `formatPathName(name)`                              | writes a `PathName` as `sample#haplotype#contig`, plus `[fragment-end]` when `name.end` is set |
+| `parsePathName(name)`                               | reads a PanSN name or a bare contig into a `PathQuery`, dropping a `[start-end]` suffix        |
+| `nodeOrientation(handle)`                           | the `Orientation` of a handle, `forward` or `reverse`                                          |
+| `flipNode(handle)`                                  | the handle of the same node in the other orientation                                           |
+| `OpenOptions`                                       | the options of `GBZBase.open`                                                                  |
+| `ByteSource`                                        | an object whose `read(length, position)` resolves to a `Uint8Array`                            |
+| `PathWindow`                                        | `{ path, start, end }`                                                                         |
+| `QueryOptions`                                      | `context`, `haplotypes`, `snarls`, `limit` and `signal`                                        |
+| `IntervalQuery`, `WindowQuery`                      | a `PathWindow` with `QueryOptions` and `keep`, for `getSubgraphs` and `subgraphInInterval`     |
+| `AlignmentQuery`                                    | the options of `getAlignments`                                                                 |
+| `OffsetQuery`, `NodesQuery`, `BetweenQuery`         | the options of the other lower-level queries                                                   |
+| `HaplotypeOutput`                                   | the values of `haplotypes`                                                                     |
+| `SnarlOutput`                                       | the values of `snarls`: `none`, `contained` or `overlapping`                                   |
+| `OverviewQuery`, `HaplotypeOverview`, `OverviewBin` | the overview query and its result                                                              |
+| `Pos`                                               | a GBWT position, `{ node, offset }`                                                            |
