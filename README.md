@@ -58,7 +58,7 @@ equivalent.
 
 `getAlignments` returns an array of records, one per haplotype that crosses the
 window. Every record has the same span fields. A record is `resolved` when the
-haplotype index named its walk, and only then does it carry the name fields:
+haplotype index named its walk, and only a resolved record has the name fields:
 
 ```ts
 type HaplotypeAlignment = {
@@ -113,18 +113,19 @@ the `PathName` object. The default output is the subgraph JSON, and
 
 ## Haplotype index
 
-Without a haplotype index, gbz-base queries returns each walk as `unknown#N`.
+Without a haplotype index, gbz-base queries return each walk as `unknown#N`.
 
 We created a custom approach called
 [`gbz-haplotype-index`](https://github.com/GMOD/gbz-haplotype-index)
 (`cargo install gbz-haplotype-index`), that adds haplotype walk metadata to the
-graph
+graph.
 
-This creates a separate file alongside the .gbz.db file. It also names every
-haplotype's walk when a query keeps a few of them, and carries an
-[overview](docs/api.md#overview) of every haplotype in bins along each reference
-path, for views of megabases or a whole chromosome. The library reads the index
-format that gbz-haplotype-index 0.3 writes and refuses an older one at open.
+`gbz-haplotype-index` writes a separate file alongside the .gbz.db file. The
+index also names every haplotype's walk when a query keeps a few of them, and
+contains an [overview](docs/api.md#overview) of every haplotype in bins along
+each reference path, for views of megabases or a whole chromosome. The library
+reads the index format that gbz-haplotype-index 0.3 writes and refuses an older
+one at open.
 
 Example usage:
 
