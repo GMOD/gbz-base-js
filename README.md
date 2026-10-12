@@ -207,8 +207,6 @@ The project started from ideas at MemPanG 26 hackathon
   and gbz-base graphs
 - [gbz-haplotype-index](https://github.com/GMOD/gbz-haplotype-index) - names
   every walk in a gbz-base cut
-- [gfa-to-tabix](https://github.com/GMOD/gfa-to-tabix) - indexes a GFA by genome
-  coordinate
 - [@jbrowse/bandage-core](https://github.com/GMOD/bandage-core) - Bandage layout
   and drawing engine
 - [@jbrowse/tubemap-core](https://github.com/GMOD/tubemap-core) -
@@ -218,9 +216,13 @@ The project started from ideas at MemPanG 26 hackathon
 
 Tutorials on [jbrowse.org](https://jbrowse.org/jb2/docs/tutorials/)
 
-- [HPRC part 1: graph alleles and haplotypes](https://jbrowse.org/jb2/docs/tutorials/pangenome_hprc/)
 - [HPRC part 3: repeat lengths](https://jbrowse.org/jb2/docs/tutorials/pangenome_hprc_repeats/)
 - [Hosting your own graph](https://jbrowse.org/jb2/docs/tutorials/pangenome_prepare_graph/)
+
+## Alternative approach
+
+- [gfa-to-tabix](https://github.com/GMOD/gfa-to-tabix) - indexes a GFA by genome
+  coordinate
 
 ## License
 
