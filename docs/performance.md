@@ -28,9 +28,9 @@ window elsewhere; "cached" has the window's pages in memory.
 | MHC class II | 463        | sampled    | 43,540 | 5.49 s | 3.63 s |
 
 Each time is the faster of two runs of `scripts/measure-windows.mjs`, with 4.0.0
-and the haplotype index hosted then, which has no stray rows. That query at AMY1
-identified every walk. With stray rows it takes the keep route, as do the other
-three
+and the haplotype index hosted then, which has no stray rows. With that index
+the AMY1 query identified every walk, and with stray rows it takes the keep
+route, as do the other three
 ([haplotype-index.md](https://github.com/GMOD/gbz-haplotype-index/blob/main/docs/haplotype-index.md#measured-on-hprc-v21)).
 
 A first query makes 16-56 range requests and reads 2.2-5.7 MB across both files.
@@ -81,9 +81,10 @@ ran the query twice in one process, the second time with every page cached:
 adjacent 90 kb window takes 5.36 s and 7 requests, of which about a third is
 network time.
 
-CPU time grows with walks times steps. Measured after the step-loop change, MHC
-class II with `keep` for eight haplotypes is 4.6x faster than all 464 (0.90 s
-against 4.13 s), because the library walks 170,000 of the 9.86 million steps.
+CPU time grows with walks times steps, and with `keep` for eight haplotypes the
+library walks 170,000 of the 9.86 million steps at MHC class II. Measured after
+the step-loop change, that query is 4.6x faster than all 464 (0.90 s against
+4.13 s).
 
 ## Small windows at the same locus
 

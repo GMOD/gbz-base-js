@@ -57,9 +57,8 @@ equivalent.
 ## Output
 
 `getAlignments` returns an array of records, one per haplotype that crosses the
-window. Every record has the span fields. A record is `resolved` when the
-haplotype index has a name for its walk, and only a resolved record has the name
-fields:
+window. Every record has the span fields, and a record also has the name fields
+when it is `resolved`, which means the haplotype index has a name for its walk:
 
 ```ts
 type HaplotypeAlignment = {
@@ -88,8 +87,8 @@ type HaplotypeAlignment = {
 )
 ```
 
-`getSubgraphs` returns `Subgraph` objects. `toSubgraphJson()` returns the same
-JSON as upstream's `gbz-base query --format json`:
+`getSubgraphs` returns `Subgraph` objects, whose `toSubgraphJson()` returns the
+same JSON as upstream's `gbz-base query --format json`:
 
 ```ts
 {
