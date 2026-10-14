@@ -1,6 +1,6 @@
 # Validating haplotype queries on a real graph
 
-Two checks, both run on local files:
+There are two checks, both run on local files:
 
 - **Parity**: a query that uses the `keep` option returns the walks that
   identifying every walk returns for those haplotypes. `sweep.ts` runs both and
@@ -20,8 +20,8 @@ such lists for an HPRC graph:
   both ends of an edge that joins two distant reference nodes (from the `jumps`
   tool), bin boundaries, anchors and windows of 150-500 kb.
 - The 2026-09-28 sweep's `gen.py` (random, segmental duplication, chromosome
-  end, acrocentric, CHM13 and unplaced-contig windows) lives on `ada` in
-  `~/keep-sweep` with its `rows.json`.
+  end, acrocentric, CHM13 and unplaced-contig windows) is in `~/keep-sweep` on
+  `ada`, with its `rows.json`.
 
 ## Running
 

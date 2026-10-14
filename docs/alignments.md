@@ -33,8 +33,8 @@ insertion longer than `context`. The library joins the two pieces into one
 record when they are consecutive, on the same strand and in order on both paths,
 and writes the sequence between them as an insertion and a deletion.
 
-Pieces that overlap on the reference are aligned again as one walk, with the
-haplotype's bases outside the subgraph as an insertion between them. They
+The library aligns pieces that overlap on the reference again as one walk, with
+the haplotype's bases outside the subgraph as an insertion between them. They
 overlap when the first piece's tail passes a node that the reference visits past
 the point where the second piece aligns. At GSTM1 on HPRC v2.1, HG03041#2
 replaces 18,445 bp of GRCh38 with an 18,445 bp copy of GSTM1, and at `context`
@@ -111,14 +111,14 @@ console.log(chains.map(chain => pairCigar(chain.edits)))
 
 Coordinates count from each walk's first base.
 
-Both are also exported on their own, as `@gmod/gbz-base/pairAlignment` and
-`@gmod/gbz-base/lcs`. A bundle that imports them from there leaves out the
-database reader, which the package root pulls in.
-
 `weightedLcs(a, b, weight)` is the step underneath the reference alignment: the
 heaviest common subsequence of two walks' handles, as index pairs and their
 total weight, where `weight` gives a handle's node length. Unlike
 `pairAlignments` it also matches nodes a walk visits more than once.
+
+`pairAlignments` and `weightedLcs` are also exported on their own, as
+`@gmod/gbz-base/pairAlignment` and `@gmod/gbz-base/lcs`. A bundle that imports
+them from there leaves out the database reader, which the package root pulls in.
 
 ## PAF output
 

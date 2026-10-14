@@ -32,16 +32,18 @@ files with an upstream binary.
   records `-`. Upstream warns that the reference path is not in canonical
   orientation and gives all-insertion CIGARs. CHM13's path fragment on HPRC
   chr20 starting at 30,368,374 begins in such a region.
-- In such a region the reference walk's twin, the same walk read the other way,
-  is the canonical orientation, and upstream prints it as an `unknown` walk
-  beside the reference. A walk that starts and ends at one node in opposite
-  orientations, as through a hairpin, is canonical both ways, and upstream
-  prints both. This package drops a twin once identification names it as the
-  same stretch of the same path as another walk, or as the reference over the
-  reference interval, and aligns the walk that stays in whichever orientation
-  shares more sequence. Without a haplotype index the twins stay, as upstream
-  prints them. With `haplotypes: 'distinct'` and a haplotype index, the walks a
-  twin would merge with, those of haplotypes stored against the reference and
-  walks canonical both ways, merge after identification rather than before, so
-  the merged record's name and weight are those of the walks that remain. Output
-  read before `identifyPaths()` shows them merged, as without an index.
+- Where the reference is stored reversed, the reference walk's twin, the same
+  walk read the other way, is the canonical orientation, and upstream prints it
+  as an `unknown` walk beside the reference. A walk that starts and ends at one
+  node in opposite orientations, as through a hairpin, is canonical both ways,
+  and upstream prints both. This package drops a twin once identification names
+  it as the same stretch of the same path as another walk, or as the reference
+  over the reference interval, and aligns the walk that stays in whichever
+  orientation shares more sequence. Without a haplotype index the twins stay, as
+  upstream prints them.
+- With `haplotypes: 'distinct'` and a haplotype index, this package merges the
+  walks a twin would merge with (those of haplotypes stored against the
+  reference, and walks canonical both ways) after identification rather than
+  before. The merged record's name and weight are therefore those of the walks
+  that remain. Output read before `identifyPaths()` shows them merged, as
+  without an index.

@@ -66,9 +66,9 @@ counts kept haplotypes.
 A contig can be stored as several fragments with gaps between them, and a
 subgraph holds one reference walk. `getSubgraphs` returns one subgraph per
 fragment the window overlaps, in path order, and `getAlignments` concatenates
-their records. A window inside a gap or past the end of the path returns `[]`,
-and a path the graph lacks throws `UnknownPathError`. `getPathFragments` lists
-the fragments, and `hasPath(path)` checks a path.
+their records. For a window inside a gap or past the end of the path they return
+`[]`, and for a path the graph lacks they throw `UnknownPathError`.
+`getPathFragments` lists the fragments, and `hasPath(path)` checks a path.
 
 ## Subgraph output
 
@@ -78,8 +78,8 @@ const json = subgraph.toSubgraphJson({ cigar: true })
 const compact = subgraph.toCompactSubgraph({ cigar: true })
 ```
 
-Each walk carries the `sample#haplotype#contig` name that `identifyPaths()`
-found for it. A walk the lookup could not identify prints as `unknown#N` like
+Each walk has the `sample#haplotype#contig` name that `identifyPaths()` found
+for it. A walk the lookup could not identify prints as `unknown#N` like
 upstream, and `names: 'anonymous'` prints every walk that way.
 `subgraph.pairAlignments` aligns haplotypes to each other
 ([alignments.md](alignments.md#one-haplotype-against-another)).
@@ -193,9 +193,9 @@ takes no `context` or `snarls`.
 
 ## Overview
 
-A window of megabases, or a whole chromosome, is too much graph to read: the
-subgraph of 3 Mb of chr22 costs about 70 requests and 17 MB. For such views the
-haplotype index carries an overview, which `haplotypeOverview` reads in about 7
+The subgraph of 3 Mb of chr22 costs about 70 requests and 17 MB, so a window of
+megabases, or a whole chromosome, is too much graph to read. For such views the
+haplotype index holds an overview, which `haplotypeOverview` reads in about 7
 requests whatever the window:
 
 ```ts
@@ -308,13 +308,13 @@ common subsequence and its total weight.
 | ----------------------- | -------------- | ---------------------------------------------------------------------------- |
 | `SchemaVersionError`    | `GBZBase.open` | a different schema version (`found`), or `undefined` for a non-gbz-base file |
 | `ForwardOnlyIndexError` | `GBZBase.open` | the haplotype index was built with `--forward-only`; rebuild it              |
-| `UnknownPathError`      | range queries  | the graph has no path of that name; carries the resolved `path`              |
+| `UnknownPathError`      | range queries  | the graph has no path of that name; `path` holds the resolved path           |
 | `SubgraphLimitError`    | any query      | `limit` reached; an interval query sets `windowBp` and `walkedBp`            |
 
 Each error class sets `name` to the class name.
 
 `SubgraphLimitError` counts `walkedBp` from the start of the window the caller
-asked for, across every fragment before the one that tripped.
+asked for, across every fragment before the one that reached the limit.
 
 Other errors are plain `Error`s with a message, for example a path the database
 has no random-access index for, `keep` without a haplotype index, `keep` over a

@@ -45,8 +45,9 @@ Four choices in the route came from those runs.
 - **Walks between the anchors.** Chains that stop at a fixed distance outside
   the subgraph lost 109 of 1,561 pieces of eight haplotypes at KIV-2 with
   `context: 0`, at 32 kb and at 64 kb, because the copies of the repeat lie up
-  to 105 kb apart along each haplotype. Walking each haplotype from its visit to
-  the anchor before the window to its visit to the anchor after found all 1,561.
+  to 105 kb apart along each haplotype. When the route walked each haplotype
+  from its visit to the anchor before the window to its visit to the anchor
+  after, it found all 1,561.
 - **Stray rows.** A route that placed each haplotype from its anchor visits and
   the samples in the window dropped 585 pieces in 9,000 queries on HPRC v2.1:
   unplaced contigs of a chosen haplotype, passes through collapsed repeats far
@@ -62,9 +63,9 @@ Four choices in the route came from those runs.
 - **The twin from the other orientation.** In an 8 kb window at `context: 0`,
   the walks reached all 43 pieces of eight haplotypes in the orientation
   `extractPaths` drops. A reverse-orientation sample in the window gives the
-  twin's position. For a piece without one, reading the samples of the other
-  orientation by coordinate past the piece's end completed every twin tried, 85
-  of 85 over the chr22 runs.
+  twin's position. For a piece without one, the route reads the samples of the
+  other orientation by coordinate past the piece's end, which completed every
+  twin we tried, 85 of 85 over the chr22 runs.
 
 ## The step loops
 
@@ -103,7 +104,7 @@ Node sequences and CIGARs stay strings.
   every walk when it fills a snarl. The far boundary node of such a snarl lies
   outside the node lists, so the stray rows would need the visits to every snarl
   boundary, listed in the bins of the other boundary.
-- Identifying a walk piece shorter than the sampling interval scans the
-  haplotype index, and 99.91% of those scans miss
-  ([performance.md](performance.md#small-windows-at-the-same-locus)). Following
-  such a piece through the GBWT directly would skip the scan.
+- To identify a walk piece shorter than the sampling interval, the library scans
+  the haplotype index, and 99.91% of those scans miss
+  ([performance.md](performance.md#small-windows-at-the-same-locus)). The
+  library could follow such a piece through the GBWT directly and skip the scan.

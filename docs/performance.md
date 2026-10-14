@@ -39,7 +39,7 @@ A first query makes 16-56 range requests and reads 2.2-5.7 MB across both files.
 
 With a larger `context`, the query reads more nodes and returns each haplotype
 in fewer pieces, so the library has fewer pieces to identify and join. MHC class
-II lies inside a snarl much larger than the window: the query returns 1.1M
+II lies inside a snarl much larger than the window. The query returns 1.1M
 pieces at `context: 0` and 464 whole walks at `context: 1000`, and the second
 query runs three times faster. The `snarls` option is the other way to get whole
 walks ([snarls.md](snarls.md)).
@@ -97,7 +97,7 @@ We queried all 464 haplotypes with the pages cached and `context: 1000`:
 | 90 kb  | 464       | 0.10 s              | 95 kb           |
 
 Below 45 kb the query returns walks in pieces shorter than the 16,384 bp
-interval between samples in the haplotype index. A piece with no sample on it
-sends the library to the haplotype index for a lookup, and 99.91% of those
+interval between samples in the haplotype index. For a piece with no sample on
+it, the library looks the piece up in the haplotype index, and 99.91% of those
 lookups miss. From 45 kb the window contains the whole snarl, each walk is one
 piece, and identification is an order of magnitude faster.

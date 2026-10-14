@@ -10,7 +10,7 @@ depends on neither the library's GBWT decoding nor the haplotype index.
   insertions, deletions, inversions, tandem and dispersed duplications, hairpins
   and self-loops. It stores contigs on either strand, cuts them into fragments,
   and adds short extra contigs. Some seeds add a second reference sample,
-  `CHM13`. No node exceeds 1000 bp, so `vg` keeps the GFA's node ids.
+  `CHM13`. Every node is at most 1000 bp, so `vg` keeps the GFA's node ids.
 - `truth.ts` parses a GFA and lists, for a set of nodes, every maximal run of
   consecutive steps of each walk on those nodes, with its coordinates along the
   walk.
@@ -22,14 +22,14 @@ depends on neither the library's GBWT decoding nor the haplotype index.
 CI runs two batches on every push, the `fuzz` job in
 `.github/workflows/push.yml`: 150 medium seeds at the production ratio of index
 options, and 200 small seeds with samples at anchors only and windows aimed at
-the anchor bound. It is the check that the indexer's rule for stray rows and the
+the anchor bound. The job checks that the indexer's rule for stray rows and the
 reader's walks still agree.
 
 ## Running
 
 `vg`, `gbz-base` and `gbz-haplotype-index` must be on `PATH`. `--indexer`, or
-`GBZ_HAPLOTYPE_INDEX`, names another indexer binary. Each graph's database is
-built with top-level chains from a vg distance index (`vg index -j`,
+`GBZ_HAPLOTYPE_INDEX`, names another indexer binary. The runner builds each
+graph's database with top-level chains from a vg distance index (`vg index -j`,
 `vg chains`, `gbz-base construct --chains`), since construct's own search finds
 chains only in a component with two tips and a path between them. The summary's
 `filled` and `inserted` count the keep queries whose subgraph filled a snarl and
@@ -49,16 +49,17 @@ kind, the size of the sweeps' large stratum on HPRC. A small seed takes about
 
 `--index-args` replaces the indexer's options, which default to
 `--interval 256 --anchor-spacing 2048 --stray-context 100`. The runner passes no
-`--anchor-sample`, so both reference samples carry anchors.
+`--anchor-sample`, so both reference samples have anchors.
 
-Scale every distance the indexer takes to these graphs. An option left at a
-production default larger than the graph never takes effect: `--stray-bin 16384`
-puts a whole small graph in one bin, and `--stray-bound 32768` lets every walk
-from an anchor run to the end of its path, so no query depends on a stray row.
-At `--scale medium` those two defaults also send about seven keep queries in ten
-to the sampled route, over the cap on a walk's bases outside the subgraph.
-Options in the production ratio to a 2048 bp anchor spacing exercise the stray
-rows and leave nearly every medium query on the keep route:
+Scale every distance the indexer takes to these graphs, because an option left
+at a production default larger than the graph never takes effect.
+`--stray-bin 16384` puts a whole small graph in one bin, and
+`--stray-bound 32768` lets every walk from an anchor run to the end of its path,
+so no query depends on a stray row. At `--scale medium` those two defaults also
+send about seven keep queries in ten to the sampled route, over the cap on a
+walk's bases outside the subgraph. Options in the production ratio to a 2048 bp
+anchor spacing exercise the stray rows and leave nearly every medium query on
+the keep route:
 
 ```sh
 node test/fuzz/run.ts --seeds 0..1000 --scale medium --jobs 8 --keep-going \
@@ -79,15 +80,15 @@ whole path, and ones placed at and beside the structures the generator reports.
 A window takes a `context` of 0, 1, 17 or 100 bp and `snarls` of `none` or
 `contained`.
 
-- **Sampled route.** `subgraphInInterval` then `identifyPaths`. Every walk must
-  carry a name, and the walks must equal the GFA's pieces on the subgraph's
-  nodes: the same path, the same `hapStart` and `hapEnd`, the same nodes. A
-  piece may appear once in each orientation.
-- **Keep route.** `subgraphInInterval` with `keep` set to each haplotype with a
-  piece, each sample with one, a random subset and everything. The walks must
-  equal the GFA's pieces of the kept haplotypes plus the reference piece that
-  contains the window. A query that fell back to the sampled route must still
-  match.
+- **Sampled route.** The runner calls `subgraphInInterval`, then
+  `identifyPaths`. Every walk must have a name, and the walks must equal the
+  GFA's pieces on the subgraph's nodes: the same path, the same `hapStart` and
+  `hapEnd`, the same nodes. A piece may appear once in each orientation.
+- **Keep route.** The runner calls `subgraphInInterval` with `keep` set to each
+  haplotype with a piece, each sample with one, a random subset and everything.
+  The walks must equal the GFA's pieces of the kept haplotypes plus the
+  reference piece that contains the window. A query that fell back to the
+  sampled route must still match.
 
 ## Output
 

@@ -38,7 +38,7 @@ dot -Tsvg docs/img/dataflow.dot -o docs/img/dataflow.svg
 
 ## Test data
 
-The indexer lives in
+The indexer's source is in
 [GMOD/gbz-haplotype-index](https://github.com/GMOD/gbz-haplotype-index). Build
 or install it and put it on your PATH, or pass its path to the scripts below.
 
@@ -48,18 +48,23 @@ Upstream `gbz-base` builds `test/data/*.gbz.db`
 `test/oracle.test.ts` compares against it, and `generate.sh` regenerates it with
 `gbz-base` on your PATH. Commit the regenerated files.
 
-`vg` builds the fixtures that have a GFA file: `split-contig.gfa` (a contig
-stored as two path fragments), `looping-walk.gfa` (walks that loop through or
-reorder the reference), `far-stretch.gfa` (a deletion that joins a window to a
-reference stretch far from its anchors), `two-copies.gfa` and `far-pass.gfa`
-(haplotypes that pass the window again from far along their own sequence) and
-`detour.gfa` (walks that leave the subgraph and come back) and `unplaced.gfa` (a
-contig that visits no anchor and has no sample in the window). `test/fuzz`
-generated `reverse-reference.gfa` and `stray-end.gfa`, each with a query that
-returned a wrong answer; `stray-end` takes the indexer options in
-`test/data/build-indexes.sh`. We wrote `anchor-at-bound.gfa` and
-`keep-bounds.gfa` by hand to place anchors and visits exactly on the keep
-route's boundaries, and they take their options from the same script.
+`vg` builds the fixtures that have a GFA file:
+
+- `split-contig.gfa`: a contig stored as two path fragments
+- `looping-walk.gfa`: walks that loop through or reorder the reference
+- `far-stretch.gfa`: a deletion that joins a window to a reference stretch far
+  from its anchors
+- `two-copies.gfa` and `far-pass.gfa`: haplotypes that pass the window again
+  from far along their own sequence
+- `detour.gfa`: walks that leave the subgraph and come back
+- `unplaced.gfa`: a contig that visits no anchor and has no sample in the window
+- `reverse-reference.gfa` and `stray-end.gfa`: `test/fuzz` generated these, each
+  with a query that returned a wrong answer. `stray-end` takes the indexer
+  options in `test/data/build-indexes.sh`.
+- `anchor-at-bound.gfa` and `keep-bounds.gfa`: we wrote these by hand to place
+  anchors and visits exactly on the keep route's boundaries, and they take their
+  options from the same script.
+
 `quay.io/vgteam/vg` is the easiest `vg` on a Mac.
 
 ```sh
@@ -85,9 +90,9 @@ after a change to the indexer, and commit the indexes.
 
 ## Checking haplotype queries
 
-A piece missing from a query's result draws as a deletion, so a query must
-return every piece of every haplotype it names. Three checks cover that, from
-small to large.
+A viewer draws a piece missing from a query's result as a deletion, so a query
+must return every piece of every haplotype it names. Three checks cover that,
+from small to large.
 
 - `pnpm test --run` compares the keep route with the sampled route on the
   fixtures.

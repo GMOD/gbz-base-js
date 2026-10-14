@@ -6,8 +6,8 @@
 A TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
 pangenome databases (`.gbz.db`).
 
-- The reader fetches only the pages a query touches, so a multi-gigabyte
-  database on a web server answers through range requests.
+- The reader fetches only the pages a query touches, so it can query a
+  multi-gigabyte database on a web server through range requests.
 - Upstream's `gbz-base construct` builds the database from a `.gbz` file.
 - The npm package contains a JavaScript library and a command-line program that
   runs the same queries.
@@ -58,7 +58,8 @@ equivalent.
 
 `getAlignments` returns an array of records, one per haplotype that crosses the
 window. Every record has the span fields. A record is `resolved` when the
-haplotype index named its walk, and only a resolved record has the name fields:
+haplotype index has a name for its walk, and only a resolved record has the name
+fields:
 
 ```ts
 type HaplotypeAlignment = {
@@ -123,7 +124,8 @@ Without a haplotype index, gbz-base queries return each walk as `unknown#N`.
 (`cargo install gbz-haplotype-index`) adds haplotype walk metadata to the graph.
 
 - It writes a separate file alongside the .gbz.db file.
-- The index names every haplotype's walk when a query keeps a few of them.
+- When a query uses the `keep` option to select a few haplotypes, the library
+  names each of their walks from the index.
 - It holds an [overview](docs/api.md#overview) of every haplotype in bins along
   each reference path, for views of megabases or a whole chromosome.
 - The library reads the index format that gbz-haplotype-index 0.3 writes and

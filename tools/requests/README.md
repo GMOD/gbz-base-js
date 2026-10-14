@@ -1,8 +1,8 @@
 # HTTP requests per view
 
-How many range requests, and how many bytes, one cold window query costs when
-JBrowse reads the HPRC v2.1 GRCh38 graph and its haplotype index over HTTPS. The
-metrics follow the request-shape counts in
+This study counts the range requests and bytes that one cold window query costs
+when JBrowse reads the HPRC v2.1 GRCh38 graph and its haplotype index over
+HTTPS. The metrics follow the request-shape counts in
 [jb2bench](https://github.com/cmdcolin/jb2bench): requests per view, bytes per
 view, cold cache.
 
@@ -98,7 +98,7 @@ settings.
 
 ## Run of 2026-10-03
 
-@gmod/gbz-base 6.0.1 at 0d32289, against the hosted HPRC v2.1 GRCh38 graph
+We ran @gmod/gbz-base 6.0.1 at 0d32289 against the hosted HPRC v2.1 GRCh38 graph
 (`https://s3-us-west-2.amazonaws.com/human-pangenomics/pangenomes/freeze/release2/minigraph-cactus/v2.1/hprc-v2.1-mc-grch38/hprc-v2.1-mc-grch38.gbz.db`)
 and the hosted anchored haplotype index
 (`https://jbrowse.org/demos/hprc/hprc-v2.1-mc-grch38.haplotype-index.anchored.db`).
@@ -235,9 +235,9 @@ walks each written as a W line over the window, where the 3 Mb GFA was already
 times out inside extraction on both routes after about 4,200 requests and 280
 MB, the counts taken from the last 15-second heartbeat; scaling the 10 Mb read
 linearly, the chromosome would take about 18,000 requests. Under the plugin's
-defaults a window stops sooner: the 100,000-node `limit` counts every node
-walked, more than the nodes kept, so both 3 Mb windows would raise
-`NodeLimitError`.
+defaults a window stops sooner, because the 100,000-node `limit` counts every
+node walked, which is more than the nodes kept. Both 3 Mb windows would
+therefore raise `NodeLimitError`.
 
 ### Against PIF and Zarr
 
@@ -273,10 +273,10 @@ data.
 
 ## Run of 2026-10-03, chr22, haplotype index format 3
 
-The same harness over local copies served by a Range-capable static server
-(`range-server.mjs` in this directory): the chr22 part of HPRC v2.1 GRCh38
-(`chr22.gbz.db`, 196 MB, 1,131 paths) and its haplotype index built with the
-hosted index's options (`--interval 16384 --anchor-spacing 131072`), once by
+We ran the same harness over local copies served by a Range-capable static
+server (`range-server.mjs` in this directory): the chr22 part of HPRC v2.1
+GRCh38 (`chr22.gbz.db`, 196 MB, 1,131 paths) and its haplotype index built with
+the hosted index's options (`--interval 16384 --anchor-spacing 131072`), once by
 gbz-haplotype-index 0.2 (format 2, 98 MB) and once by the next version (format
 3, 58 MB). Three random windows per size between 17 Mb and 50.7 Mb, routes
 `sampled` and `keep1`, prefetch on, no node limit, cold cache. "Before" is the
@@ -314,7 +314,7 @@ the format 3 index.
   walk now streams the node table in chunks instead of one block per request:
   the second and third 3 Mb windows fell from 182 and 181 graph requests to 45
   and 63. The first 3 Mb window (chr22:20.04-23.04 Mb) still costs 166 on the
-  sampled route: consecutive reference nodes there lie about 25 blocks apart in
+  sampled route. Consecutive reference nodes there lie about 25 blocks apart in
   the node table, so the per-run prefetch issues one read per reference node, 93
   of them, in parallel.
 - `breakdown.ts` prints every request of one query with the b-tree operation
