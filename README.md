@@ -11,8 +11,9 @@ pangenome databases (`.gbz.db`).
 - Upstream's `gbz-base construct` builds the database from a `.gbz` file.
 - The npm package contains a JavaScript library and a command-line program that
   runs the same queries.
-- The optional haplotype index gives the sample and haplotype of each walk a
-  query returns. A separate Rust program in this repository builds it.
+- The optional haplotype index, built by
+  [gbz-haplotype-index](https://github.com/GMOD/gbz-haplotype-index), gives the
+  sample and haplotype of each walk a query returns.
 
 ## Library
 
@@ -56,9 +57,9 @@ equivalent.
 
 ## Output
 
-`getAlignments` returns an array of records, one per haplotype that crosses the
-window. Every record has the span fields, and a record also has the name fields
-when it is `resolved`, which means the haplotype index has a name for its walk:
+`getAlignments` returns one record per haplotype crossing the window. A
+`resolved` record, whose walk the haplotype index names, also has the name
+fields:
 
 ```ts
 type HaplotypeAlignment = {
@@ -87,8 +88,8 @@ type HaplotypeAlignment = {
 )
 ```
 
-`getSubgraphs` returns `Subgraph` objects, whose `toSubgraphJson()` returns the
-same JSON as upstream's `gbz-base query --format json`:
+`getSubgraphs` returns `Subgraph` objects. `toSubgraphJson()` returns the same
+JSON as upstream's `gbz-base query --format json`:
 
 ```ts
 {
@@ -107,9 +108,8 @@ same JSON as upstream's `gbz-base query --format json`:
 
 On the command line:
 
-- `--alignments` prints a JSON array of the records above, without `start`. A
-  resolved record's `name` holds the label string instead of the `PathName`
-  object.
+- `--alignments` prints the records above as JSON, without `start`, and with the
+  label string as `name`.
 - The default output is the subgraph JSON, and `--format gfa` prints GFA.
 
 The [API reference](docs/api.md#subgraph-output) and
@@ -120,26 +120,23 @@ The [API reference](docs/api.md#subgraph-output) and
 Without a haplotype index, gbz-base queries return each walk as `unknown#N`.
 
 [`gbz-haplotype-index`](https://github.com/GMOD/gbz-haplotype-index)
-(`cargo install gbz-haplotype-index`) adds haplotype walk metadata to the graph.
+(`cargo install gbz-haplotype-index`) writes a file alongside the `.gbz.db`.
 
-- It writes a separate file alongside the .gbz.db file.
 - The index names every haplotype's walk when a query keeps a few of them.
-- It holds an [overview](docs/api.md#overview) of every haplotype in bins along
-  each reference path, for views of megabases or a whole chromosome.
-- The library reads the index format that gbz-haplotype-index 0.3 writes and
-  refuses an older one at open.
-
-Example usage:
+- It also holds an [overview](docs/api.md#overview) of every haplotype in bins
+  along each reference path, for views of megabases or a whole chromosome.
+- The library reads the gbz-haplotype-index 0.3 format and refuses an older one
+  at open.
 
 ```ts
 const db = await GBZBase.open({
   source: new RemoteFile(graphUrl),
   haplotypeIndex: new RemoteFile(indexUrl),
 })
-// return all haplotypes
+// all haplotypes
 const records = await db.getAlignments({ path, start, end })
 
-// or, restrict to particular haplotype. can match multiple haplotypes here in callback
+// only those whose name passes the callback
 const records = await db.getAlignments({
   path,
   start,
@@ -148,22 +145,13 @@ const records = await db.getAlignments({
 })
 ```
 
-Same thing using our command line tool
+On the command line:
 
 ```bash
 npx -p @gmod/gbz-base gbz-base-query "$graphUrl" --haplotype-index "$indexUrl" \
   --sample GRCh38 --contig chr6 --interval 31500000..31501000 \
   --alignments --keep HG00097
 ```
-
-## Programs
-
-| Program                         | Use it to                                  |
-| ------------------------------- | ------------------------------------------ |
-| `GBZBase`                       | query a database from browser or Node code |
-| `gbz-base-query`                | query a database from a shell              |
-| `gbz-haplotype-index`           | build the haplotype index, once per graph  |
-| `gbz-base construct` (upstream) | build the `.gbz.db` from a `.gbz` file     |
 
 ## Documentation
 
@@ -186,27 +174,15 @@ Design:
 - [Internals](docs/internals.md)
 - [Contributing](CONTRIBUTING.md)
 
-## Used by
-
-- [BandageJS](https://github.com/cmdcolin/BandageJS) - Our webpage that draws
-  the graph with Bandage's exact graph layout code
-- [sequenceTubeMap - MemPanG26 edition](https://github.com/cmdcolin/sequenceTubeMap) -
-  our sequenceTubeMap fork
-- [JBrowse 2 w/ jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer) -
-  can render both BandageJS and sequenceTubeMap approaches
-
-## Inspiration
-
-The project started from ideas at MemPanG 26 hackathon
-
 ## See also
 
+The project started at the MemPanG 26 hackathon.
+
 - [jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer) -
-  JBrowse 2 plugin that browses these graphs by locus
-- [BandageJS](https://github.com/cmdcolin/BandageJS) - standalone page for GFA
-  and gbz-base graphs
-- [gbz-haplotype-index](https://github.com/GMOD/gbz-haplotype-index) - names
-  every walk in a gbz-base cut
+  JBrowse 2 plugin that browses these graphs by locus, drawn as Bandage or as a
+  tube map
+- [BandageJS](https://github.com/cmdcolin/BandageJS) - standalone page that
+  draws GFA and gbz-base graphs with Bandage's layout code
 - [@jbrowse/bandage-core](https://github.com/GMOD/bandage-core) - Bandage layout
   and drawing engine
 - [@jbrowse/tubemap-core](https://github.com/GMOD/tubemap-core) -
