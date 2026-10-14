@@ -124,8 +124,7 @@ Without a haplotype index, gbz-base queries return each walk as `unknown#N`.
 (`cargo install gbz-haplotype-index`) adds haplotype walk metadata to the graph.
 
 - It writes a separate file alongside the .gbz.db file.
-- When a query uses the `keep` option to select a few haplotypes, the library
-  names each of their walks from the index.
+- The index names every haplotype's walk when a query keeps a few of them.
 - It holds an [overview](docs/api.md#overview) of every haplotype in bins along
   each reference path, for views of megabases or a whole chromosome.
 - The library reads the index format that gbz-haplotype-index 0.3 writes and
