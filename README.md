@@ -199,6 +199,8 @@ Tutorials on [jbrowse.org](https://jbrowse.org/jb2/docs/tutorials/)
 
 - [gfa-to-tabix](https://github.com/GMOD/gfa-to-tabix) - indexes a GFA by genome
   coordinate
+- [Comparison of gfa-to-tabix with gbz-base](https://github.com/GMOD/gfa-to-tabix/blob/main/docs/gbz-comparison.md) -
+  what each format holds, sizes and requests on HPRC v2.1
 
 ## License
 
