@@ -33,7 +33,7 @@ Then open `http://127.0.0.1:8765/demo/?graph=<url>&index=<url>` and choose a
 path. The page keeps one session open, so the status line gives the requests and
 bytes of the view just drawn beside the session's total. When you hover a row,
 the page names the haplotype and its class in that bin. Zoom in, zoom out and
-the arrows move by halves, and a window under 300 kb switches to the alignments.
+the arrows move by halves; a window under 300 kb switches to the alignments.
 
 ## chr22, HPRC v2.1, 464 haplotypes, cold cache over local HTTP
 

@@ -315,7 +315,7 @@ the format 3 index.
   walk now streams the node table in chunks instead of one block per request:
   the second and third 3 Mb windows fell from 182 and 181 graph requests to 45
   and 63. The first 3 Mb window (chr22:20.04-23.04 Mb) still costs 166 on the
-  sampled route. Consecutive reference nodes there lie about 25 blocks apart in
+  sampled route: consecutive reference nodes there lie about 25 blocks apart in
   the node table, so the per-run prefetch issues one read per reference node, 93
   of them, in parallel.
 - `breakdown.ts` prints every request of one query with the b-tree operation

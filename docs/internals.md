@@ -44,6 +44,6 @@ files with an upstream binary.
 - With `haplotypes: 'distinct'` and a haplotype index, this package merges the
   walks a twin would merge with (those of haplotypes stored against the
   reference, and walks canonical both ways) after identification rather than
-  before. The merged record's name and weight are therefore those of the walks
-  that remain. Output read before `identifyPaths()` shows them merged, as
-  without an index.
+  before, so the merged record's name and weight are those of the walks that
+  remain. Output read before `identifyPaths()` shows them merged, as without an
+  index.

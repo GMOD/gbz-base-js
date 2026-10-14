@@ -39,7 +39,7 @@ A first query makes 16-56 range requests and reads 2.2-5.7 MB across both files.
 
 With a larger `context`, the query reads more nodes and returns each haplotype
 in fewer pieces, so the library has fewer pieces to identify and join. MHC class
-II lies inside a snarl much larger than the window. The query returns 1.1M
+II lies inside a snarl much larger than the window: the query returns 1.1M
 pieces at `context: 0` and 464 whole walks at `context: 1000`, and the second
 query runs three times faster. The `snarls` option is the other way to get whole
 walks ([snarls.md](snarls.md)).

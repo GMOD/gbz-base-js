@@ -51,15 +51,14 @@ kind, the size of the sweeps' large stratum on HPRC. A small seed takes about
 `--interval 256 --anchor-spacing 2048 --stray-context 100`. The runner passes no
 `--anchor-sample`, so both reference samples have anchors.
 
-Scale every distance the indexer takes to these graphs, because an option left
-at a production default larger than the graph never takes effect.
-`--stray-bin 16384` puts a whole small graph in one bin, and
-`--stray-bound 32768` lets every walk from an anchor run to the end of its path,
-so no query depends on a stray row. At `--scale medium` those two defaults also
-send about seven keep queries in ten to the sampled route, over the cap on a
-walk's bases outside the subgraph. Options in the production ratio to a 2048 bp
-anchor spacing exercise the stray rows and leave nearly every medium query on
-the keep route:
+Scale every distance the indexer takes to these graphs. An option left at a
+production default larger than the graph never takes effect: `--stray-bin 16384`
+puts a whole small graph in one bin, and `--stray-bound 32768` lets every walk
+from an anchor run to the end of its path, so no query depends on a stray row.
+At `--scale medium` those two defaults also send about seven keep queries in ten
+to the sampled route, over the cap on a walk's bases outside the subgraph.
+Options in the production ratio to a 2048 bp anchor spacing exercise the stray
+rows and leave nearly every medium query on the keep route:
 
 ```sh
 node test/fuzz/run.ts --seeds 0..1000 --scale medium --jobs 8 --keep-going \
