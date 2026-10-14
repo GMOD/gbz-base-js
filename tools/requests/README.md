@@ -237,7 +237,8 @@ MB, the counts taken from the last 15-second heartbeat; scaling the 10 Mb read
 linearly, the chromosome would take about 18,000 requests. Under the plugin's
 defaults a window stops sooner, because the 100,000-node `limit` counts every
 node walked, which is more than the nodes kept. Both 3 Mb windows would
-therefore raise `NodeLimitError`.
+therefore raise `SubgraphLimitError`, which the plugin rethrows as its own
+`NodeLimitError`.
 
 ### Against PIF and Zarr
 
