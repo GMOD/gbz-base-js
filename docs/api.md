@@ -110,8 +110,13 @@ one. On a 200 kb HPRC chr20 window (5,943 nodes, 178 haplotypes), the compact
 form structured-clones in 1.9 ms against 295 ms for the JSON form. Transfer its
 buffers with `port.postMessage(compact, compactSubgraphTransferables(compact))`.
 
-The JSON form's walks are `SubgraphPath`s, and the compact form's
-`CompactPath`s.
+In the JSON form, `nodes` lists `{ id, sequence }`, `edges` lists
+`{ from, from_is_reverse, to, to_is_reverse }`, and `paths` lists each walk as a
+`SubgraphPath` with its `name`, its `weight` and `cigar` when set, and `path` as
+`{ id, is_reverse }` steps. A `CompactSubgraph` holds `nodeIds` in ascending
+order with `nodeSequences` parallel to it, `edges` as handle pairs, and `paths`
+as `CompactPath` objects, which have the same `name`, `weight` and `cigar` and
+list the walk's handles in `steps`.
 
 `compactSubgraphTransferables` returns the buffers of `nodeIds`, `edges` and
 every path's `steps`. Transferring them detaches them, so the sending thread
