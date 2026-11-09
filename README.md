@@ -172,7 +172,6 @@ Design:
 - [How a query flows](docs/dataflow.md)
 - [Performance](docs/performance.md) and [optimizations](docs/optimizations.md)
 - [Internals](docs/internals.md)
-- [Contributing](CONTRIBUTING.md)
 
 ## See also
 
