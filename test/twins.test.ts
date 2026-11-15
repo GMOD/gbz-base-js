@@ -3,8 +3,8 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { dataDir } from './fixtures.ts'
 import { GBZBase } from '../src/db.ts'
+import { dataDir } from './fixtures.ts'
 
 import type { PathName } from '../src/pathName.ts'
 

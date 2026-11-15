@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs'
 import { LocalFile, RemoteFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { checkResolvedRecordAgainstSamples } from './walkBack.ts'
 import { GBZBase } from '../src/db.ts'
+import { checkResolvedRecordAgainstSamples } from './walkBack.ts'
 
 import type { PathName } from '../src/pathName.ts'
 

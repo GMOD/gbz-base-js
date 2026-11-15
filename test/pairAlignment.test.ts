@@ -4,11 +4,11 @@ import path from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { openSampled, sampledCompanion } from './fixtures.ts'
 import { main } from '../src/cli.ts'
 import { encodeNode } from '../src/gbwt/node.ts'
 import { reverseComplement } from '../src/gbwt/sequence.ts'
 import { pairAlignments, pairCigar } from '../src/pairAlignment.ts'
+import { openSampled, sampledCompanion } from './fixtures.ts'
 
 import type { PairChain } from '../src/pairAlignment.ts'
 import type { PairAlignment } from '../src/subgraph.ts'

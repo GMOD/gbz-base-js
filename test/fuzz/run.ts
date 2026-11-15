@@ -11,12 +11,12 @@ import { LocalFile } from 'generic-filehandle2'
 import { generate, makeRng, scales } from './gen.ts'
 import { parseGfa, piecesIn } from './truth.ts'
 
-import type { Feature, Scale } from './gen.ts'
-import type { Gfa, GfaPath, Piece } from './truth.ts'
 import type * as ChosenPaths from '../../src/chosenPaths.ts'
 import type * as Db from '../../src/db.ts'
 import type { PathName } from '../../src/pathName.ts'
 import type { PathIdentity, SnarlOutput, Subgraph } from '../../src/subgraph.ts'
+import type { Feature, Scale } from './gen.ts'
+import type { Gfa, GfaPath, Piece } from './truth.ts'
 
 const defaultIndexArgs =
   '--interval 256 --anchor-spacing 2048 --stray-context 100'

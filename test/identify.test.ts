@@ -3,10 +3,10 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { openSampled } from './fixtures.ts'
-import { cigarConsumption, walkBack } from './walkBack.ts'
 import { ForwardOnlyIndexError, GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode } from '../src/gbwt/node.ts'
+import { openSampled } from './fixtures.ts'
+import { cigarConsumption, walkBack } from './walkBack.ts'
 
 const dataDir = path.join(import.meta.dirname, 'data')
 

@@ -3,8 +3,8 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { sampledCompanion } from './fixtures.ts'
 import { GBZBase } from '../src/db.ts'
+import { sampledCompanion } from './fixtures.ts'
 
 import type { ByteSource } from '../src/filehandle.ts'
 

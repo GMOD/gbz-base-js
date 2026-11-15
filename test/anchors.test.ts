@@ -3,11 +3,11 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { openSampled } from './fixtures.ts'
-import { checkResolvedRecord, walkBack } from './walkBack.ts'
 import { keepTuning } from '../src/chosenPaths.ts'
 import { GBZBase } from '../src/db.ts'
 import { ENDMARKER, encodeNode, nodeId } from '../src/gbwt/node.ts'
+import { openSampled } from './fixtures.ts'
+import { checkResolvedRecord, walkBack } from './walkBack.ts'
 
 import type { HaplotypeSample } from '../src/db.ts'
 import type { PathName } from '../src/pathName.ts'

@@ -3,8 +3,8 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { dataDir } from './fixtures.ts'
 import { GBZBase, OVERVIEW_REFERENCE, OVERVIEW_VARIANT } from '../src/index.ts'
+import { dataDir } from './fixtures.ts'
 
 function openMicb() {
   return GBZBase.open({

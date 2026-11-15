@@ -3,10 +3,10 @@ import path from 'node:path'
 import { LocalFile } from 'generic-filehandle2'
 import { describe, expect, it } from 'vitest'
 
-import { dataDir, openSampled } from './fixtures.ts'
 import { GBZBase, UnknownPathError } from '../src/db.ts'
 import { parsePathName } from '../src/pathName.ts'
 import { Subgraph, SubgraphLimitError } from '../src/subgraph.ts'
+import { dataDir, openSampled } from './fixtures.ts'
 
 const chr6 = 'GRCh38#0#chr6'
 
