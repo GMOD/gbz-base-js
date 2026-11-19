@@ -6,6 +6,12 @@
 A TypeScript reader for [gbz-base](https://github.com/jltsiren/gbz-base)
 pangenome databases (`.gbz.db`).
 
+GMOD's graph viewers now read pangenome regions from
+[gfa-to-tabix](https://github.com/GMOD/gfa-to-tabix) walk files, and our work on
+serving pangenome graphs goes there.
+[Comparison with gbz-base](https://github.com/GMOD/gfa-to-tabix/blob/main/docs/comparison.md)
+covers how the two differ.
+
 - The reader fetches only the pages a query touches, so it can query a
   multi-gigabyte database on a web server through range requests.
 - Upstream's `gbz-base construct` builds the database from a `.gbz` file.
@@ -180,7 +186,7 @@ The project started at the MemPanG 26 hackathon.
 - [jbrowse-plugin-graphgenomeviewer](https://github.com/GMOD/jbrowse-plugin-graphgenomeviewer) -
   JBrowse 2 plugin that browses these graphs by locus, drawn as Bandage or as a
   tube map
-- [BandageJS](https://github.com/cmdcolin/BandageJS) - standalone page that
+- [BandageJS](https://github.com/GMOD/BandageJS) - standalone page that
   draws GFA and gbz-base graphs with Bandage's layout code
 - [@jbrowse/bandage-core](https://github.com/GMOD/bandage-core) - Bandage layout
   and drawing engine
@@ -193,13 +199,6 @@ Tutorials on [jbrowse.org](https://jbrowse.org/jb2/docs/tutorials/)
 
 - [HPRC part 3: repeat lengths](https://jbrowse.org/jb2/docs/tutorials/pangenome_hprc_repeats/)
 - [Hosting your own graph](https://jbrowse.org/jb2/docs/tutorials/pangenome_prepare_graph/)
-
-## Alternative approach
-
-- [gfa-to-tabix](https://github.com/GMOD/gfa-to-tabix) - indexes a GFA by genome
-  coordinate
-- [Comparison of gfa-to-tabix with gbz-base](https://github.com/GMOD/gfa-to-tabix/blob/main/docs/gbz-comparison.md) -
-  what each format holds, sizes and requests on HPRC v2.1
 
 ## License
 
